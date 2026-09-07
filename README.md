@@ -2,7 +2,7 @@
 
 仕事、会話、家計、体重、食事、coding agent の実行状況を一か所で扱う、本人用のダッシュボードです。公開コードと個人データを分離し、Web/API は Cloudflare、外部 CLI と agent 実行は Mac の runner が担当します。
 
-[要件定義](docs/requirements.md)に定めた MVP を実装しています。Talknote、栄養推定の自動化、PWA の追加機能、Android/iOS native、複数リポジトリ UI、GitHub との双方向同期は要件上の MVP 対象外です。
+[要件定義](docs/requirements.md)に定めた MVP を実装しています。Talknote、栄養推定の自動化、PWA の追加機能、Android/iOS の画面全体の native 化、複数リポジトリ UI、GitHub との双方向同期は要件上の MVP 対象外です。
 
 ## 構成
 
@@ -10,6 +10,7 @@
 apps/web       Vite + React + TanStack Router/Query
 apps/api       Hono + Workers Static Assets + D1 + R2
 apps/runner    Mac で動く CLI/Orca adapter と job executor
+clients/android  体重・食事入力 URL を開く Android ウィジェット
 packages/core       Result、構造化 logger
 packages/contracts  API の Zod schema、共有 DTO
 packages/db         Drizzle schema、migration、架空 seed
@@ -19,7 +20,7 @@ packages/eslint-config  Flat Config、ルール別の実装・README・テスト
 
 API は `handler -> usecase -> repository` の向きに依存し、外部境界で Zod により検証します。失敗を値として扱う処理には `@life-console/core` の `Result<T, E>` を使い、Worker と runner の共通 logger は本文・token・transcript を出しません。Result の戻り値と捨て忘れも ESLint で検査します。
 
-責務と使い方は [core](packages/core/README.md)、[db](packages/db/README.md)、[env](packages/env/README.md)、[ESLint](packages/eslint-config/README.md)、[Web / Storybook](apps/web/README.md) を参照してください。フロントのページ専用部品・query・テスト・stories はページの近くに配置しています。
+責務と使い方は [core](packages/core/README.md)、[db](packages/db/README.md)、[env](packages/env/README.md)、[ESLint](packages/eslint-config/README.md)、[Web / Storybook](apps/web/README.md)、[ネイティブクライアント](clients/README.md) を参照してください。フロントのページ専用部品・query・テスト・stories はページの近くに配置しています。
 
 ## 必要環境
 
@@ -99,6 +100,10 @@ pnpm dev:runner
 
 manifest は認証 Cookie を送って取得します。Service Worker とオフラインキャッシュは使いません。アイコンの編集元は `apps/web/public/icons/app.svg`、配信用の PNG は同じディレクトリに置いています。
 
+## Android の記録ウィジェット
+
+[Android アプリ](clients/android/README.md) をインストールすると、ホーム画面に『体重を記録』『食事を記録』のウィジェットを個別に置けます。ブラウザで本番の `/health?entry=weight` または `/health?entry=meal` を開きます。Android アプリは API を呼ばず、ログインと記録は既存の Web 画面で行います。
+
 ## 体重の記録
 
 『健康』の『体重を記録』から入力シートを開きます。整数部と小数部をホイールで選び、計測した日付・時刻を指定して保存します。直接の数値入力にも切り替えられます。初期値は直近の計測値、日時はシートを開いた時点の端末の現在日時です。初回は空欄から入力します。
@@ -106,6 +111,14 @@ manifest は認証 Cookie を送って取得します。Service Worker とオフ
 `/health?entry=weight` で入力シートを開いた状態を復元します。再読み込みとブラウザの戻る・進むにも対応し、入力途中の体重・日時は URL には含めません。
 
 Storybook の `Health/体重を記録` でライト・ダーク・初回・保存中・保存失敗を確認できます。`Pages/健康` の『URL から体重記録を開く』では健康画面に重ねた状態を確認します。
+
+## 食事の記録
+
+『健康』の『食事を記録』から、写真・食事区分・日時・メモを入力するシートを開きます。写真かメモのどちらかを入力して保存します。写真は端末で縮小して JPEG に再生成し、EXIF を除去します。
+
+`/health?entry=meal` から直接開けます。再読み込みと戻る・進むにも対応し、閉じるか保存すると `entry` を URL から除きます。写真・メモ・入力中の日時は URL に含めません。開くたびに入力を初期化し、保存失敗時は入力を保持します。
+
+Storybook の `Health/食事を記録` でライト・ダーク・写真のみの保存・メモと日時の保存・保存失敗・保存中を確認できます。`Pages/健康` に『URL から食事記録を開く』も追加しています。
 
 ## 返信下書き
 
