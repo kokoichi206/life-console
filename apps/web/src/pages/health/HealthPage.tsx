@@ -1,19 +1,16 @@
 import { calculate7DayMovingAverage, weightCalendarDate, weightCalendarDayTimestamp } from "@life-console/contracts";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
 
 import { api } from "../../api";
 import { EmptyState, Eyebrow, Field, FormError, MetricCard, Panel, SectionHeading } from "../../components/DesignSystem";
 import { PageHeader } from "../../components/PageHeader";
-import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/input";
-import { NativeSelect } from "../../components/ui/native-select";
-import { Textarea } from "../../components/ui/textarea";
 
+import { MealEntryDialog } from "./_components/MealEntryDialog";
 import { WeightEntryDialog } from "./_components/WeightEntryDialog";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
-import { normalizeMealPhoto } from "./meal-photo";
 import { mealsQuery, weightsQuery } from "./queries";
 
 const ONE_DAY_MILLISECONDS = 86_400_000;
@@ -27,23 +24,15 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
   day: "numeric",
 }).format(new Date(occurredAt));
 
-const localDateTime = (): string => {
-  const date = new Date();
-  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-  return date.toISOString().slice(0, 16);
-};
-
-export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange }: {
+export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange }: {
+  readonly mealEntryOpen: boolean;
+  readonly onMealEntryOpenChange: (open: boolean) => void;
   readonly weightEntryOpen: boolean;
   readonly onWeightEntryOpenChange: (open: boolean) => void;
 }) => {
   const queryClient = useQueryClient();
   const { data: weights } = useSuspenseQuery(weightsQuery);
   const { data: meals } = useSuspenseQuery(mealsQuery);
-  const [mealOccurredAt, setMealOccurredAt] = useState(localDateTime());
-  const [mealKind, setMealKind] = useState<"breakfast" | "lunch" | "dinner" | "snack">("dinner");
-  const [memo, setMemo] = useState("");
-  const [photo, setPhoto] = useState<File | null>(null);
   const [weightRange, setWeightRange] = useState<WeightRange>("d90");
   const [showWeightTable, setShowWeightTable] = useState(false);
   const weightTrend = useMemo(() => calculate7DayMovingAverage(weights), [weights]);
@@ -74,51 +63,19 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange }: {
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
-  const createMeal = useMutation({
-    mutationFn: async () => {
-      const clientId = crypto.randomUUID();
-      let photoId: string | null = null;
-      if (photo !== null) {
-        const normalized = await normalizeMealPhoto(photo);
-        const upload = await api.createMealUpload({ clientId, contentType: "image/jpeg" });
-        const response = await fetch(upload.uploadUrl, {
-          method: "PUT",
-          headers: upload.requiredHeaders,
-          body: normalized,
-        });
-        if (!response.ok) throw new Error("写真のアップロードに失敗しました。");
-        photoId = upload.photoId;
-      }
-      return api.createMeal({
-        clientId,
-        photoId,
-        memo,
-        mealKind,
-        occurredAt: new Date(mealOccurredAt).toISOString(),
-        tags: [],
-      });
-    },
-    onSuccess: async () => {
-      setMemo("");
-      setPhoto(null);
-      await queryClient.invalidateQueries({ queryKey: ["meals"] });
-    },
-  });
   const selectWeightCsv = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file !== undefined) importCsv.mutate(file);
-  };
-  const submitMeal = (event: FormEvent) => {
-    event.preventDefault();
-    createMeal.mutate();
   };
 
   return (
     <>
       <PageHeader eyebrow="LIFE / HEALTH" title="体重と食事" description="体重の実測値と7日移動平均、食事の記録をまとめて確認します。" />
-      <div className="mb-6 flex justify-end">
+      <div className="mb-6 flex flex-wrap justify-end gap-3">
+        <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => onMealEntryOpenChange(true)}>食事を記録</Button>
         <Button className="h-11 rounded-xl px-5" onClick={() => onWeightEntryOpenChange(true)}>体重を記録</Button>
       </div>
+      <MealEntryDialog open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />
       <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />
       <section className="mb-6">
         <header className="mb-4 flex items-end justify-between gap-6 max-md:flex-col max-md:items-start">
@@ -235,7 +192,7 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange }: {
           <p className="border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7日移動平均は当日を含む直近7暦日の実測値から算出します。記録のない日は補間しません。</p>
         </Panel>
       </section>
-      <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-[0.8fr_1.15fr_1.05fr]">
+      <div className="grid items-start gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <Panel className="gap-4 px-5">
           <div className="space-y-1.5">
             <Eyebrow>WEIGHT IMPORT</Eyebrow>
@@ -244,30 +201,7 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange }: {
           <Field label="CSV を取り込む"><Input type="file" accept=".csv,text/csv" onChange={selectWeightCsv} /></Field>
           {importCsv.error !== null && <FormError>{importCsv.error.message}</FormError>}
         </Panel>
-        <form onSubmit={submitMeal}>
-          <Panel className="gap-4 px-5">
-            <div className="space-y-1.5">
-              <Eyebrow>MEAL ENTRY</Eyebrow>
-              <h2 className="text-base font-semibold">食事を記録</h2>
-            </div>
-            <Field label="写真"><Input type="file" accept="image/*" capture="environment" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} /></Field>
-            {photo !== null && <Badge variant="secondary" className="max-w-full truncate">{photo.name}</Badge>}
-            <Field label="食事区分">
-              <NativeSelect className="w-full" value={mealKind} onChange={(event) => setMealKind(event.target.value as typeof mealKind)}>
-                <option value="breakfast">朝食</option>
-                <option value="lunch">昼食</option>
-                <option value="dinner">夕食</option>
-                <option value="snack">間食</option>
-              </NativeSelect>
-            </Field>
-            <Field label="日時"><Input type="datetime-local" value={mealOccurredAt} onChange={(event) => setMealOccurredAt(event.target.value)} /></Field>
-            <Field label="メモ"><Textarea rows={3} maxLength={2_000} value={memo} onChange={(event) => setMemo(event.target.value)} /></Field>
-            <Button type="submit" size="lg" className="w-full" disabled={createMeal.isPending || (photo === null && memo.trim() === "")}>記録する</Button>
-            <p className="text-[0.7rem] leading-5 text-muted-foreground">写真は端末で縮小・JPEG 再生成し、EXIF を除去します。</p>
-            {createMeal.error !== null && <FormError>{createMeal.error.message}</FormError>}
-          </Panel>
-        </form>
-        <Panel className="lg:col-span-2 xl:col-span-1">
+        <Panel>
           <SectionHeading eyebrow="RECENT MEALS" title="最近の食事" />
           <div className="px-5">
             {meals.slice(0, 8).map((meal) => (

@@ -19,18 +19,25 @@ class MainActivity : Activity() {
         }
 
         val manager = getSystemService(AppWidgetManager::class.java)
-        val addWidget = findViewById<Button>(R.id.add_widget)
-        if (manager.isRequestPinAppWidgetSupported) {
-            addWidget.setOnClickListener {
-                manager.requestPinAppWidget(
-                    ComponentName(this, WeightWidgetProvider::class.java),
-                    null,
-                    null,
-                )
+        val widgetButtons = listOf(
+            R.id.add_weight_widget to WeightWidgetProvider::class.java,
+            R.id.add_meal_widget to MealWidgetProvider::class.java,
+        )
+        for ((buttonId, providerClass) in widgetButtons) {
+            val addWidget = findViewById<Button>(buttonId)
+            if (manager.isRequestPinAppWidgetSupported) {
+                addWidget.setOnClickListener {
+                    manager.requestPinAppWidget(ComponentName(this, providerClass), null, null)
+                }
+            } else {
+                addWidget.visibility = View.GONE
             }
-        } else {
-            addWidget.visibility = View.GONE
+        }
+        if (!manager.isRequestPinAppWidgetSupported) {
             findViewById<TextView>(R.id.widget_instructions).setText(R.string.add_manually)
+        }
+        findViewById<Button>(R.id.open_meal).setOnClickListener {
+            startActivity(MealEntry.intent())
         }
         findViewById<Button>(R.id.open_weight).setOnClickListener {
             startActivity(WeightEntry.intent())

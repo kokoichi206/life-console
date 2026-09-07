@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { http, HttpResponse } from "msw";
 import { useMemo } from "react";
-import { expect } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 
 import { parseHealthSearch } from "./health-search";
 import { HealthRoutePage } from "./HealthRoutePage";
@@ -25,8 +25,8 @@ const meta = {
     const router = useMemo(() => {
       const root = createRootRoute();
       const health = createRoute({ getParentRoute: () => root, path: "/health", validateSearch: parseHealthSearch, component: Story });
-      return createRouter({ routeTree: root.addChildren([health]), history: createMemoryHistory({ initialEntries: [context.parameters.weightEntryOpen ? "/health?entry=weight" : "/health"] }) });
-    }, [context.parameters.weightEntryOpen]);
+      return createRouter({ routeTree: root.addChildren([health]), history: createMemoryHistory({ initialEntries: [context.parameters.entry === undefined ? "/health" : `/health?entry=${context.parameters.entry}`] }) });
+    }, [context.parameters.entry]);
     return <RouterProvider router={router} />;
   }],
 } satisfies Meta<typeof HealthRoutePage>;
@@ -44,4 +44,18 @@ export const Recorded: Story = {
 };
 export const Empty: Story = { parameters: { msw: { handlers: handlers([]) } } };
 export const Dark: Story = { globals: { theme: "dark" } };
-export const WeightEntryOpen: Story = { name: "URL から体重記録を開く", parameters: { weightEntryOpen: true } };
+export const WeightEntryOpen: Story = { name: "URL から体重記録を開く", parameters: { entry: "weight" } };
+
+export const MealEntryOpen: Story = {
+  name: "URL から食事記録を開く",
+  parameters: { entry: "meal" },
+  play: async ({ canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await expect(await screen.findByRole("dialog", { name: "食事を記録" })).toBeVisible();
+    await expect(screen.queryByRole("dialog", { name: "体重を記録" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "食事の記録を閉じる" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "体重を記録" }));
+    await expect(await screen.findByRole("dialog", { name: "体重を記録" })).toBeVisible();
+  },
+};

@@ -15,7 +15,7 @@ describe("体重の記録頻度", () => {
       { id: "manual", source: "manual", weightKg: 82, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
     ]);
     client.setQueryData(mealsQuery.queryKey, []);
-    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
+    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
     expect(html.replace(/<[^>]*>/g, "").replace(/\s+/g, "")).toContain("記録頻度2/8日25%");
     client.clear();
   });

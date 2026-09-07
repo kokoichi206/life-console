@@ -10,7 +10,7 @@
 apps/web       Vite + React + TanStack Router/Query
 apps/api       Hono + Workers Static Assets + D1 + R2
 apps/runner    Mac で動く CLI/Orca adapter と job executor
-apps/android   体重入力 URL を開く Android ウィジェット
+apps/android   体重・食事入力 URL を開く Android ウィジェット
 packages/core       Result、構造化 logger
 packages/contracts  API の Zod schema、共有 DTO
 packages/db         Drizzle schema、migration、架空 seed
@@ -100,9 +100,9 @@ pnpm dev:runner
 
 manifest は認証 Cookie を送って取得します。Service Worker とオフラインキャッシュは使いません。アイコンの編集元は `apps/web/public/icons/app.svg`、配信用の PNG は同じディレクトリに置いています。
 
-## Android の体重記録ウィジェット
+## Android の記録ウィジェット
 
-[Android アプリ](apps/android/README.md) をインストールすると、ホーム画面に『体重を記録』ボタンを置けます。タップするとブラウザで本番の `/health?entry=weight` を開きます。Android アプリは API を呼ばず、ログインと記録は既存の Web 画面で行います。
+[Android アプリ](apps/android/README.md) をインストールすると、ホーム画面に『体重を記録』『食事を記録』のウィジェットを個別に置けます。ブラウザで本番の `/health?entry=weight` または `/health?entry=meal` を開きます。Android アプリは API を呼ばず、ログインと記録は既存の Web 画面で行います。
 
 ## 体重の記録
 
@@ -111,6 +111,14 @@ manifest は認証 Cookie を送って取得します。Service Worker とオフ
 `/health?entry=weight` で入力シートを開いた状態を復元します。再読み込みとブラウザの戻る・進むにも対応し、入力途中の体重・日時は URL には含めません。
 
 Storybook の `Health/体重を記録` でライト・ダーク・初回・保存中・保存失敗を確認できます。`Pages/健康` の『URL から体重記録を開く』では健康画面に重ねた状態を確認します。
+
+## 食事の記録
+
+『健康』の『食事を記録』から、写真・食事区分・日時・メモを入力するシートを開きます。写真かメモのどちらかを入力して保存します。写真は端末で縮小して JPEG に再生成し、EXIF を除去します。
+
+`/health?entry=meal` から直接開けます。再読み込みと戻る・進むにも対応し、閉じるか保存すると `entry` を URL から除きます。写真・メモ・入力中の日時は URL に含めません。開くたびに入力を初期化し、保存失敗時は入力を保持します。
+
+Storybook の `Health/食事を記録` でライト・ダーク・写真のみの保存・メモと日時の保存・保存失敗・保存中を確認できます。`Pages/健康` に『URL から食事記録を開く』も追加しています。
 
 ## 返信下書き
 
