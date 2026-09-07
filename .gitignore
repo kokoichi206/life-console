@@ -10,6 +10,7 @@ storybook-static/
 test-results/
 *.log
 .DS_Store
+__pycache__/
 private/
 backups/
 .claude/settings.local.json
