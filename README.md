@@ -150,7 +150,9 @@ Storybook の `Health/食事を記録` でライト・ダーク・写真のみ�
 
 ## 品質確認
 
-`develop` と `main` 向けの PR では GitHub Actions の `CI / Quality checks` が `pnpm check` を実行します。両ブランチの Rulesets で `Quality checks` を必須チェックに設定します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
+`develop` と `main` 向けの PR では GitHub Actions の `ci / Quality checks` が `pnpm check` を実行します。両ブランチの Rulesets で `Quality checks` を必須チェックに設定します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
+
+Android の変更には [ci-android](.github/workflows/ci-android.yml) で ktlint、カスタムルールのテスト、Android Lint、Debug APK ビルドを実行します。手元でのコマンドは [Android の README](clients/android/README.md#lint-と-ci) を参照してください。workflow 自体は [ci-github-workflows](.github/README.md) で zizmor と運用規約の検査にかけます。
 
 ```bash
 pnpm check
@@ -193,7 +195,7 @@ Workers、D1、R2 の使用量は Cloudflare dashboard で実測します。acco
 
 ### GitHub Actions からの更新
 
-[Deploy production](.github/workflows/deploy.yml) は `main` への push、または Actions 画面の『Run workflow』で実行します。Markdown、`docs/`、`.agents/`、`.claude/` だけの変更では自動実行を省略します。手動実行でも `main` を選択してください。他のブランチではデプロイ job を実行しません。
+[deploy](.github/workflows/deploy.yml) は `main` への push、または Actions 画面の『Run workflow』で実行します。Markdown、`docs/`、`.agents/`、`.claude/` だけの変更では自動実行を省略します。手動実行でも `main` を選択してください。他のブランチではデプロイ job を実行しません。
 
 クラウドは本番の 1 環境とし、開発中の変更はローカルと PR の CI で確認します。通常は feature ブランチから `develop` へ取り込み、リリース時に `develop` から `main` への PR を merge commit でマージします。`develop` へのマージだけでは本番を更新しません。GitHub の default branch は `develop` を維持します。現在の `develop` の Ruleset は default branch を対象としているため、default branch を変更する場合はルールの対象も見直してください。
 

@@ -1,0 +1,69 @@
+name: ci-android
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - "clients/android/**"
+      - ".github/workflows/ci-android.yml"
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - "clients/android/**"
+      - ".github/workflows/ci-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Android quality checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: clients/android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: "platforms;android-36 build-tools;35.0.0"
+
+      - name: Run Kotlin lint and custom rule tests
+        run: ./gradlew ktlintCheck :lint-rules:test --no-daemon
+
+      - name: Run Android lint, unit tests and debug build
+        run: ./gradlew :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --no-daemon
+
+      - name: Upload lint and test reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: android-reports
+          path: clients/android/**/build/reports/
+          retention-days: 7

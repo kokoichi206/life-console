@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "LifeConsoleWidget"
 include(":app")
+include(":lint-rules")
