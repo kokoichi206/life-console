@@ -1,0 +1,2 @@
+source,source_transaction_id,kind,amount_yen,category,payment_method,payee,occurred_at
+sample,transaction-001,expense,1280,food,card,"Sample shop, station branch",2026-09-01T12:30:00+09:00

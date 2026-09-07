@@ -1,0 +1,159 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "DM Sans", "Noto Sans JP", sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+}
+
+:root {
+  color-scheme: light;
+  --background: #f5f7fa;
+  --foreground: #263746;
+  --card: #ffffff;
+  --card-foreground: #263746;
+  --popover: #ffffff;
+  --popover-foreground: #263746;
+  --primary: #086b6d;
+  --primary-foreground: #ffffff;
+  --secondary: #edf2f6;
+  --secondary-foreground: #263746;
+  --muted: #f1f5f8;
+  --muted-foreground: #5f7182;
+  --accent: #e3f3f2;
+  --accent-foreground: #0b6264;
+  --destructive: #b42335;
+  --border: #d5dee7;
+  --input: #cbd6df;
+  --ring: #0f8f91;
+  --sidebar: #26333f;
+  --sidebar-foreground: #e7edf2;
+  --sidebar-primary: #086b6d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #354451;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #3b4854;
+  --sidebar-ring: #40b5b6;
+  --chart-1: #0f8f91;
+  --chart-2: #e4674c;
+  --chart-3: #c58a27;
+  --chart-4: #39758e;
+  --chart-5: #7d6ca8;
+  --success: #2e9766;
+  --warning: #c58a27;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #090807;
+  --foreground: #f5f1ed;
+  --card: #151311;
+  --card-foreground: #f5f1ed;
+  --popover: #191613;
+  --popover-foreground: #f5f1ed;
+  --primary: #f97316;
+  --primary-foreground: #1c0d04;
+  --secondary: #27221e;
+  --secondary-foreground: #f1eae4;
+  --muted: #1d1a17;
+  --muted-foreground: #a99e95;
+  --accent: #3a2112;
+  --accent-foreground: #fed7aa;
+  --destructive: #fb7185;
+  --border: #332c26;
+  --input: #40362e;
+  --ring: #f97316;
+  --sidebar: #12100e;
+  --sidebar-foreground: #eee7e1;
+  --sidebar-primary: #c94a0b;
+  --sidebar-primary-foreground: #fff7ed;
+  --sidebar-accent: #29211b;
+  --sidebar-accent-foreground: #fff7ed;
+  --sidebar-border: #302923;
+  --sidebar-ring: #f97316;
+  --chart-1: #f97316;
+  --chart-2: #d6d3d1;
+  --chart-3: #fbbf24;
+  --chart-4: #fdba74;
+  --chart-5: #a8a29e;
+  --success: #4ade80;
+  --warning: #fbbf24;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply min-w-80 bg-background text-foreground antialiased;
+    min-height: 100vh;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  a,
+  button,
+  input,
+  select,
+  textarea {
+    transition-duration: 150ms;
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

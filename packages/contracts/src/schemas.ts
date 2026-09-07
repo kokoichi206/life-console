@@ -1,0 +1,302 @@
+import { z } from "zod";
+
+const isoDateTimeSchema = z.iso.datetime({ offset: true });
+const identifierSchema = z.string().min(1).max(128);
+
+export const taskStatusSchema = z.enum(["inbox", "todo", "doing", "done", "canceled"]);
+export const conversationClassificationSchema = z.enum([
+  "unprocessed",
+  "task_candidate",
+  "reference",
+  "no_action",
+]);
+export const connectorKindSchema = z.enum(["slack", "chatwork", "talknote", "gmail"]);
+export const repositoryRoleSchema = z.enum(["work", "context", "default_work", "always_read"]);
+export const sourceScopeSchema = z.enum(["channel", "room"]);
+export const jobStatusSchema = z.enum([
+  "queued",
+  "claimed",
+  "running",
+  "waiting_for_user",
+  "succeeded",
+  "failed",
+  "canceled",
+  "lost",
+  "expired",
+  "skipped_precondition",
+]);
+export const jobKindSchema = z.enum([
+  "slack_sync",
+  "chatwork_sync",
+  "gmail_sync",
+  "talknote_sync",
+  "reply_drafts",
+  "conversation_reply",
+  "weight_import",
+  "finance_import",
+  "nutrition_analysis",
+  "agent",
+  "github_promotion",
+  "backup",
+  "repository_scan",
+]);
+export const agentProviderSchema = z.enum(["codex", "claude"]);
+export const scheduleIntervalSchema = z.enum(["hourly", "daily", "weekly"]);
+export const scheduleCoalescingSchema = z.enum(["skip_if_pending", "queue_all"]);
+export const mealKindSchema = z.enum(["breakfast", "lunch", "dinner", "snack"]);
+export const financeEntryKindSchema = z.enum(["income", "expense"]);
+export const assetKindSchema = z.enum(["cash", "investment", "debt"]);
+
+export const createTaskSchema = z.object({
+  title: z.string().trim().min(1).max(240),
+  description: z.string().trim().max(10_000).default(""),
+  dueAt: isoDateTimeSchema.nullable().default(null),
+  conversationId: identifierSchema.nullable().default(null),
+  repositoryId: identifierSchema.nullable().default(null),
+});
+
+export const updateTaskSchema = createTaskSchema.partial().extend({
+  status: taskStatusSchema.optional(),
+});
+
+export const classifyConversationSchema = z.object({
+  classification: conversationClassificationSchema.exclude(["unprocessed"]),
+});
+
+export const listConversationsQuerySchema = z.object({
+  connector: connectorKindSchema.optional(),
+  classification: conversationClassificationSchema.optional(),
+  period: z.enum(["24h", "3d", "7d", "all"]).default("24h"),
+});
+
+export const importedConversationSchema = z.object({
+  externalMessageId: identifierSchema,
+  authorLabel: z.string().trim().min(1).max(120),
+  excerpt: z.string().trim().min(1).max(2_000),
+  sourceUrl: z.url().nullable().default(null),
+  occurredAt: isoDateTimeSchema,
+  classification: conversationClassificationSchema.default("unprocessed"),
+});
+
+export const importConversationsSchema = z.object({
+  connector: connectorKindSchema,
+  sourceId: identifierSchema,
+  sourceLabel: z.string().trim().min(1).max(240),
+  watermark: z.string().min(1).max(500),
+  conversations: z.array(importedConversationSchema).max(1_000),
+});
+
+export const createConnectorSyncSchema = z.object({
+  connector: connectorKindSchema,
+});
+
+export const replyCalendarRequestSchema = z.object({
+  from: z.iso.date(),
+  through: z.iso.date(),
+  dayStart: z.iso.time({ precision: -1 }),
+  dayEnd: z.iso.time({ precision: -1 }),
+  durationMinutes: z.union([z.literal(30), z.literal(60)]),
+}).refine((input) => input.from <= input.through && Date.parse(input.through) - Date.parse(input.from) < 31 * 86_400_000,
+  { message: "カレンダーの確認期間は開始日から 31 日以内にしてください。" })
+  .refine((input) => input.dayStart < input.dayEnd, { message: "候補時間帯の終了は開始より後にしてください。" });
+export type ReplyCalendarRequest = z.infer<typeof replyCalendarRequestSchema>;
+
+export const createReplyDraftsSchema = z.object({
+  connector: connectorKindSchema,
+  period: z.enum(["24h", "3d", "7d"]).default("7d"),
+  conversationId: identifierSchema.optional(),
+  calendar: replyCalendarRequestSchema.optional(),
+});
+export const replyDraftDecisionSchema = z.object({
+  status: z.enum(["ready", "replied", "no_action", "needs_review"]),
+  body: z.string().max(5_000),
+  reason: z.string().min(1).max(3_000),
+  replyEvidenceId: z.string().nullable(),
+}).refine((input) => input.status !== "ready" || input.body.trim().length > 0, { message: "下書き本文がありません。" });
+export const saveReplyDraftSchema = z.object({
+  conversationId: identifierSchema,
+  decision: replyDraftDecisionSchema,
+  checkedAt: isoDateTimeSchema,
+  jobId: identifierSchema,
+  leaseToken: z.uuid(),
+});
+export const editReplyDraftSchema = z.object({
+  body: z.string().trim().min(1).max(5_000),
+  updatedAt: isoDateTimeSchema,
+});
+export type CreateReplyDraftsInput = z.infer<typeof createReplyDraftsSchema>;
+export type ReplyDraftDecision = z.infer<typeof replyDraftDecisionSchema>;
+export type SaveReplyDraftInput = z.infer<typeof saveReplyDraftSchema>;
+export type EditReplyDraftInput = z.infer<typeof editReplyDraftSchema>;
+
+export const createConversationReplySchema = z.object({
+  body: z.string().trim().min(1).max(5_000),
+});
+
+export const createMealUploadSchema = z.object({
+  clientId: z.uuid(),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+});
+
+export const createMealSchema = z.object({
+  clientId: z.uuid(),
+  photoId: identifierSchema.nullable().default(null),
+  memo: z.string().trim().max(2_000).default(""),
+  mealKind: mealKindSchema,
+  occurredAt: isoDateTimeSchema,
+  tags: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
+}).refine((input) => input.photoId !== null || input.memo.length > 0, {
+  message: "写真またはメモのどちらかが必要です。",
+  path: ["memo"],
+});
+
+export const createNutritionEstimateSchema = z.object({
+  model: z.string().trim().min(1).max(120),
+  analyzedAt: isoDateTimeSchema,
+  inputHash: z.string().regex(/^[a-f0-9]{64}$/),
+  caloriesKcal: z.number().int().nonnegative(),
+  proteinGrams: z.number().nonnegative(),
+  fatGrams: z.number().nonnegative(),
+  carbohydrateGrams: z.number().nonnegative(),
+});
+
+export const createWeightSchema = z.object({
+  source: z.enum(["manual", "csv"]),
+  sourceKey: z.string().trim().min(1).max(240),
+  weightKg: z.number().positive().max(500),
+  occurredAt: isoDateTimeSchema,
+});
+
+export const weightCsvRowSchema = z.object({
+  date: z.iso.date(),
+  weightKg: z.number().positive().max(500),
+});
+
+export const createFinanceTransactionSchema = z.object({
+  source: z.string().trim().min(1).max(80),
+  sourceTransactionId: z.string().trim().min(1).max(240),
+  kind: financeEntryKindSchema,
+  amountYen: z.number().int().positive(),
+  category: z.string().trim().min(1).max(80),
+  paymentMethod: z.string().trim().min(1).max(80),
+  payee: z.string().trim().max(160).default(""),
+  occurredAt: isoDateTimeSchema,
+});
+
+export const createFinanceAdjustmentSchema = z.object({
+  transactionId: identifierSchema,
+  amountDeltaYen: z.number().int(),
+  reason: z.string().trim().min(1).max(500),
+});
+
+export const createAssetBalanceSchema = z.object({
+  accountName: z.string().trim().min(1).max(120),
+  assetKind: assetKindSchema,
+  amountYen: z.number().int(),
+  occurredAt: isoDateTimeSchema,
+});
+
+export const createNoteSchema = z.object({
+  body: z.string().trim().min(1).max(10_000),
+  occurredAt: isoDateTimeSchema,
+});
+
+export const registerRunnerSchema = z.object({
+  runnerId: identifierSchema,
+  name: z.string().trim().min(1).max(120),
+  tokenExpiresAt: isoDateTimeSchema.nullable(),
+  orcaStatus: z.enum(["healthy", "unreachable", "unknown"]),
+});
+
+export const runnerHeartbeatSchema = z.object({
+  runnerId: identifierSchema,
+  orcaStatus: z.enum(["healthy", "unreachable", "unknown"]),
+});
+
+export const claimJobSchema = z.object({
+  runnerId: identifierSchema,
+});
+
+export const jobHeartbeatSchema = z.object({
+  runnerId: identifierSchema,
+  leaseToken: z.uuid(),
+  progressSummary: z.string().trim().max(240).nullable().default(null),
+  waitingForUser: z.boolean().default(false),
+});
+
+export const completeJobSchema = z.object({
+  runnerId: identifierSchema,
+  leaseToken: z.uuid(),
+  outcome: z.enum(["succeeded", "failed", "canceled", "skipped_precondition"]),
+  errorCode: z.string().trim().max(80).nullable().default(null),
+  summary: z.string().trim().max(240),
+});
+
+export const agentReportSchema = completeJobSchema.omit({
+  runnerId: true,
+  leaseToken: true,
+});
+
+export const createAgentJobSchema = z.object({
+  taskId: identifierSchema,
+  repositoryId: identifierSchema,
+  provider: agentProviderSchema,
+  executionMode: z.enum(["main_checkout", "new_worktree"]),
+});
+
+export const createRepositorySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  localPath: z.string().trim().min(1).max(1_024),
+});
+
+export const syncRepositoriesSchema = z.object({
+  repositories: z.array(createRepositorySchema).max(1_000),
+});
+
+export const upsertSourceRepositoryMappingSchema = z.object({
+  connector: connectorKindSchema.extract(["slack", "chatwork"]),
+  sourceScope: sourceScopeSchema,
+  sourceId: identifierSchema,
+  repositoryId: identifierSchema,
+});
+
+export const assignRepositorySchema = z.object({
+  repositoryId: identifierSchema,
+  role: repositoryRoleSchema,
+});
+
+export const promoteTaskSchema = z.object({
+  target: z.enum(["github_issue", "github_project"]),
+  repositoryId: identifierSchema,
+});
+
+export const createScheduleSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  jobKind: jobKindSchema.exclude(["reply_drafts"]),
+  interval: scheduleIntervalSchema,
+  timezone: z.string().trim().min(1).max(80),
+  nextRunAt: isoDateTimeSchema,
+  coalescing: scheduleCoalescingSchema,
+  deadlineSeconds: z.number().int().positive().max(604_800),
+});
+
+export type CreateTaskInput = z.infer<typeof createTaskSchema>;
+export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+export type CreateMealInput = z.infer<typeof createMealSchema>;
+export type CreateWeightInput = z.infer<typeof createWeightSchema>;
+export type CreateFinanceTransactionInput = z.infer<typeof createFinanceTransactionSchema>;
+export type CreateFinanceAdjustmentInput = z.infer<typeof createFinanceAdjustmentSchema>;
+export type CreateAssetBalanceInput = z.infer<typeof createAssetBalanceSchema>;
+export type RegisterRunnerInput = z.infer<typeof registerRunnerSchema>;
+export type JobHeartbeatInput = z.infer<typeof jobHeartbeatSchema>;
+export type CompleteJobInput = z.infer<typeof completeJobSchema>;
+export type CreateAgentJobInput = z.infer<typeof createAgentJobSchema>;
+export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
+export type ImportConversationsInput = z.infer<typeof importConversationsSchema>;
+export type ListConversationsInput = z.infer<typeof listConversationsQuerySchema>;
+export type CreateConnectorSyncInput = z.infer<typeof createConnectorSyncSchema>;
+export type CreateConversationReplyInput = z.infer<typeof createConversationReplySchema>;
+export type SyncRepositoriesInput = z.infer<typeof syncRepositoriesSchema>;
+export type UpsertSourceRepositoryMappingInput = z.infer<typeof upsertSourceRepositoryMappingSchema>;
+export type JobKind = z.infer<typeof jobKindSchema>;
+export type JobStatus = z.infer<typeof jobStatusSchema>;

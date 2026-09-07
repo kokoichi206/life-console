@@ -1,0 +1,29 @@
+{
+  "name": "@life-console/eslint-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./rules": "./rules/index.js"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@eslint/js": "^9.39.5",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@typescript-eslint/utils": "^8.69.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-jsonc": "^3.4.2",
+    "eslint-plugin-yml": "^3.8.1",
+    "jsonc-eslint-parser": "^3.3.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.69.0",
+    "yaml-eslint-parser": "^2.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.11"
+  }
+}
