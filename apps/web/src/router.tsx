@@ -9,6 +9,7 @@ import { jobsQuery } from "./features/jobs/queries";
 import { dashboardQuery } from "./features/overview/queries";
 import { repositoriesQuery } from "./features/repositories/queries";
 import { financeQuery } from "./pages/finance/queries";
+import { parseHealthSearch } from "./pages/health/health-search";
 import { mealsQuery, weightsQuery } from "./pages/health/queries";
 import { parseWorkSearch } from "./pages/work/work-search";
 
@@ -18,7 +19,7 @@ type RouterContext = {
 
 const DashboardPage = lazy(async () => ({ default: (await import("./pages/dashboard/DashboardPage")).DashboardPage }));
 const TasksPage = lazy(async () => ({ default: (await import("./pages/work/TasksPage")).TasksPage }));
-const HealthPage = lazy(async () => ({ default: (await import("./pages/health/HealthPage")).HealthPage }));
+const HealthPage = lazy(async () => ({ default: (await import("./pages/health/HealthRoutePage")).HealthRoutePage }));
 const FinancePage = lazy(async () => ({ default: (await import("./pages/finance/FinancePage")).FinancePage }));
 const OperationsPage = lazy(async () => ({ default: (await import("./pages/operations/OperationsPage")).OperationsPage }));
 
@@ -52,6 +53,7 @@ const tasksRoute = createRoute({
 const healthRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/health",
+  validateSearch: parseHealthSearch,
   loader: async ({ context }) => Promise.all([
     context.queryClient.ensureQueryData(weightsQuery),
     context.queryClient.ensureQueryData(mealsQuery),

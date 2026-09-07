@@ -1,6 +1,6 @@
 import { calculate7DayMovingAverage, weightCalendarDate, weightCalendarDayTimestamp } from "@life-console/contracts";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { api } from "../../api";
 import { EmptyState, Eyebrow, Field, FormError, MetricCard, Panel, SectionHeading } from "../../components/DesignSystem";
@@ -11,6 +11,7 @@ import { Input } from "../../components/ui/input";
 import { NativeSelect } from "../../components/ui/native-select";
 import { Textarea } from "../../components/ui/textarea";
 
+import { WeightEntryDialog } from "./_components/WeightEntryDialog";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
 import { normalizeMealPhoto } from "./meal-photo";
 import { mealsQuery, weightsQuery } from "./queries";
@@ -32,12 +33,13 @@ const localDateTime = (): string => {
   return date.toISOString().slice(0, 16);
 };
 
-export const HealthPage = () => {
+export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange }: {
+  readonly weightEntryOpen: boolean;
+  readonly onWeightEntryOpenChange: (open: boolean) => void;
+}) => {
   const queryClient = useQueryClient();
   const { data: weights } = useSuspenseQuery(weightsQuery);
   const { data: meals } = useSuspenseQuery(mealsQuery);
-  const [weightKg, setWeightKg] = useState(() => weights.at(-1)?.weightKg.toString() ?? "");
-  const [weightOccurredAt, setWeightOccurredAt] = useState(localDateTime());
   const [mealOccurredAt, setMealOccurredAt] = useState(localDateTime());
   const [mealKind, setMealKind] = useState<"breakfast" | "lunch" | "dinner" | "snack">("dinner");
   const [memo, setMemo] = useState("");
@@ -46,9 +48,6 @@ export const HealthPage = () => {
   const [showWeightTable, setShowWeightTable] = useState(false);
   const weightTrend = useMemo(() => calculate7DayMovingAverage(weights), [weights]);
   const latestWeight = weightTrend.at(-1);
-  useEffect(() => {
-    if (latestWeight !== undefined) setWeightKg(latestWeight.weightKg.toString());
-  }, [latestWeight]);
   const availableYears = useMemo(() => [...new Set(weightTrend.map((point) => weightCalendarDate(point.occurredAt).slice(0, 4)))].reverse(), [weightTrend]);
   const visibleWeightTrend = useMemo(() => {
     if (weightRange === "all") return weightTrend;
@@ -68,13 +67,6 @@ export const HealthPage = () => {
     ? 0
     : Math.round((weightCalendarDayTimestamp(lastVisibleWeight.occurredAt) - weightCalendarDayTimestamp(firstVisibleWeight.occurredAt)) / ONE_DAY_MILLISECONDS) + 1;
   const periodChange = firstVisibleWeight === undefined || lastVisibleWeight === undefined ? undefined : lastVisibleWeight.weightKg - firstVisibleWeight.weightKg;
-  const createWeight = useMutation({
-    mutationFn: api.createWeight,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["weights"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-  });
   const importCsv = useMutation({
     mutationFn: async (file: File) => api.importWeightCsv(await file.text()),
     onSuccess: async () => {
@@ -112,15 +104,6 @@ export const HealthPage = () => {
       await queryClient.invalidateQueries({ queryKey: ["meals"] });
     },
   });
-  const submitWeight = (event: FormEvent) => {
-    event.preventDefault();
-    createWeight.mutate({
-      source: "manual",
-      sourceKey: crypto.randomUUID(),
-      weightKg: Number(weightKg),
-      occurredAt: new Date(weightOccurredAt).toISOString(),
-    });
-  };
   const selectWeightCsv = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file !== undefined) importCsv.mutate(file);
@@ -133,6 +116,10 @@ export const HealthPage = () => {
   return (
     <>
       <PageHeader eyebrow="LIFE / HEALTH" title="体重と食事" description="体重の実測値と7日移動平均、食事の記録をまとめて確認します。" />
+      <div className="mb-6 flex justify-end">
+        <Button className="h-11 rounded-xl px-5" onClick={() => onWeightEntryOpenChange(true)}>体重を記録</Button>
+      </div>
+      <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />
       <section className="mb-6">
         <header className="mb-4 flex items-end justify-between gap-6 max-md:flex-col max-md:items-start">
           <div>
@@ -249,19 +236,14 @@ export const HealthPage = () => {
         </Panel>
       </section>
       <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-[0.8fr_1.15fr_1.05fr]">
-        <form onSubmit={submitWeight}>
-          <Panel className="gap-4 px-5">
-            <div className="space-y-1.5">
-              <Eyebrow>QUICK ENTRY</Eyebrow>
-              <h2 className="text-base font-semibold">体重を記録</h2>
-            </div>
-            <Field label="体重 (kg)"><Input required type="number" min="1" max="500" step="0.1" inputMode="decimal" value={weightKg} onChange={(event) => setWeightKg(event.target.value)} /></Field>
-            <Field label="計測日時"><Input required type="datetime-local" value={weightOccurredAt} onChange={(event) => setWeightOccurredAt(event.target.value)} /></Field>
-            <Button type="submit" size="lg" className="w-full" disabled={createWeight.isPending}>保存する</Button>
-            <Field label="CSV を取り込む"><Input type="file" accept=".csv,text/csv" onChange={selectWeightCsv} /></Field>
-            {createWeight.error !== null && <FormError>{createWeight.error.message}</FormError>}
-          </Panel>
-        </form>
+        <Panel className="gap-4 px-5">
+          <div className="space-y-1.5">
+            <Eyebrow>WEIGHT IMPORT</Eyebrow>
+            <h2 className="text-base font-semibold">体重の CSV 取り込み</h2>
+          </div>
+          <Field label="CSV を取り込む"><Input type="file" accept=".csv,text/csv" onChange={selectWeightCsv} /></Field>
+          {importCsv.error !== null && <FormError>{importCsv.error.message}</FormError>}
+        </Panel>
         <form onSubmit={submitMeal}>
           <Panel className="gap-4 px-5">
             <div className="space-y-1.5">

@@ -7,7 +7,7 @@ import { defineConfig, mergeConfig } from "vitest/config";
 import viteConfig from "./vite.config";
 
 const config = mergeConfig(viteConfig, defineConfig({
-  optimizeDeps: { include: ["@tanstack/react-router"] },
+  optimizeDeps: { include: ["@tanstack/react-router", "@base-ui/react/dialog"] },
   plugins: [storybookTest({ configDir: fileURLToPath(new URL("./.storybook", import.meta.url)) })],
   test: {
     name: "storybook",
