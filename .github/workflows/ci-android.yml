@@ -49,8 +49,10 @@ jobs:
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4
+        with:
+          packages: "platforms;android-36 build-tools;35.0.0"
 
       - name: Run Kotlin lint and custom rule tests
         run: ./gradlew ktlintCheck :lint-rules:test --no-daemon

@@ -5,6 +5,8 @@
 - zizmor `1.30.0`: action の SHA 固定、token の権限、shell への式の直接展開、checkout の認証情報保持などを検査。結果は annotation に出力します。
 - `scripts/lint-workflows.py`: workflow 名とファイル名の一致、各 job の `timeout-minutes`、空でない step 名、step 間の空行を検査。reusable workflow を呼ぶ job は `timeout-minutes` を指定できないため対象外です。
 
+zizmor 本体を更新するときは、固定した `zizmor-action` の `support/versions` にそのバージョンが含まれることを確認してください。Action は同ファイルに登録されたコンテナだけを実行します。
+
 ローカルでは [uv](https://docs.astral.sh/uv/) を用意し、リポジトリルートで実行します。Python の依存はスクリプトに固定しています。
 
 ```bash
