@@ -1,5 +1,5 @@
 import type { LifeConsoleRepository } from "@api/repositories/life-console-repository";
-import { err, ok, safeTry, type Result } from "@life-console/contracts";
+import { err, ok, safeTry, type Result } from "@life-console/core";
 import { AwsClient } from "aws4fetch";
 
 import { appError, type AppError } from "../shared/app-error";

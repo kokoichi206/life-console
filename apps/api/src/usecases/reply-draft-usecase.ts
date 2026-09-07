@@ -1,5 +1,6 @@
 import type { LifeConsoleRepository } from "@api/repositories/life-console-repository";
-import { err, ok, type Conversation, type CreateReplyDraftsInput, type EditReplyDraftInput, type Job, type ReplyDraft, type Result, type SaveReplyDraftInput } from "@life-console/contracts";
+import { type Conversation, type CreateReplyDraftsInput, type EditReplyDraftInput, type Job, type ReplyDraft, type SaveReplyDraftInput } from "@life-console/contracts";
+import { err, ok, type Result } from "@life-console/core";
 
 import { appError, type AppError } from "../shared/app-error";
 import type { Clock } from "../shared/clock";

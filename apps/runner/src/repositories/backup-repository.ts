@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import { err, ok, safeTry, type Result } from "@life-console/contracts";
+import { err, ok, safeTry, type Result } from "@life-console/core";
 
 import type { RunnerConfig } from "../config";
 import { runnerError, type RunnerError } from "../errors";

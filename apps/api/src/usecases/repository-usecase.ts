@@ -1,5 +1,6 @@
 import type { LifeConsoleRepository, Repository, SourceRepositoryMapping } from "@api/repositories/life-console-repository";
-import type { Result, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput } from "@life-console/contracts";
+import type { SyncRepositoriesInput, UpsertSourceRepositoryMappingInput } from "@life-console/contracts";
+import type { Result } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
 import type { Clock } from "../shared/clock";

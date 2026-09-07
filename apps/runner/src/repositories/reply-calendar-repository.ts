@@ -1,4 +1,5 @@
-import { err, ok, type ReplyCalendarRequest, type Result } from "@life-console/contracts";
+import { type ReplyCalendarRequest } from "@life-console/contracts";
+import { err, ok, type Result } from "@life-console/core";
 import { z } from "zod";
 
 import { runnerError, type RunnerError } from "../errors";

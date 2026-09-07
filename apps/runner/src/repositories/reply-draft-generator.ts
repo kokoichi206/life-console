@@ -1,4 +1,5 @@
-import { err, ok, replyDraftDecisionSchema, type Conversation, type ReplyDraftDecision, type Result } from "@life-console/contracts";
+import { replyDraftDecisionSchema, type Conversation, type ReplyDraftDecision } from "@life-console/contracts";
+import { err, ok, type Result } from "@life-console/core";
 import { z } from "zod";
 
 import { runnerError, type RunnerError } from "../errors";

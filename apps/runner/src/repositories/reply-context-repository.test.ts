@@ -1,4 +1,5 @@
-import { ok, type Conversation } from "@life-console/contracts";
+import { type Conversation } from "@life-console/contracts";
+import { ok } from "@life-console/core";
 import { describe, expect, it, vi } from "vitest";
 
 import type { CommandRepository } from "./command-repository";

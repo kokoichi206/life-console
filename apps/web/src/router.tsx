@@ -5,25 +5,22 @@ import { lazy } from "react";
 import { AppShell } from "./components/AppShell";
 import { Eyebrow, Panel } from "./components/DesignSystem";
 import { Button } from "./components/ui/Button";
-import { parseWorkSearch } from "./lib/work-search";
-import {
-  dashboardQuery,
-  financeQuery,
-  jobsQuery,
-  mealsQuery,
-  repositoriesQuery,
-  weightsQuery,
-} from "./query";
+import { jobsQuery } from "./features/jobs/queries";
+import { dashboardQuery } from "./features/overview/queries";
+import { repositoriesQuery } from "./features/repositories/queries";
+import { financeQuery } from "./pages/finance/queries";
+import { mealsQuery, weightsQuery } from "./pages/health/queries";
+import { parseWorkSearch } from "./pages/work/work-search";
 
 type RouterContext = {
   readonly queryClient: QueryClient;
 };
 
-const DashboardPage = lazy(async () => ({ default: (await import("./pages/DashboardPage")).DashboardPage }));
-const TasksPage = lazy(async () => ({ default: (await import("./pages/TasksPage")).TasksPage }));
-const HealthPage = lazy(async () => ({ default: (await import("./pages/HealthPage")).HealthPage }));
-const FinancePage = lazy(async () => ({ default: (await import("./pages/FinancePage")).FinancePage }));
-const OperationsPage = lazy(async () => ({ default: (await import("./pages/OperationsPage")).OperationsPage }));
+const DashboardPage = lazy(async () => ({ default: (await import("./pages/dashboard/DashboardPage")).DashboardPage }));
+const TasksPage = lazy(async () => ({ default: (await import("./pages/work/TasksPage")).TasksPage }));
+const HealthPage = lazy(async () => ({ default: (await import("./pages/health/HealthPage")).HealthPage }));
+const FinancePage = lazy(async () => ({ default: (await import("./pages/finance/FinancePage")).FinancePage }));
+const OperationsPage = lazy(async () => ({ default: (await import("./pages/operations/OperationsPage")).OperationsPage }));
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: AppShell,

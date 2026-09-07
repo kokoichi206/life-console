@@ -6,6 +6,8 @@ wrangler.production.jsonc
 .env
 .env.local
 coverage/
+storybook-static/
+test-results/
 *.log
 .DS_Store
 private/

@@ -1,10 +1,6 @@
 import type { FinanceSummary, LifeConsoleRepository } from "@api/repositories/life-console-repository";
-import type {
-  CreateAssetBalanceInput,
-  CreateFinanceAdjustmentInput,
-  CreateFinanceTransactionInput,
-  Result,
-} from "@life-console/contracts";
+import type { CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput } from "@life-console/contracts";
+import type { Result } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
 import type { Clock } from "../shared/clock";
