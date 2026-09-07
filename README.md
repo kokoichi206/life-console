@@ -2,7 +2,7 @@
 
 仕事、会話、家計、体重、食事、coding agent の実行状況を一か所で扱う、本人用のダッシュボードです。公開コードと個人データを分離し、Web/API は Cloudflare、外部 CLI と agent 実行は Mac の runner が担当します。
 
-[要件定義](docs/requirements.md)に定めた MVP を実装しています。Talknote、栄養推定の自動化、PWA の追加機能、Android/iOS native、複数リポジトリ UI、GitHub との双方向同期は要件上の MVP 対象外です。
+[要件定義](docs/requirements.md)に定めた MVP を実装しています。Talknote、栄養推定の自動化、PWA の追加機能、Android/iOS の画面全体の native 化、複数リポジトリ UI、GitHub との双方向同期は要件上の MVP 対象外です。
 
 ## 構成
 
@@ -10,6 +10,7 @@
 apps/web       Vite + React + TanStack Router/Query
 apps/api       Hono + Workers Static Assets + D1 + R2
 apps/runner    Mac で動く CLI/Orca adapter と job executor
+apps/android   体重入力 URL を開く Android ウィジェット
 packages/core       Result、構造化 logger
 packages/contracts  API の Zod schema、共有 DTO
 packages/db         Drizzle schema、migration、架空 seed
@@ -98,6 +99,10 @@ pnpm dev:runner
 追加した Life Console のアイコンから、ホーム画面をアドレスバーなしで開けます。利用にはネットワーク接続が必要です。Access のセッションが切れた場合は再ログインします。
 
 manifest は認証 Cookie を送って取得します。Service Worker とオフラインキャッシュは使いません。アイコンの編集元は `apps/web/public/icons/app.svg`、配信用の PNG は同じディレクトリに置いています。
+
+## Android の体重記録ウィジェット
+
+[Android アプリ](apps/android/README.md) をインストールすると、ホーム画面に『体重を記録』ボタンを置けます。タップするとブラウザで本番の `/health?entry=weight` を開きます。Android アプリは API を呼ばず、ログインと記録は既存の Web 画面で行います。
 
 ## 体重の記録
 

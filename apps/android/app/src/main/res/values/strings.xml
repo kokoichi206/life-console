@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Life Console Widget</string>
+    <string name="brand">Life Console</string>
+    <string name="record_weight">体重を記録</string>
+    <string name="widget_description">体重の入力画面を開きます。</string>
+    <string name="heading">体重の記録を、\nホーム画面から。</string>
+    <string name="widget_instructions">ウィジェットをタップすると、前回の体重が入った記録画面を開けます。</string>
+    <string name="add_widget">ホーム画面に追加</string>
+    <string name="open_weight">記録画面を開く</string>
+    <string name="add_manually">ホーム画面を長押しし、「ウィジェット」から Life Console Widget を選んで追加してください。</string>
+    <string name="login_hint">初回はブラウザでログインしてください。</string>
+</resources>
