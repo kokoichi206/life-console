@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.life-console.runner</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/absolute/path/to/node</string>
+      <string>/absolute/path/to/life-console/apps/runner/dist/index.js</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/absolute/path/to/life-console</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/absolute/private/path/life-console-runner.log</string>
+    <key>StandardErrorPath</key>
+    <string>/absolute/private/path/life-console-runner-error.log</string>
+  </dict>
+</plist>

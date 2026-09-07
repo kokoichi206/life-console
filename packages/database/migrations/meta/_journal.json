@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788272981175,
+      "tag": "0000_futuristic_captain_america",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788359285252,
+      "tag": "0001_demonic_tenebrous",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788696616898,
+      "tag": "0002_grey_fallen_one",
+      "breakpoints": true
+    }
+  ]
+}

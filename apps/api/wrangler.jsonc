@@ -1,0 +1,43 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "life-console",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [],
+  "vars": {
+    "APP_ENV": "local",
+    "PHOTO_UPLOAD_MODE": "worker"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "life-console-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/database/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEAL_PHOTOS",
+      "bucket_name": "life-console-meal-photos",
+      "preview_bucket_name": "life-console-meal-photos-preview"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  }
+}
