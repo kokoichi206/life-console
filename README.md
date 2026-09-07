@@ -156,6 +156,33 @@ runner を本番へ接続するときは、別途 `RUNNER_TOKEN` と Access の�
 
 Workers、D1、R2 の使用量は Cloudflare dashboard で実測します。account token をアプリへ渡していないため、Life Console 内には未取得値やゼロ固定値を表示しません。
 
+### GitHub Actions からの更新
+
+[Deploy production](.github/workflows/deploy.yml) は `develop` への push、または Actions 画面の『Run workflow』で実行します。Markdown、`docs/`、`.agents/`、`.claude/` だけの変更では自動実行を省略します。手動実行でも `develop` を選択してください。他のブランチではデプロイ job を実行しません。
+
+この workflow は、上記の初回配置と Cloudflare Access の保護設定を済ませた本番 Worker の更新用です。production 設定例から設定を生成し、`workers_dev: true`、`preview_urls: false`、`routes: []` で既存の Worker を更新します。配置設定を変える場合は、設定例と workflow も更新してください。
+
+GitHub リポジトリの Settings → Environments で `production` を作成します。『Deployment branches and tags』を『Selected branches and tags』にし、種類を Branch、名前を `develop` としたルールだけを登録してください。workflow の条件に加えて、Environment 側でも他のブランチやタグからのデプロイと Secrets の利用を制限します。
+
+次の Environment secrets を登録します。
+
+| Secret | 値 |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | 配置先アカウントに限定したデプロイ用 API token |
+| `CLOUDFLARE_ACCOUNT_ID` | private 設定の `account_id` |
+| `CLOUDFLARE_D1_DATABASE_ID` | private 設定の `d1_databases[0].database_id` |
+| `CLOUDFLARE_R2_BUCKET_NAME` | private 設定の `r2_buckets[0].bucket_name` |
+
+API token は [Cloudflare の GitHub Actions 手順](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)の『Edit Cloudflare Workers』を基に、D1 の migration 適用に必要な `Account / D1 / Edit` 権限も付けます。`Account / Workers R2 Storage / Edit` 権限も含めてください。権限名は [API token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)を参照してください。対話ログイン用の OAuth token は使いません。API token は次のコマンドでも入力できます。
+
+```bash
+gh secret set CLOUDFLARE_API_TOKEN --env production
+```
+
+Node.js 24 と `package.json` 指定の pnpm を使い、lockfile に従ってインストールします。`pnpm check` と本番設定の dry-run が成功した後、remote D1 に未適用の migration を適用し、ビルド済みの Web と API をまとめて deploy します。Mac の runner の更新と本番 seed の投入は含みません。
+
+同時に実行できる本番デプロイは 1 件です。後続の push が来ても実行中の migration と deploy は自動キャンセルしません。migration 成功後に deploy が失敗した場合、適用済みの migration は残るため、変更は稼働中の Worker と互換性を保ってください。
+
 ## データ保護
 
 `.dev.vars`、`.env`、`.env.local`、production Wrangler 設定、`private/`、`backups/` は Git 対象外です。リポジトリの seed、CSV 例、設定例には実データやローカル絶対パスを入れないでください。agent transcript、terminal 出力、connector 資格情報は Mac の外へ送らない設計です。
