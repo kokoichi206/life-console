@@ -22,6 +22,10 @@ API は `handler -> usecase -> repository` の向きに依存し、外部境界�
 
 責務と使い方は [core](packages/core/README.md)、[db](packages/db/README.md)、[env](packages/env/README.md)、[ESLint](packages/eslint-config/README.md)、[Web / Storybook](apps/web/README.md)、[ネイティブクライアント](clients/README.md) を参照してください。フロントのページ専用部品・query・テスト・stories はページの近くに配置しています。
 
+## AI を使った開発
+
+Claude Code / Codex の共通指示は [AGENTS.md](AGENTS.md)、スキルの使い方と設定の更新手順は [AI ハーネス](docs/agent-configuration.md) を参照してください。
+
 ## 必要環境
 
 - Node.js 24 以上
@@ -156,7 +160,7 @@ Storybook の `Health/食事を記録` でライト・ダーク・写真のみ�
 pnpm check
 ```
 
-上記で ESLint、TypeScript strict、Vitest、Web/API/runner の production build、Storybook のビルドとブラウザテストを順に実行します。初回だけ `pnpm --filter @life-console/web exec playwright install chromium` でテスト用 Chromium を準備してください。自動修正は `pnpm lint:fix` です。
+上記で AI ハーネスの整合性、ESLint、TypeScript strict、Vitest、Web/API/runner の production build、Storybook のビルドとブラウザテストを順に実行します。初回だけ `pnpm --filter @life-console/web exec playwright install chromium` でテスト用 Chromium を準備してください。自動修正は `pnpm lint:fix` です。
 
 runner のビルドには TS ソースを公開する共通パッケージも含めます。ビルド後に Node.js で実行し、テスト専用 API への登録・heartbeat・空のジョブ取得まで確認します。このテストは外部 CLI を探索せず、実 API や実ジョブを使用しません。
 

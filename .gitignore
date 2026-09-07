@@ -12,3 +12,6 @@ test-results/
 .DS_Store
 private/
 backups/
+.claude/settings.local.json
+CLAUDE.local.md
+AGENTS.override.md
