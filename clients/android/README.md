@@ -17,7 +17,7 @@
 JDK 17 と Android SDK Platform 36 が必要です。`ANDROID_HOME` または Git 管理対象外の `local.properties` に SDK の場所を設定します。
 
 ```bash
-cd apps/android
+cd clients/android
 ./gradlew :app:assembleDebug :app:lintDebug
 adb -s DEVICE_SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
 ```

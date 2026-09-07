@@ -10,7 +10,7 @@
 apps/web       Vite + React + TanStack Router/Query
 apps/api       Hono + Workers Static Assets + D1 + R2
 apps/runner    Mac で動く CLI/Orca adapter と job executor
-apps/android   体重・食事入力 URL を開く Android ウィジェット
+clients/android  体重・食事入力 URL を開く Android ウィジェット
 packages/core       Result、構造化 logger
 packages/contracts  API の Zod schema、共有 DTO
 packages/db         Drizzle schema、migration、架空 seed
@@ -20,7 +20,7 @@ packages/eslint-config  Flat Config、ルール別の実装・README・テスト
 
 API は `handler -> usecase -> repository` の向きに依存し、外部境界で Zod により検証します。失敗を値として扱う処理には `@life-console/core` の `Result<T, E>` を使い、Worker と runner の共通 logger は本文・token・transcript を出しません。Result の戻り値と捨て忘れも ESLint で検査します。
 
-責務と使い方は [core](packages/core/README.md)、[db](packages/db/README.md)、[env](packages/env/README.md)、[ESLint](packages/eslint-config/README.md)、[Web / Storybook](apps/web/README.md) を参照してください。フロントのページ専用部品・query・テスト・stories はページの近くに配置しています。
+責務と使い方は [core](packages/core/README.md)、[db](packages/db/README.md)、[env](packages/env/README.md)、[ESLint](packages/eslint-config/README.md)、[Web / Storybook](apps/web/README.md)、[ネイティブクライアント](clients/README.md) を参照してください。フロントのページ専用部品・query・テスト・stories はページの近くに配置しています。
 
 ## 必要環境
 
@@ -102,7 +102,7 @@ manifest は認証 Cookie を送って取得します。Service Worker とオフ
 
 ## Android の記録ウィジェット
 
-[Android アプリ](apps/android/README.md) をインストールすると、ホーム画面に『体重を記録』『食事を記録』のウィジェットを個別に置けます。ブラウザで本番の `/health?entry=weight` または `/health?entry=meal` を開きます。Android アプリは API を呼ばず、ログインと記録は既存の Web 画面で行います。
+[Android アプリ](clients/android/README.md) をインストールすると、ホーム画面に『体重を記録』『食事を記録』のウィジェットを個別に置けます。ブラウザで本番の `/health?entry=weight` または `/health?entry=meal` を開きます。Android アプリは API を呼ばず、ログインと記録は既存の Web 画面で行います。
 
 ## 体重の記録
 
