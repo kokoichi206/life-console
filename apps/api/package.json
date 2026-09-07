@@ -1,0 +1,29 @@
+{
+  "name": "@life-console/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/app.ts"
+  },
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "deploy": "pnpm --filter @life-console/web build && wrangler deploy --config wrangler.production.jsonc",
+    "dev": "wrangler dev --local --port 8788",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.9.1",
+    "@life-console/contracts": "workspace:*",
+    "aws4fetch": "^1.0.20",
+    "hono": "^4.13.5",
+    "zod": "^4.5.4",
+    "@life-console/core": "workspace:*",
+    "@life-console/env": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260901.1",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.127.1"
+  }
+}

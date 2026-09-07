@@ -1,0 +1,34 @@
+{
+  "name": "life-console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.4",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "pnpm --filter @life-console/web build && pnpm --filter @life-console/api build && pnpm --filter @life-console/runner build",
+    "dev": "concurrently --kill-others-on-fail --names api,web --prefix-colors cyan,magenta \"pnpm dev:api\" \"pnpm --filter @life-console/web dev\"",
+    "dev:api": "pnpm --filter @life-console/api dev",
+    "dev:runner": "pnpm --filter @life-console/runner dev",
+    "dev:runner:once": "pnpm --filter @life-console/runner dev:once",
+    "local:setup": "pnpm --filter @life-console/web build && pnpm --filter @life-console/db migrate:local && pnpm --filter @life-console/db seed:local",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "storybook": "pnpm --filter @life-console/web storybook",
+    "storybook:build": "pnpm --filter @life-console/web storybook:build",
+    "storybook:test": "pnpm --filter @life-console/web storybook:test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "eslint": "^9.39.5",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11",
+    "@life-console/eslint-config": "workspace:*"
+  }
+}
