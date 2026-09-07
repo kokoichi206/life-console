@@ -150,7 +150,7 @@ Storybook の `Health/食事を記録` でライト・ダーク・写真のみ�
 
 ## 品質確認
 
-`develop` 向けの PR では GitHub Actions の `CI / Quality checks` が `pnpm check` を実行します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
+`develop` と `main` 向けの PR では GitHub Actions の `CI / Quality checks` が `pnpm check` を実行します。両ブランチの Rulesets で `Quality checks` を必須チェックに設定します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
 
 ```bash
 pnpm check
@@ -193,11 +193,15 @@ Workers、D1、R2 の使用量は Cloudflare dashboard で実測します。acco
 
 ### GitHub Actions からの更新
 
-[Deploy production](.github/workflows/deploy.yml) は `develop` への push、または Actions 画面の『Run workflow』で実行します。Markdown、`docs/`、`.agents/`、`.claude/` だけの変更では自動実行を省略します。手動実行でも `develop` を選択してください。他のブランチではデプロイ job を実行しません。
+[Deploy production](.github/workflows/deploy.yml) は `main` への push、または Actions 画面の『Run workflow』で実行します。Markdown、`docs/`、`.agents/`、`.claude/` だけの変更では自動実行を省略します。手動実行でも `main` を選択してください。他のブランチではデプロイ job を実行しません。
+
+クラウドは本番の 1 環境とし、開発中の変更はローカルと PR の CI で確認します。通常は feature ブランチから `develop` へ取り込み、リリース時に `develop` から `main` への PR を merge commit でマージします。`develop` へのマージだけでは本番を更新しません。GitHub の default branch は `develop` を維持します。現在の `develop` の Ruleset は default branch を対象としているため、default branch を変更する場合はルールの対象も見直してください。
 
 この workflow は、上記の初回配置と Cloudflare Access の保護設定を済ませた本番 Worker の更新用です。production 設定例から設定を生成し、`workers_dev: true`、`preview_urls: false`、`routes: []` で既存の Worker を更新します。配置設定を変える場合は、設定例と workflow も更新してください。
 
-GitHub リポジトリの Settings → Environments で `production` を作成します。『Deployment branches and tags』を『Selected branches and tags』にし、種類を Branch、名前を `develop` としたルールだけを登録してください。workflow の条件に加えて、Environment 側でも他のブランチやタグからのデプロイと Secrets の利用を制限します。
+GitHub リポジトリの Settings → Environments で `production` を作成します。『Deployment branches and tags』を『Selected branches and tags』にし、種類を Branch、名前を `main` としたルールだけを登録してください。workflow の条件に加えて、Environment 側でも他のブランチやタグからのデプロイと Secrets の利用を制限します。
+
+本番ブランチは GitHub 側で指定し、Cloudflare では既存の Worker、D1、R2、Access 設定を使い続けます。GitHub の Environment は Secrets とデプロイ許可の管理単位で、Cloudflare に別環境を作る指定ではありません。Workers Builds の Git 連携は追加せず、本番更新の起点をこの workflow に統一します。
 
 次の Environment secrets を登録します。
 
