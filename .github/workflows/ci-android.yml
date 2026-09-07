@@ -4,12 +4,14 @@ on:
   push:
     branches:
       - develop
+      - main
     paths:
       - "clients/android/**"
       - ".github/workflows/ci-android.yml"
   pull_request:
     branches:
       - develop
+      - main
     paths:
       - "clients/android/**"
       - ".github/workflows/ci-android.yml"

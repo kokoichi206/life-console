@@ -35,7 +35,7 @@ ktlint は `1.8.0`、Gradle plugin は `14.0.1` に固定しています。ktlin
 
 違反のあるファイルを削除しただけの場合、plugin の増分検査が処理をスキップし、削除済みファイルの検出結果が残ることがあります。実際にこの挙動を確認しています。その場合は `./gradlew ktlintCheck --rerun-tasks` で全件再検査してください。原因は [plugin の変更ファイル抽出とスキップ処理](https://github.com/JLLeitschuh/ktlint-gradle/blob/v14.0.1/plugin/src/main/kotlin/org/jlleitschuh/gradle/ktlint/tasks/BaseKtLintCheckTask.kt) にあります。
 
-[ci-android](../../.github/workflows/ci-android.yml) は、Android または同 workflow の変更を含む `develop` 向け PR・`develop` への push と手動実行に対応します。JDK 17 / Android SDK 36 で lint、カスタムルールのテスト、アプリの単体テスト、Debug APK ビルドを実行し、レポートを 7 日間保存します。アプリの単体テストは現時点で未実装のため `NO-SOURCE` です。APK の公開・実機へのインストールは行いません。
+[ci-android](../../.github/workflows/ci-android.yml) は、Android または同 workflow の変更を含む `develop` / `main` 向け PR・両ブランチへの push と手動実行に対応します。JDK 17 / Android SDK 36 で lint、カスタムルールのテスト、アプリの単体テスト、Debug APK ビルドを実行し、レポートを 7 日間保存します。アプリの単体テストは現時点で未実装のため `NO-SOURCE` です。APK の公開・実機へのインストールは行いません。
 
 [minken-mobile の Android 構成](https://github.com/Wareware-PJ/minken-mobile/tree/main/android) を参考にしています。Compose は使用していないため Compose 用ルールは導入していません。
 

@@ -4,12 +4,14 @@ on:
   push:
     branches:
       - develop
+      - main
     paths:
       - ".github/workflows/**"
       - ".github/scripts/**"
   pull_request:
     branches:
       - develop
+      - main
     paths:
       - ".github/workflows/**"
       - ".github/scripts/**"
