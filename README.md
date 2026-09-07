@@ -150,7 +150,9 @@ Storybook の `Health/食事を記録` でライト・ダーク・写真のみ�
 
 ## 品質確認
 
-`develop` 向けの PR では GitHub Actions の `CI / Quality checks` が `pnpm check` を実行します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
+`develop` 向けの PR では GitHub Actions の `ci / Quality checks` が `pnpm check` を実行します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
+
+Android の変更には [ci-android](.github/workflows/ci-android.yml) で ktlint、カスタムルールのテスト、Android Lint、Debug APK ビルドを実行します。手元でのコマンドは [Android の README](clients/android/README.md#lint-と-ci) を参照してください。workflow 自体は [ci-github-workflows](.github/README.md) で zizmor と運用規約の検査にかけます。
 
 ```bash
 pnpm check
@@ -193,7 +195,7 @@ Workers、D1、R2 の使用量は Cloudflare dashboard で実測します。acco
 
 ### GitHub Actions からの更新
 
-[Deploy production](.github/workflows/deploy.yml) は `develop` への push、または Actions 画面の『Run workflow』で実行します。Markdown、`docs/`、`.agents/`、`.claude/` だけの変更では自動実行を省略します。手動実行でも `develop` を選択してください。他のブランチではデプロイ job を実行しません。
+[deploy](.github/workflows/deploy.yml) は `develop` への push、または Actions 画面の『Run workflow』で実行します。Markdown、`docs/`、`.agents/`、`.claude/` だけの変更では自動実行を省略します。手動実行でも `develop` を選択してください。他のブランチではデプロイ job を実行しません。
 
 この workflow は、上記の初回配置と Cloudflare Access の保護設定を済ませた本番 Worker の更新用です。production 設定例から設定を生成し、`workers_dev: true`、`preview_urls: false`、`routes: []` で既存の Worker を更新します。配置設定を変える場合は、設定例と workflow も更新してください。
 

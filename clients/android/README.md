@@ -18,11 +18,26 @@ JDK 17 と Android SDK Platform 36 が必要です。`ANDROID_HOME` または Gi
 
 ```bash
 cd clients/android
-./gradlew :app:assembleDebug :app:lintDebug
+./gradlew ktlintCheck :lint-rules:test :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
 adb -s DEVICE_SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 開発用 APK は `app/build/outputs/apk/debug/app-debug.apk` に生成します。ローカルの debug key で署名し、Play ストアへの公開や配布用の署名管理は行いません。既存の `pnpm check` は Android を対象に含めないため、変更時は上記の Gradle コマンドも実行してください。
+
+## Lint と CI
+
+- `./gradlew ktlintCheck`: Kotlin と Gradle Kotlin DSL の標準ルール、アプリのカスタムルールを検査。
+- `./gradlew ktlintFormat`: 自動整形。カスタムルールの違反は自動修正しない。
+- `./gradlew :lint-rules:test`: カスタムルールの検出・非検出・抑制をテスト。
+- `./gradlew :app:lintDebug`: Android Lint でリソース、Manifest、Android API の使い方を検査。
+
+ktlint は `1.8.0`、Gradle plugin は `14.0.1` に固定しています。ktlint 本体とカスタムルールの API 依存は `gradle/libs.versions.toml` の同じバージョンを参照します。独自ルールの理由と制約は [lint-rules](lint-rules/README.md) を参照してください。
+
+違反のあるファイルを削除しただけの場合、plugin の増分検査が処理をスキップし、削除済みファイルの検出結果が残ることがあります。実際にこの挙動を確認しています。その場合は `./gradlew ktlintCheck --rerun-tasks` で全件再検査してください。原因は [plugin の変更ファイル抽出とスキップ処理](https://github.com/JLLeitschuh/ktlint-gradle/blob/v14.0.1/plugin/src/main/kotlin/org/jlleitschuh/gradle/ktlint/tasks/BaseKtLintCheckTask.kt) にあります。
+
+[ci-android](../../.github/workflows/ci-android.yml) は、Android または同 workflow の変更を含む `develop` 向け PR・`develop` への push と手動実行に対応します。JDK 17 / Android SDK 36 で lint、カスタムルールのテスト、アプリの単体テスト、Debug APK ビルドを実行し、レポートを 7 日間保存します。アプリの単体テストは現時点で未実装のため `NO-SOURCE` です。APK の公開・実機へのインストールは行いません。
+
+[minken-mobile の Android 構成](https://github.com/Wareware-PJ/minken-mobile/tree/main/android) を参考にしています。Compose は使用していないため Compose 用ルールは導入していません。
 
 ## 構成
 
