@@ -13,3 +13,6 @@ test-results/
 __pycache__/
 private/
 backups/
+.claude/settings.local.json
+CLAUDE.local.md
+AGENTS.override.md
