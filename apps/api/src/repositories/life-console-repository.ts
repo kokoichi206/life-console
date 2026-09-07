@@ -1,23 +1,5 @@
-import type {
-  CompleteJobInput,
-  CreateAssetBalanceInput,
-  CreateFinanceAdjustmentInput,
-  CreateFinanceTransactionInput,
-  CreateMealInput,
-  CreateScheduleInput,
-  CreateTaskInput,
-  CreateWeightInput,
-  JobHeartbeatInput,
-  RegisterRunnerInput,
-  Result,
-  CreateReplyDraftsInput,
-  SaveReplyDraftInput,
-  EditReplyDraftInput,
-  ReplyDraft,
-  SyncRepositoriesInput,
-  UpsertSourceRepositoryMappingInput,
-  UpdateTaskInput,
-} from "@life-console/contracts";
+import type { CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { Result } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
 

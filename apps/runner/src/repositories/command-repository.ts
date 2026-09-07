@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-import { err, ok, type Result } from "@life-console/contracts";
+import { err, ok, type Result } from "@life-console/core";
 
 import { runnerError, type RunnerError } from "../errors";
 

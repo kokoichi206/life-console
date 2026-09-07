@@ -1,21 +1,4 @@
-type LocalLog = {
-  readonly event: string;
-  readonly jobId?: string;
-  readonly errorCode?: string;
-  readonly detail?: unknown;
-  readonly timestamp: string;
-};
+import { createLogger, type Logger } from "@life-console/core";
 
-export interface LocalLogger {
-  error(entry: LocalLog): void;
-  info(entry: LocalLog): void;
-}
-
-export const localLogger: LocalLogger = {
-  error(entry): void {
-    console.error(JSON.stringify({ level: "error", ...entry }));
-  },
-  info(entry): void {
-    console.error(JSON.stringify({ level: "info", ...entry }));
-  },
-};
+export type LocalLogger = Pick<Logger, "error" | "info">;
+export const localLogger: LocalLogger = createLogger("runner");

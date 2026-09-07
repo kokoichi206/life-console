@@ -1,15 +1,7 @@
 import type { AgentJobContext, Job, LifeConsoleRepository, RunnerHealth } from "@api/repositories/life-console-repository";
-import type {
-  CompleteJobInput,
-  CreateAgentJobInput,
-  CreateConnectorSyncInput,
-  CreateConversationReplyInput,
-  CreateScheduleInput,
-  JobHeartbeatInput,
-  RegisterRunnerInput,
-  Result,
-} from "@life-console/contracts";
-import { err } from "@life-console/contracts";
+import type { CompleteJobInput, CreateAgentJobInput, CreateConnectorSyncInput, CreateConversationReplyInput, CreateScheduleInput, JobHeartbeatInput, RegisterRunnerInput } from "@life-console/contracts";
+import type { Result } from "@life-console/core";
+import { err } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
 import { appError } from "../shared/app-error";

@@ -17,7 +17,9 @@
     "@life-console/contracts": "workspace:*",
     "aws4fetch": "^1.0.20",
     "hono": "^4.13.5",
-    "zod": "^4.5.4"
+    "zod": "^4.5.4",
+    "@life-console/core": "workspace:*",
+    "@life-console/env": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260901.1",

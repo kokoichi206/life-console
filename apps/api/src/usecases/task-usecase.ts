@@ -1,5 +1,6 @@
 import type { LifeConsoleRepository, Task } from "@api/repositories/life-console-repository";
-import type { CreateTaskInput, Result, UpdateTaskInput } from "@life-console/contracts";
+import type { CreateTaskInput, UpdateTaskInput } from "@life-console/contracts";
+import type { Result } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
 import type { Clock } from "../shared/clock";

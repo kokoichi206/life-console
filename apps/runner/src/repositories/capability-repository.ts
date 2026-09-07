@@ -2,7 +2,7 @@ import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { err, ok, safeTry, type Result } from "@life-console/contracts";
+import { err, ok, safeTry, type Result } from "@life-console/core";
 
 import { runnerError, type RunnerError } from "../errors";
 

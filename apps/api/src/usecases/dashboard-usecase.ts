@@ -1,5 +1,5 @@
 import type { Dashboard, LifeConsoleRepository } from "@api/repositories/life-console-repository";
-import type { Result } from "@life-console/contracts";
+import type { Result } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
 

@@ -63,11 +63,10 @@ const main = async (): Promise<void> => {
   }
 };
 
-void main().catch((cause: unknown) => {
+void main().catch(() => {
   localLogger.error({
     event: "runner_crashed",
     errorCode: "runner_crashed",
-    detail: cause,
     timestamp: new Date().toISOString(),
   });
   process.exitCode = 1;

@@ -13,26 +13,22 @@
     "dev:api": "pnpm --filter @life-console/api dev",
     "dev:runner": "pnpm --filter @life-console/runner dev",
     "dev:runner:once": "pnpm --filter @life-console/runner dev:once",
-    "local:setup": "pnpm --filter @life-console/web build && pnpm --filter @life-console/database migrate:local && pnpm --filter @life-console/database seed:local",
+    "local:setup": "pnpm --filter @life-console/web build && pnpm --filter @life-console/db migrate:local && pnpm --filter @life-console/db seed:local",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "storybook": "pnpm --filter @life-console/web storybook",
+    "storybook:build": "pnpm --filter @life-console/web storybook:build",
+    "storybook:test": "pnpm --filter @life-console/web storybook:test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
-    "@stylistic/eslint-plugin": "^5.10.0",
     "concurrently": "^10.0.5",
     "eslint": "^9.39.5",
-    "eslint-plugin-import-x": "^4.17.1",
-    "eslint-plugin-jsonc": "^3.4.2",
-    "eslint-plugin-yml": "^3.8.1",
-    "jsonc-eslint-parser": "^3.3.0",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.11",
-    "yaml-eslint-parser": "^2.1.0"
+    "@life-console/eslint-config": "workspace:*"
   }
 }

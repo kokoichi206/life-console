@@ -10,12 +10,16 @@
 apps/web       Vite + React + TanStack Router/Query
 apps/api       Hono + Workers Static Assets + D1 + R2
 apps/runner    Mac で動く CLI/Orca adapter と job executor
-packages/contracts  Zod schema、Result、共有 DTO
-packages/database   Drizzle schema、migration、架空 seed
-eslint-rules   core の throw と layer 越境を検知する custom rule
+packages/core       Result、構造化 logger
+packages/contracts  API の Zod schema、共有 DTO
+packages/db         Drizzle schema、migration、架空 seed
+packages/env        APP_ENV、共通環境変数 schema
+packages/eslint-config  Flat Config、ルール別の実装・README・テスト
 ```
 
-API は `handler -> usecase -> repository` の向きに依存し、外部境界で Zod により検証します。失敗を値として扱う処理には `Result<T, E>` を使い、Worker と runner の logger は本文・token・transcript を出しません。
+API は `handler -> usecase -> repository` の向きに依存し、外部境界で Zod により検証します。失敗を値として扱う処理には `@life-console/core` の `Result<T, E>` を使い、Worker と runner の共通 logger は本文・token・transcript を出しません。Result の戻り値と捨て忘れも ESLint で検査します。
+
+責務と使い方は [core](packages/core/README.md)、[db](packages/db/README.md)、[env](packages/env/README.md)、[ESLint](packages/eslint-config/README.md)、[Web / Storybook](apps/web/README.md) を参照してください。フロントのページ専用部品・query・テスト・stories はページの近くに配置しています。
 
 ## 必要環境
 
@@ -109,7 +113,7 @@ pnpm dev:runner
 - 生成には認証済みの `claude --print` を使います。外部の会話を信頼しないデータとして渡し、ツール、MCP、カスタマイズ、セッション保存を無効化します。会話本文は Claude Code のモデルへ送られますが、サービスの token / Cookie は渡しません。
 - 手動編集した本文は再生成で上書きしません。保存には job の有効な lease が必要で、画面からの編集は更新日時による競合検出を行います。下書き作成は現在、画面からの手動実行です。
 
-ローカル DB の更新: `pnpm --filter @life-console/database migrate:local`。runner のコード・環境変数を変えた場合は runner を再起動してください。
+ローカル DB の更新: `pnpm --filter @life-console/db migrate:local`。runner のコード・環境変数を変えた場合は runner を再起動してください。
 
 ## 品質確認
 
@@ -117,7 +121,17 @@ pnpm dev:runner
 pnpm check
 ```
 
-上記で ESLint、TypeScript strict、Vitest、Web/API/runner の production build を順に実行します。自動修正は `pnpm lint:fix` です。
+上記で ESLint、TypeScript strict、Vitest、Web/API/runner の production build、Storybook のビルドとブラウザテストを順に実行します。初回だけ `pnpm --filter @life-console/web exec playwright install chromium` でテスト用 Chromium を準備してください。自動修正は `pnpm lint:fix` です。
+
+runner のビルドには TS ソースを公開する共通パッケージも含めます。ビルド後に Node.js で実行し、テスト専用 API への登録・heartbeat・空のジョブ取得まで確認します。このテストは外部 CLI を探索せず、実 API や実ジョブを使用しません。
+
+`pnpm storybook` で <http://localhost:6006> に共通 UI と画面状態のカタログを起動します。ライト・ダーク、空の状態、取得失敗も実データなしで確認できます。
+
+### 環境変数
+
+APP_ENV は `local` / `development` / `production` を使い、Zod で検証します。API は Wrangler の vars、Web は `VITE_APP_ENV`、runner は起動時の環境変数で指定します。`pnpm dev:runner` は local を明示指定します。本番用の `pnpm --filter @life-console/runner start` は APP_ENV、接続先、専用 token の設定が必要です。
+
+環境名の未指定を local とみなす処理はありません。local 以外では API の runner token が未設定なら認証を拒否します。R2 直接 upload を選んだ場合だけ S3 の資格情報も要求します。環境変数を追加する際は各アプリの検証境界に定義し、利用箇所で直接読み直さないでください。
 
 ## Cloudflare へ配置する場合
 
@@ -138,7 +152,7 @@ pnpm --filter @life-console/api deploy
 
 runner を本番へ接続するときは、別途 `RUNNER_TOKEN` と Access の機械認証を設定します。本人メールのみの Allow ポリシーでは runner の HTTP リクエストも拒否されます。job report の capability は Access を通過する資格情報ではないため、runner だけでなく job report の送信経路も含めて認証を設計・検証してから接続します。現時点の配置では認証を迂回する例外を設けません。
 
-実データ用 D1 に `packages/database/seed.sql` は適用しません。runner の LaunchAgent は [plist 例](apps/runner/launchd/com.life-console.runner.plist.example)を private な場所へコピーして使います。secret は plist に書かず、本人の user session から local secret store を介して渡します。
+実データ用 D1 に `packages/db/seed.sql` は適用しません。runner の LaunchAgent は [plist 例](apps/runner/launchd/com.life-console.runner.plist.example)を private な場所へコピーして使います。例は `APP_ENV=local` でローカル API に接続します。本番向けには `APP_ENV=production` と接続先を設定し、専用 token と Access の資格情報を渡してください。secret は plist に書かず、本人の user session から local secret store を介して渡します。
 
 Workers、D1、R2 の使用量は Cloudflare dashboard で実測します。account token をアプリへ渡していないため、Life Console 内には未取得値やゼロ固定値を表示しません。
 

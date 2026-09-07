@@ -1,9 +1,10 @@
 import { app, createHandlers } from "./app";
-import type { ApiEnvironment } from "./shared/environment";
+import { parseApiEnvironment, type ApiEnvironment } from "./shared/environment";
 
 export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, environment: ApiEnvironment, executionContext: ExecutionContext): Promise<void> {
+    environment = parseApiEnvironment(environment);
     executionContext.waitUntil(createHandlers(environment).runScheduledMaintenance().then((result) => {
       if (!result.ok) {
         console.error(JSON.stringify({

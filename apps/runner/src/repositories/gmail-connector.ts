@@ -1,4 +1,4 @@
-import { err, ok, type Result } from "@life-console/contracts";
+import { err, ok, type Result } from "@life-console/core";
 import type { RunnerConfig } from "@runner/config";
 import { z } from "zod";
 

@@ -7,16 +7,18 @@
     "life-console-runner": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --platform node --target node24 --clean",
-    "dev": "tsx src/index.ts",
-    "dev:once": "tsx src/index.ts --once",
+    "build": "tsup && node --test tests/build.test.mjs",
+    "dev": "APP_ENV=local tsx src/index.ts",
+    "dev:once": "APP_ENV=local tsx src/index.ts --once",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@life-console/contracts": "workspace:*",
     "csv-parse": "^7.0.2",
-    "zod": "^4.5.4"
+    "zod": "^4.5.4",
+    "@life-console/core": "workspace:*",
+    "@life-console/env": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

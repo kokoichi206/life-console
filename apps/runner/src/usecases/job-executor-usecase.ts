@@ -1,4 +1,5 @@
-import { ok, safeTry, createReplyDraftsSchema, type ReplyDraftDecision, type Result } from "@life-console/contracts";
+import { createReplyDraftsSchema, type ReplyDraftDecision } from "@life-console/contracts";
+import { ok, safeTry, type Result } from "@life-console/core";
 import type { RunnerConfig } from "@runner/config";
 import { runnerError, type RunnerError } from "@runner/errors";
 import type { ApiRepository, RunnerJob } from "@runner/repositories/api-repository";

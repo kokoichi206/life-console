@@ -1,39 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
-import {
-  assignRepositorySchema,
-  agentReportSchema,
-  claimJobSchema,
-  classifyConversationSchema,
-  completeJobSchema,
-  createAgentJobSchema,
-  createAssetBalanceSchema,
-  createConnectorSyncSchema,
-  createConversationReplySchema,
-  createReplyDraftsSchema,
-  editReplyDraftSchema,
-  saveReplyDraftSchema,
-  createFinanceAdjustmentSchema,
-  createFinanceTransactionSchema,
-  createMealSchema,
-  createMealUploadSchema,
-  createNoteSchema,
-  createRepositorySchema,
-  createScheduleSchema,
-  createTaskSchema,
-  createWeightSchema,
-  err,
-  importConversationsSchema,
-  jobHeartbeatSchema,
-  listConversationsQuerySchema,
-  promoteTaskSchema,
-  registerRunnerSchema,
-  runnerHeartbeatSchema,
-  syncRepositoriesSchema,
-  upsertSourceRepositoryMappingSchema,
-  updateTaskSchema,
-  weightCsvRowSchema,
-  type Result,
-} from "@life-console/contracts";
+import { assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
+import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import { z } from "zod";
@@ -43,7 +10,7 @@ import { D1LifeConsoleRepository } from "./repositories/d1-life-console-reposito
 import type { AppError } from "./shared/app-error";
 import { appError } from "./shared/app-error";
 import { systemClock } from "./shared/clock";
-import type { ApiEnvironment } from "./shared/environment";
+import { parseApiEnvironment, type ApiEnvironment } from "./shared/environment";
 import { cryptoIdGenerator } from "./shared/id-generator";
 import { cloudLogger } from "./shared/logger";
 import { createConversationUsecase } from "./usecases/conversation-usecase";
@@ -59,6 +26,7 @@ import { createTaskUsecase } from "./usecases/task-usecase";
 
 type HonoEnvironment = {
   Bindings: ApiEnvironment;
+  Variables: { environment: ApiEnvironment };
 };
 
 const identifierParameterSchema = z.object({ id: z.string().min(1).max(128) });
@@ -132,7 +100,7 @@ const respond = <T>(context: Context<HonoEnvironment>, result: Result<T, AppErro
 
 const runnerAuthentication = createMiddleware<HonoEnvironment>(async (context, next) => {
   const authorization = context.req.header("Authorization");
-  const expectedToken = context.env.RUNNER_TOKEN ?? (context.env.APP_ENV === "local" ? "local-runner-token" : undefined);
+  const expectedToken = context.get("environment").RUNNER_TOKEN ?? (context.get("environment").APP_ENV === "local" ? "local-runner-token" : undefined);
   if (expectedToken === undefined || authorization !== `Bearer ${expectedToken}`) {
     return respond(context, err(appError.unauthorized()));
   }
@@ -178,60 +146,65 @@ app.onError((error, context) => {
   }, 500);
 });
 
+app.use("/api/*", async (context, next) => {
+  context.set("environment", parseApiEnvironment(context.env));
+  await next();
+});
+
 app.use("/api/v1/runner/*", runnerAuthentication);
 
 const _routes = app
-  .get("/api/v1/reply-drafts", async (context) => respond(context, await createHandlers(context.env).listReplyDrafts()))
+  .get("/api/v1/reply-drafts", async (context) => respond(context, await createHandlers(context.get("environment")).listReplyDrafts()))
   .post("/api/v1/reply-drafts/generate", zValidator("json", createReplyDraftsSchema), async (context) => respond(
-    context, await createHandlers(context.env).generateReplyDrafts(context.req.valid("json")),
+    context, await createHandlers(context.get("environment")).generateReplyDrafts(context.req.valid("json")),
   ))
   .patch("/api/v1/reply-drafts/:id", zValidator("param", identifierParameterSchema), zValidator("json", editReplyDraftSchema), async (context) => respond(
-    context, await createHandlers(context.env).editReplyDraft(context.req.valid("param").id, context.req.valid("json")),
+    context, await createHandlers(context.get("environment")).editReplyDraft(context.req.valid("param").id, context.req.valid("json")),
   ))
   .get("/api/v1/runner/reply-candidates", zValidator("query", createReplyDraftsSchema), async (context) => respond(
-    context, await createHandlers(context.env).replyCandidates(context.req.valid("query")),
+    context, await createHandlers(context.get("environment")).replyCandidates(context.req.valid("query")),
   ))
   .post("/api/v1/runner/reply-drafts", zValidator("json", saveReplyDraftSchema), async (context) => respond(
-    context, await createHandlers(context.env).saveReplyDraft(context.req.valid("json")),
+    context, await createHandlers(context.get("environment")).saveReplyDraft(context.req.valid("json")),
   ))
   .get("/api/v1/health", (context) => context.json({ data: { status: "ok" as const } }))
-  .get("/api/v1/dashboard", async (context) => respond(context, await createHandlers(context.env).dashboard()))
-  .get("/api/v1/tasks", async (context) => respond(context, await createHandlers(context.env).listTasks()))
+  .get("/api/v1/dashboard", async (context) => respond(context, await createHandlers(context.get("environment")).dashboard()))
+  .get("/api/v1/tasks", async (context) => respond(context, await createHandlers(context.get("environment")).listTasks()))
   .post("/api/v1/tasks", zValidator("json", createTaskSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).createTask(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).createTask(context.req.valid("json")));
   })
   .patch("/api/v1/tasks/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateTaskSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).updateTask(
+    return respond(context, await createHandlers(context.get("environment")).updateTask(
       context.req.valid("param").id,
       context.req.valid("json"),
     ));
   })
   .get("/api/v1/conversations", zValidator("query", listConversationsQuerySchema), async (context) => respond(
     context,
-    await createHandlers(context.env).listConversations(context.req.valid("query")),
+    await createHandlers(context.get("environment")).listConversations(context.req.valid("query")),
   ))
   .post("/api/v1/conversations/:id/classification", zValidator("param", identifierParameterSchema), zValidator("json", classifyConversationSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).classifyConversation(
+    return respond(context, await createHandlers(context.get("environment")).classifyConversation(
       context.req.valid("param").id,
       context.req.valid("json").classification,
     ));
   })
   .post("/api/v1/conversations/:id/replies", zValidator("param", identifierParameterSchema), zValidator("json", createConversationReplySchema), async (context) => {
-    return respond(context, await createHandlers(context.env).createConversationReplyJob(
+    return respond(context, await createHandlers(context.get("environment")).createConversationReplyJob(
       context.req.valid("param").id,
       context.req.valid("json"),
     ));
   })
   .post("/api/v1/conversations/:id/tasks", zValidator("param", identifierParameterSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).createTaskFromConversation(context.req.valid("param").id));
+    return respond(context, await createHandlers(context.get("environment")).createTaskFromConversation(context.req.valid("param").id));
   })
   .post("/api/v1/connectors/sync", zValidator("json", createConnectorSyncSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).createConnectorSyncJob(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).createConnectorSyncJob(context.req.valid("json")));
   })
-  .get("/api/v1/meals", async (context) => respond(context, await createHandlers(context.env).listMeals()))
+  .get("/api/v1/meals", async (context) => respond(context, await createHandlers(context.get("environment")).listMeals()))
   .post("/api/v1/meal-photos/upload", zValidator("json", createMealUploadSchema), async (context) => {
     const input = context.req.valid("json");
-    return respond(context, await createHandlers(context.env).createMealPhotoUpload(
+    return respond(context, await createHandlers(context.get("environment")).createMealPhotoUpload(
       input.clientId,
       input.contentType,
       new URL(context.req.url).origin,
@@ -241,7 +214,7 @@ const _routes = app
     const body = context.req.raw.body;
     const contentType = context.req.header("Content-Type");
     if (body === null || contentType === undefined) return respond(context, err(appError.validation("写真データがありません。")));
-    return respond(context, await createHandlers(context.env).uploadMealPhoto(
+    return respond(context, await createHandlers(context.get("environment")).uploadMealPhoto(
       context.req.valid("param").id,
       context.req.valid("query").token,
       contentType,
@@ -249,7 +222,7 @@ const _routes = app
     ));
   })
   .get("/api/v1/meal-photos/:id/content", zValidator("param", identifierParameterSchema), async (context) => {
-    const result = await createHandlers(context.env).readMealPhoto(context.req.valid("param").id);
+    const result = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id);
     if (!result.ok) return respond(context, result);
     return new Response(result.value.body, {
       headers: {
@@ -261,121 +234,121 @@ const _routes = app
   })
   .post("/api/v1/meals", zValidator("json", createMealSchema), async (context) => {
     const input = context.req.valid("json");
-    const handlers = createHandlers(context.env);
+    const handlers = createHandlers(context.get("environment"));
     if (input.photoId !== null) {
       const confirmed = await handlers.confirmMealPhotoUploaded(input.photoId);
       if (!confirmed.ok) return respond(context, confirmed);
     }
     return respond(context, await handlers.createMeal(input));
   })
-  .get("/api/v1/weights", async (context) => respond(context, await createHandlers(context.env).listWeights()))
+  .get("/api/v1/weights", async (context) => respond(context, await createHandlers(context.get("environment")).listWeights()))
   .post("/api/v1/weights", zValidator("json", createWeightSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).createWeight(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).createWeight(context.req.valid("json")));
   })
   .post("/api/v1/weights/import", async (context) => {
     const parsed = parseWeightCsv(await context.req.text());
     if (!parsed.ok) return respond(context, parsed);
-    return respond(context, await createHandlers(context.env).importWeights(parsed.value));
+    return respond(context, await createHandlers(context.get("environment")).importWeights(parsed.value));
   })
-  .get("/api/v1/finance/summary", async (context) => respond(context, await createHandlers(context.env).financeSummary()))
+  .get("/api/v1/finance/summary", async (context) => respond(context, await createHandlers(context.get("environment")).financeSummary()))
   .post("/api/v1/finance/transactions", zValidator("json", createFinanceTransactionSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).createFinanceTransaction(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).createFinanceTransaction(context.req.valid("json")));
   })
   .post("/api/v1/finance/adjustments", zValidator("json", createFinanceAdjustmentSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).createFinanceAdjustment(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).createFinanceAdjustment(context.req.valid("json")));
   })
   .post("/api/v1/finance/asset-balances", zValidator("json", createAssetBalanceSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).createAssetBalance(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).createAssetBalance(context.req.valid("json")));
   })
   .post("/api/v1/notes", zValidator("json", createNoteSchema), async (context) => {
     const input = context.req.valid("json");
-    return respond(context, await createHandlers(context.env).createNote(input.body, input.occurredAt));
+    return respond(context, await createHandlers(context.get("environment")).createNote(input.body, input.occurredAt));
   })
-  .get("/api/v1/repositories", async (context) => respond(context, await createHandlers(context.env).listRepositories()))
-  .post("/api/v1/repositories/sync", async (context) => respond(context, await createHandlers(context.env).createRepositorySyncJob()))
+  .get("/api/v1/repositories", async (context) => respond(context, await createHandlers(context.get("environment")).listRepositories()))
+  .post("/api/v1/repositories/sync", async (context) => respond(context, await createHandlers(context.get("environment")).createRepositorySyncJob()))
   .post("/api/v1/repositories", zValidator("json", createRepositorySchema), async (context) => {
     const input = context.req.valid("json");
-    return respond(context, await createHandlers(context.env).createRepository(input.name, input.localPath));
+    return respond(context, await createHandlers(context.get("environment")).createRepository(input.name, input.localPath));
   })
   .post("/api/v1/tasks/:id/repositories", zValidator("param", identifierParameterSchema), zValidator("json", assignRepositorySchema), async (context) => {
     const input = context.req.valid("json");
-    return respond(context, await createHandlers(context.env).assignRepository(
+    return respond(context, await createHandlers(context.get("environment")).assignRepository(
       context.req.valid("param").id,
       input.repositoryId,
       input.role,
     ));
   })
-  .get("/api/v1/source-repository-mappings", async (context) => respond(context, await createHandlers(context.env).listSourceRepositoryMappings()))
+  .get("/api/v1/source-repository-mappings", async (context) => respond(context, await createHandlers(context.get("environment")).listSourceRepositoryMappings()))
   .put("/api/v1/source-repository-mappings", zValidator("json", upsertSourceRepositoryMappingSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).upsertSourceRepositoryMapping(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).upsertSourceRepositoryMapping(context.req.valid("json")));
   })
   .post("/api/v1/tasks/:id/agent-jobs", zValidator("param", identifierParameterSchema), zValidator("json", createAgentJobSchema.omit({ taskId: true })), async (context) => {
-    return respond(context, await createHandlers(context.env).createAgentJob({
+    return respond(context, await createHandlers(context.get("environment")).createAgentJob({
       ...context.req.valid("json"),
       taskId: context.req.valid("param").id,
     }));
   })
   .post("/api/v1/tasks/:id/promotions", zValidator("param", identifierParameterSchema), zValidator("json", promoteTaskSchema), async (context) => {
     const input = context.req.valid("json");
-    return respond(context, await createHandlers(context.env).createPromotionJob(
+    return respond(context, await createHandlers(context.get("environment")).createPromotionJob(
       context.req.valid("param").id,
       input.repositoryId,
       input.target,
     ));
   })
-  .get("/api/v1/jobs", async (context) => respond(context, await createHandlers(context.env).listJobs()))
+  .get("/api/v1/jobs", async (context) => respond(context, await createHandlers(context.get("environment")).listJobs()))
   .post("/api/v1/jobs/:id/cancel", zValidator("param", identifierParameterSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).cancelJob(context.req.valid("param").id));
+    return respond(context, await createHandlers(context.get("environment")).cancelJob(context.req.valid("param").id));
   })
   .post("/api/v1/job-reports/:id/:token", zValidator("param", jobReportParameterSchema), zValidator("json", agentReportSchema), async (context) => {
     const parameters = context.req.valid("param");
-    return respond(context, await createHandlers(context.env).reportJob(
+    return respond(context, await createHandlers(context.get("environment")).reportJob(
       parameters.id,
       parameters.token,
       context.req.valid("json"),
     ));
   })
   .post("/api/v1/schedules", zValidator("json", createScheduleSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).createSchedule(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).createSchedule(context.req.valid("json")));
   })
-  .get("/api/v1/runner/runners", async (context) => respond(context, await createHandlers(context.env).listRunners()))
+  .get("/api/v1/runner/runners", async (context) => respond(context, await createHandlers(context.get("environment")).listRunners()))
   .post("/api/v1/runner/register", zValidator("json", registerRunnerSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).registerRunner(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).registerRunner(context.req.valid("json")));
   })
   .post("/api/v1/runner/heartbeat", zValidator("json", runnerHeartbeatSchema), async (context) => {
     const input = context.req.valid("json");
-    return respond(context, await createHandlers(context.env).heartbeatRunner(input.runnerId, input.orcaStatus));
+    return respond(context, await createHandlers(context.get("environment")).heartbeatRunner(input.runnerId, input.orcaStatus));
   })
   .post("/api/v1/runner/repositories/sync", zValidator("json", syncRepositoriesSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).syncRepositories(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).syncRepositories(context.req.valid("json")));
   })
   .post("/api/v1/runner/jobs/claim", zValidator("json", claimJobSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).claimJob(context.req.valid("json").runnerId));
+    return respond(context, await createHandlers(context.get("environment")).claimJob(context.req.valid("json").runnerId));
   })
   .post("/api/v1/runner/jobs/:id/heartbeat", zValidator("param", identifierParameterSchema), zValidator("json", jobHeartbeatSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).heartbeatJob(
+    return respond(context, await createHandlers(context.get("environment")).heartbeatJob(
       context.req.valid("param").id,
       context.req.valid("json"),
     ));
   })
   .post("/api/v1/runner/jobs/:id/complete", zValidator("param", identifierParameterSchema), zValidator("json", completeJobSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).completeJob(
+    return respond(context, await createHandlers(context.get("environment")).completeJob(
       context.req.valid("param").id,
       context.req.valid("json"),
     ));
   })
   .get("/api/v1/runner/jobs/:id/lease/:token", async (context) => {
-    return respond(context, await createHandlers(context.env).validateLease(
+    return respond(context, await createHandlers(context.get("environment")).validateLease(
       context.req.param("id"),
       context.req.param("token"),
     ));
   })
   .get("/api/v1/runner/agent-context", zValidator("query", agentContextQuerySchema), async (context) => {
     const query = context.req.valid("query");
-    return respond(context, await createHandlers(context.env).getAgentJobContext(query.taskId, query.repositoryId));
+    return respond(context, await createHandlers(context.get("environment")).getAgentJobContext(query.taskId, query.repositoryId));
   })
   .post("/api/v1/runner/conversations/import", zValidator("json", importConversationsSchema), async (context) => {
-    return respond(context, await createHandlers(context.env).importConversations(context.req.valid("json")));
+    return respond(context, await createHandlers(context.get("environment")).importConversations(context.req.valid("json")));
   });
 
 export type AppType = typeof _routes;

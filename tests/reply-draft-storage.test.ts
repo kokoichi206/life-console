@@ -8,7 +8,7 @@ import { createReplyDraftUsecase } from "../apps/api/src/usecases/reply-draft-us
 
 const createStorage = () => {
   const database = new DatabaseSync(":memory:");
-  const migrations = new URL("../packages/database/migrations/", import.meta.url);
+  const migrations = new URL("../packages/db/migrations/", import.meta.url);
   for (const migration of readdirSync(migrations).filter((name) => name.endsWith(".sql")).sort()) {
     database.exec(readFileSync(new URL(migration, migrations), "utf8"));
   }

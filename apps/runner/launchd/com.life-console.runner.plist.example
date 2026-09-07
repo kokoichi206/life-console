@@ -11,6 +11,11 @@
     </array>
     <key>WorkingDirectory</key>
     <string>/absolute/path/to/life-console</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>APP_ENV</key>
+      <string>local</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

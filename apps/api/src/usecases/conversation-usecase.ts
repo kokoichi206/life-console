@@ -1,5 +1,6 @@
 import type { Conversation, LifeConsoleRepository, Task } from "@api/repositories/life-console-repository";
-import type { ImportConversationsInput, ListConversationsInput, Result } from "@life-console/contracts";
+import type { ImportConversationsInput, ListConversationsInput } from "@life-console/contracts";
+import type { Result } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
 import type { Clock } from "../shared/clock";

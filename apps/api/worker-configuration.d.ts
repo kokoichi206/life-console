@@ -1,5 +1,5 @@
 interface Env {
-  readonly APP_ENV: "local" | "production";
+  readonly APP_ENV: "local" | "development" | "production";
   readonly ASSETS: Fetcher;
   readonly DB: D1Database;
   readonly MEAL_PHOTOS: R2Bucket;

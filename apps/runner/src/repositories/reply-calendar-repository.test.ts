@@ -1,4 +1,5 @@
-import { err, ok, replyCalendarRequestSchema, type ReplyCalendarRequest } from "@life-console/contracts";
+import { replyCalendarRequestSchema, type ReplyCalendarRequest } from "@life-console/contracts";
+import { err, ok } from "@life-console/core";
 import { describe, expect, it, vi } from "vitest";
 
 import { runnerError } from "../errors";

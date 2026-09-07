@@ -1,4 +1,4 @@
-import { err, ok } from "@life-console/contracts";
+import { err, ok } from "@life-console/core";
 import type { ApiRepository, RunnerJob } from "@runner/repositories/api-repository";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

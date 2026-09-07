@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import { err, ok, safeTry, type Result } from "@life-console/contracts";
+import { err, ok, safeTry, type Result } from "@life-console/core";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
 
