@@ -10,6 +10,7 @@
 | 対象別ルール | `docs/agent-rules/` | AGENTS の表から該当文書を読む | `.claude/rules -> ../docs/agent-rules`、`paths` で適用 |
 | 作業手順 | `.agents/skills/` | 標準のスキル探索 | `.claude/skills -> ../.agents/skills` |
 | 機械的な検証 | `package.json`、`packages/eslint-config/` | `pnpm check` | `pnpm check` |
+| Claude 固有の動作 | `.claude/settings.json`、`.claude/hooks/` | 対象外 | 日本語・実行時間・編集後 lint |
 
 相対 symlink を Git 管理する。個々のスキル・ルールへのリンクを増やす方式と違い、正本にファイルを追加すれば両方から参照できる。リンク先を複製する同期スクリプトは不要。
 
@@ -30,6 +31,16 @@ Codex の [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-
 
 モデル、承認モード、sandbox、個人アカウント、MCP、プラグインは各クライアントの利用者設定で管理する。共通化のために個人の設定を上書きしない。Claude 専用の `context: fork`、動的 shell 展開、特定 MCP や未導入スキルへの依存は共通スキルに入れない。
 
+## Claude 固有の settings と hook
+
+[settings.json](../.claude/settings.json) はプロジェクトで共有する。日本語、`@` ファイル候補での gitignore の尊重、Bash の既定 timeout 5 分・上限 20 分を設定する。利用者だけの上書きは Git 管理外の `.claude/settings.local.json` に置く。
+
+`PostToolUse` の `Edit|Write` に [lint-after-edit.mjs](../.claude/hooks/lint-after-edit.mjs) を登録する。編集した 1 ファイルへ既存の ESLint 設定を適用し、error / warning があれば exit code 2 と stderr で Claude に返す。自動修正はせず、成功時は無出力。対象外の拡張子・生成物などは ESLint の ignore 判定に従い、リポジトリ外のファイルも除く。
+
+依存関係は通常の `pnpm install --frozen-lockfile` で準備する。依存不足や設定エラーは hook の実行エラーとして表示される。検証成功に置き換えたり、自動インストールしたりしない。Bash 経由の書き換えや削除、ファイル間の整合性はこの hook だけでは確認できないため、完了前の `pnpm check` は引き続き必要。
+
+Claude Code をリポジトリルートから起動し、`/hooks` で登録を確認する。hooks は利用者のグローバル設定とも併用される。Codex ではこの hook は動かず、同じ ESLint を `pnpm lint` / `pnpm check` から実行する。仕様は [Claude Code settings](https://code.claude.com/docs/en/settings)、[hooks](https://code.claude.com/docs/en/hooks)、[環境変数](https://code.claude.com/docs/en/env-vars) を参照。
+
 ## 追加・更新・検証
 
 1. 共通の前提は `AGENTS.md`、条件付きの規約は `docs/agent-rules/`、作業手順は `.agents/skills/<name>/SKILL.md` に書く。スキルには `name` と `description` の YAML frontmatter を付ける。
@@ -48,5 +59,7 @@ symlink が通常ファイルに展開される checkout は `pnpm harness:check
 - `Wareware-PJ/japagate-systems-ops`: `AGENTS.md`、共通ルールとスキルの正本、Claude 側の相対リンク、実装検証・セルフレビュー・レビュー学習を採用。Life Console の D1 / Hono / Vite 構成と実在するコマンドに合わせて書き直した。
 - `Wareware-PJ/ads-report-pro`: Claude 専用 commands / rules と `.agents` / `.codex` の併存を確認。今回は探索先と正本を増やさず、`.agents/skills` にまとめる。
 - `kokoichi206/orgctl`、`kokoichi206/slack-cli`: 短い入口から実装・CLI リファレンスへ案内し、実行境界を明記する構成を採用。
+- `kokoichi206/portfolio`: 編集後に対象ファイルを lint し、違反を Claude へ返す hook を採用。Life Console の既存 ESLint を使う構成にした。
+- `Wareware-PJ/kicho-pro`、`Wareware-PJ/aip-skilld-seal`: 終了時の検証を確認。Life Console では対象ファイルの lint が実測約 1〜2 秒だったため、編集直後に返す方式を採用した。終了時の追加検証は既存の `pnpm check` と CI で扱う。
 
 Supabase / Next.js 固有ルール、未導入のツール・プラグイン、広いコマンド許可、モデル固定は移植していない。必要な規約は、実コードや繰り返した不具合を根拠に追加する。
