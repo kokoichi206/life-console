@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - develop
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".agents/**"
+      - ".claude/**"
   workflow_dispatch:
 
 permissions:
