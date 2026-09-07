@@ -86,6 +86,18 @@ pnpm dev:runner
 - D1 schedule と単一 Cron による catch-up、coalescing、deadline、lost batch の再 queue
 - D1 dump と R2 object 本体の Mac 側 backup job
 - desktop/mobile responsive UI
+- ホーム画面から独立したウィンドウで起動する PWA
+
+## スマホのホーム画面に追加
+
+本番 URL をスマホのブラウザで開き、Cloudflare Access にログインしてから追加します。
+
+- Android の Chrome: メニューの『ホーム画面に追加』から『インストール』を選びます。
+- iPhone の Safari: 共有メニューの『ホーム画面に追加』を選びます。『Web アプリとして開く』が表示される場合は有効にします。
+
+追加した Life Console のアイコンから、ホーム画面をアドレスバーなしで開けます。利用にはネットワーク接続が必要です。Access のセッションが切れた場合は再ログインします。
+
+manifest は認証 Cookie を送って取得します。Service Worker とオフラインキャッシュは使いません。アイコンの編集元は `apps/web/public/icons/app.svg`、配信用の PNG は同じディレクトリに置いています。
 
 ## 返信下書き
 
