@@ -17,13 +17,14 @@
     "typecheck": "tsc --noEmit && pnpm -r typecheck",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
+    "knip": "knip",
     "test": "vitest run",
     "storybook": "pnpm --filter @life-console/web storybook",
     "storybook:build": "pnpm --filter @life-console/web storybook:build",
     "storybook:test": "pnpm --filter @life-console/web storybook:test",
     "harness:check": "node .agents/scripts/check-harness.mjs",
     "migrations:check": "pnpm --filter @life-console/db migrations:check",
-    "check": "pnpm harness:check && pnpm migrations:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
+    "check": "pnpm harness:check && pnpm migrations:check && pnpm lint && pnpm knip && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260901.1",
@@ -31,7 +32,7 @@
     "@types/node": "^24.13.3",
     "concurrently": "^10.0.5",
     "eslint": "^9.39.5",
-    "tsx": "^4.23.13",
+    "knip": "^6.35.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11",
     "yaml": "2.9.0"

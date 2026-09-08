@@ -52,6 +52,12 @@ flowchart TB
 
 同期・送信・agent 起動は job として処理し、実行経過と結果を Web で確認できます。定期実行は D1 のスケジュールと Cloudflare Cron で管理。runner や外部 CLI の異常・復旧は Web Push で通知します。
 
+## 開発時のチェック
+
+`pnpm check` で lint・型検査・テスト・build をまとめて実行します。未使用ファイル・依存関係・export の検査だけなら `pnpm knip`。全 workspace を対象にし、PR の CI でも実行します。
+
+[knip.jsonc](knip.jsonc) は `minken` と `enerops` のルート設定を参考にしています。[Knip の workspace 自動検出](https://knip.dev/features/monorepos-and-workspaces) を使い、Claude hook と Terraform の fixture は entry を明示しています。Gradle の生成物と ESLint の fixture、共通 UI の追加に使う `shadcn` CLI は理由を付けて除外しています。同一ファイル内で使う export は未使用扱いにしません。
+
 ## ライセンス
 
 [MIT License](LICENSE)
