@@ -327,3 +327,8 @@ export const weightGoalSchema = z.object({
   targetDate: z.iso.date().nullable(),
 });
 export type WeightGoal = z.infer<typeof weightGoalSchema>;
+
+export const mealPeriodQuerySchema = z.union([
+  z.object({ from: z.iso.date(), to: z.iso.date() }).refine((value) => value.from <= value.to),
+  z.object({}).strict(),
+]);

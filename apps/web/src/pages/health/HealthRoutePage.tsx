@@ -11,6 +11,9 @@ export const HealthRoutePage = () => {
       onRangeChange={(range) => {
         void navigate({ search: { ...search, range: undefined, from: undefined, to: undefined, ...range }, replace: true, resetScroll: false });
       }}
+      onRunningVisibilityChange={(show) => {
+        void navigate({ search: { ...search, running: show ? "show" : undefined }, replace: true, resetScroll: false });
+      }}
       goalEntryOpen={search.entry === "goal"}
       onGoalEntryOpenChange={(open) => {
         void navigate({ search: { ...search, entry: open ? "goal" : undefined, meal: undefined }, replace: !open, resetScroll: false });

@@ -60,7 +60,7 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   classifyConversation: (id: string, classification: string) => dependencies.conversations.classify(id, classification),
   createTaskFromConversation: (id: string) => dependencies.conversations.createTask(id),
   importConversations: (input: ImportConversationsInput) => dependencies.conversations.import(input),
-  listMeals: () => dependencies.health.listMeals(),
+  listMeals: (period?: { readonly from: string; readonly to: string }) => dependencies.health.listMeals(period),
   createMeal: (input: CreateMealInput) => dependencies.health.createMeal(input),
   createMealPhotoUpload: (clientId: string, contentType: string) => dependencies.mealPhotos.createUpload(clientId, contentType),
   confirmMealPhotoUploaded: (photoId: string) => dependencies.mealPhotos.confirmUploaded(photoId),

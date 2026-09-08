@@ -4,12 +4,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import { EmptyState } from "../../../components/DesignSystem";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/input";
+import type { ExerciseWeek } from "../exercise-weeks";
 import { constrainWeightWindow, snapWeightWindow, WEIGHT_DAY_MS, type WeightWindow } from "../weight-window";
 
 import { useWeightChartGesture } from "./use-weight-chart-gesture";
 
 const CHART_HEIGHT = 300;
-const PLOT_LEFT = 12;
 const PLOT_RIGHT = 44;
 const PLOT_TOP = 28;
 const PLOT_BOTTOM = 32;
@@ -17,6 +17,9 @@ const calendarDate = (timestamp: number) => new Date(timestamp).toISOString().sl
 const tickDate = (timestamp: number) => new Intl.DateTimeFormat("ja-JP", { timeZone: "UTC", month: "numeric", day: "numeric" }).format(timestamp);
 
 type WeightTrendChartProps = {
+  readonly runningWeeks: ReadonlyArray<ExerciseWeek> | undefined;
+  readonly onSelectWeek: (period: { from: string; to: string }) => void;
+  readonly latestDay: number;
   readonly points: ReadonlyArray<WeightPointWithMovingAverage>;
   readonly window: WeightWindow;
   readonly bounds: WeightWindow;
@@ -24,12 +27,14 @@ type WeightTrendChartProps = {
   readonly goal: WeightGoal | null;
 };
 
-export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal }: WeightTrendChartProps) => {
+export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal, latestDay, runningWeeks, onSelectWeek }: WeightTrendChartProps) => {
   const container = useRef<HTMLDivElement>(null);
   const clipId = useId();
   const helpId = useId();
   const [chartWidth, setChartWidth] = useState(360);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [inspectedDay, setInspectedDay] = useState<number | null>(null);
+  const plotLeft = runningWeeks === undefined ? 12 : 44;
   useEffect(() => {
     const element = container.current;
     if (element === null) return;
@@ -39,21 +44,25 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const plotWidth = Math.max(1, chartWidth - PLOT_LEFT - PLOT_RIGHT);
+  const plotWidth = Math.max(1, chartWidth - plotLeft - PLOT_RIGHT);
   const plotHeight = CHART_HEIGHT - PLOT_TOP - PLOT_BOTTOM;
   const committedPoints = points.filter((point) => {
     const day = weightCalendarDayTimestamp(point.occurredAt);
     return day >= window.start && day <= window.end;
   });
   const { preview, dragging, pointerHandlers, dismissInspection } = useWeightChartGesture({
-    window, bounds, plotWidth, plotLeft: PLOT_LEFT, onWindowChange,
+    window, bounds, plotWidth, plotLeft, onWindowChange,
     onInspect: (position) => {
       if (position === null) {
         setHoveredId(null);
+        setInspectedDay(null);
         return;
       }
-      const timestamp = window.start + (position - PLOT_LEFT) / plotWidth * (window.end - window.start);
-      const nearest = committedPoints.reduce<typeof points[number] | undefined>((found, point) => found === undefined || Math.abs(weightCalendarDayTimestamp(point.occurredAt) - timestamp) < Math.abs(weightCalendarDayTimestamp(found.occurredAt) - timestamp) ? point : found, undefined);
+      const timestamp = window.start + (position - plotLeft) / plotWidth * (window.end - window.start);
+      setInspectedDay(timestamp);
+      const week = runningWeeks?.find((entry) => timestamp >= Date.parse(entry.visibleFrom) && timestamp < Date.parse(entry.visibleTo) + WEIGHT_DAY_MS);
+      const weekPoints = runningWeeks === undefined ? committedPoints : committedPoints.filter((point) => week !== undefined && weightCalendarDayTimestamp(point.occurredAt) >= Date.parse(week.visibleFrom) && weightCalendarDayTimestamp(point.occurredAt) <= Date.parse(week.visibleTo));
+      const nearest = weekPoints.reduce<typeof points[number] | undefined>((found, point) => found === undefined || Math.abs(weightCalendarDayTimestamp(point.occurredAt) - timestamp) < Math.abs(weightCalendarDayTimestamp(found.occurredAt) - timestamp) ? point : found, undefined);
       setHoveredId(nearest?.id ?? null);
     },
   });
@@ -67,22 +76,27 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
   const yMinimum = Math.floor((minimum - 0.5) / tickStep) * tickStep;
   const yMaximum = Math.ceil((maximum + 0.5) / tickStep) * tickStep;
   const y = (weight: number) => PLOT_TOP + (yMaximum - weight) / (yMaximum - yMinimum) * plotHeight;
-  const x = (timestamp: number) => PLOT_LEFT + (timestamp - displayedWindow.start) / (displayedWindow.end - displayedWindow.start) * plotWidth;
+  const x = (timestamp: number) => plotLeft + (timestamp - displayedWindow.start) / (displayedWindow.end - displayedWindow.start) * plotWidth;
   const positioned = points.map((point) => ({ ...point, x: x(weightCalendarDayTimestamp(point.occurredAt)), actualY: y(point.weightKg), averageY: y(point.movingAverage7DaysKg) }));
-  const visiblePoints = positioned.filter((point) => point.x >= PLOT_LEFT && point.x <= chartWidth - PLOT_RIGHT);
+  const visiblePoints = positioned.filter((point) => point.x >= plotLeft && point.x <= chartWidth - PLOT_RIGHT);
   const hovered = visiblePoints.find((point) => point.id === hoveredId);
-  const detailPoint = hovered ?? visiblePoints.at(-1);
+  const inspectedWeek = runningWeeks?.find((week) => inspectedDay !== null && inspectedDay >= Date.parse(week.visibleFrom) && inspectedDay < Date.parse(week.visibleTo) + WEIGHT_DAY_MS);
+  const detailWeek = inspectedWeek ?? runningWeeks?.[0];
+  const detailPoints = detailWeek === undefined ? visiblePoints : visiblePoints.filter((point) => weightCalendarDayTimestamp(point.occurredAt) >= Date.parse(detailWeek.visibleFrom) && weightCalendarDayTimestamp(point.occurredAt) <= Date.parse(detailWeek.visibleTo));
+  const detailPoint = hovered ?? detailPoints.at(-1);
+  const maximumKilometers = Math.max(0, ...runningWeeks?.map((week) => week.distanceMeters / 1000) ?? []);
+  const distanceStep = Math.max(5, Math.ceil(maximumKilometers / 4 / 5) * 5);
+  const distanceMaximum = distanceStep * 4;
+  const distanceY = (kilometers: number) => PLOT_TOP + (1 - kilometers / distanceMaximum) * plotHeight;
   // 点が重なって線を隠さないよう、拡大して間隔が取れるときだけ各記録の点を描く。
   const showSampleMarkers = visiblePoints.length <= plotWidth / 8;
-  const latestPoint = points.at(-1);
-  const latestDay = latestPoint === undefined ? undefined : weightCalendarDayTimestamp(latestPoint.occurredAt);
   const yTicks = Array.from({ length: Math.round((yMaximum - yMinimum) / tickStep) + 1 }, (_, index) => yMinimum + index * tickStep);
   const selectWindow = (next: WeightWindow) => {
     dismissInspection();
     onWindowChange(snapWeightWindow(next));
   };
   const returnToLatest = () => {
-    if (latestDay !== undefined) selectWindow({ start: latestDay - (window.end - window.start), end: latestDay });
+    selectWindow({ start: latestDay - (window.end - window.start), end: latestDay });
   };
   const changeScale = (factor: number) => {
     const midpoint = (window.start + window.end) / 2;
@@ -100,17 +114,17 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
         <div className="flex items-center gap-1" role="group" aria-label="グラフの拡大と移動">
           <Button variant="ghost" className="size-11" size="icon" aria-label="表示期間を広げる" disabled={window.end - window.start >= bounds.end - bounds.start} onClick={() => changeScale(2)}>−</Button>
           <Button variant="ghost" className="size-11" size="icon" aria-label="表示期間を狭める" disabled={window.end - window.start <= WEIGHT_DAY_MS} onClick={() => changeScale(0.5)}>＋</Button>
-          <Button variant="outline" className="h-11 shrink-0" size="sm" disabled={latestDay === undefined || window.end === latestDay} onClick={returnToLatest}>最新へ</Button>
+          <Button variant="outline" className="h-11 shrink-0" size="sm" disabled={window.end === latestDay} onClick={returnToLatest}>最新へ</Button>
         </div>
       </div>
       <div ref={container} className="relative min-w-0">
-        {points.length > 0 && (
-          <div className="mb-2 flex min-h-24 items-center rounded-lg bg-muted/30 px-3 py-2">
+        {(points.length > 0 || detailWeek !== undefined) && (
+          <div className="mb-2 grid min-h-24 gap-3 rounded-lg bg-muted/30 px-3 py-2 sm:grid-cols-2">
             {detailPoint === undefined
               ? (
                   <div className="space-y-1 text-xs text-muted-foreground">
-                    <p>この期間の体重記録はありません</p>
-                    <p>横に動かすか『最新へ』で記録のある期間へ戻れます</p>
+                    <p>{detailWeek === undefined ? "この期間の体重記録はありません" : "この週の体重記録はありません"}</p>
+                    <p>横に動かすか、日付を指定して記録のある期間を選べます</p>
                   </div>
                 )
               : (
@@ -120,9 +134,16 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
                     <small className="text-muted-foreground">{`窓内 ${detailPoint.movingAverageWindowSamples} 件`}</small>
                   </div>
                 )}
+            {detailWeek !== undefined && (
+              <div className="space-y-1 text-xs tabular-nums">
+                <strong>{`${tickDate(Date.parse(detailWeek.visibleFrom))} 〜 ${tickDate(Date.parse(detailWeek.visibleTo))}${detailWeek.partial ? "（一部）" : ""}`}</strong>
+                <p className="text-base font-semibold text-chart-4">{`${(detailWeek.distanceMeters / 1000).toFixed(1)} km ・ ${detailWeek.runCount} 回`}</p>
+                <Button size="sm" variant="outline" onClick={() => onSelectWeek({ from: detailWeek.from, to: detailWeek.to })}>この週のランと食事を見る</Button>
+              </div>
+            )}
           </div>
         )}
-        {points.length === 0 && goal === null
+        {points.length === 0 && goal === null && runningWeeks === undefined
           ? <EmptyState>表示できる体重記録がありません。</EmptyState>
           : (
               <svg
@@ -130,7 +151,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
                 viewBox={`0 0 ${chartWidth} ${CHART_HEIGHT}`}
                 role="img"
                 tabIndex={0}
-                aria-label="体重の実測値と 7 日移動平均の推移"
+                aria-label={runningWeeks === undefined ? "体重の実測値と 7 日移動平均の推移" : "体重と週ごとの走行距離の推移"}
                 aria-describedby={helpId}
                 {...pointerHandlers}
                 onKeyDown={(event) => {
@@ -144,21 +165,36 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
                   event.preventDefault();
                 }}
               >
-                <defs><clipPath id={clipId}><rect x={PLOT_LEFT - 4} y={0} width={plotWidth + 8} height={CHART_HEIGHT - PLOT_BOTTOM + 4} /></clipPath></defs>
-                {yTicks.map((tick) => (
+                <defs><clipPath id={clipId}><rect x={plotLeft - 4} y={0} width={plotWidth + 8} height={CHART_HEIGHT - PLOT_BOTTOM + 4} /></clipPath></defs>
+                {weightValues.length > 0 && <text className="fill-muted-foreground text-[11px]" x={chartWidth - PLOT_RIGHT + 10} y={14}>kg</text>}
+                {weightValues.length > 0 && yTicks.map((tick) => (
                   <g key={tick}>
-                    <line className="stroke-border" x1={PLOT_LEFT} x2={chartWidth - PLOT_RIGHT} y1={y(tick)} y2={y(tick)} />
+                    <line className="stroke-border" x1={plotLeft} x2={chartWidth - PLOT_RIGHT} y1={y(tick)} y2={y(tick)} />
                     <text className="fill-muted-foreground text-[11px]" x={chartWidth - PLOT_RIGHT + 10} y={y(tick) + 4}>{tick}</text>
                   </g>
                 ))}
+                {runningWeeks !== undefined && (
+                  <>
+                    <text className="fill-chart-4 text-[11px]" x={0} y={14}>km / 週</text>
+                    {[0, 1, 2, 3, 4].map((step) => <text key={step} className="fill-chart-4 text-[11px]" x={plotLeft - 8} y={distanceY(step * distanceStep) + 4} textAnchor="end">{step * distanceStep}</text>)}
+                    <g clipPath={`url(#${clipId})`} aria-label="週ごとの走行距離">
+                      {runningWeeks.map((week) => {
+                        const left = Math.max(plotLeft, x(Date.parse(week.visibleFrom)));
+                        const right = Math.min(chartWidth - PLOT_RIGHT, x(Date.parse(week.visibleTo) + WEIGHT_DAY_MS));
+                        const top = distanceY(week.distanceMeters / 1000);
+                        return <rect key={week.from} className={`fill-chart-4 ${week.partial ? "stroke-chart-4" : ""}`} strokeDasharray={week.partial ? "3 3" : undefined} fillOpacity={week.from === detailWeek?.from ? 0.4 : 0.18} x={left + 1} y={top} width={Math.max(0, right - left - 2)} height={CHART_HEIGHT - PLOT_BOTTOM - top} rx={3}><title>{`${week.visibleFrom} 〜 ${week.visibleTo}${week.partial ? "（一部）" : ""}: ${(week.distanceMeters / 1000).toFixed(1)} km ・ ${week.runCount} 回`}</title></rect>;
+                      })}
+                    </g>
+                  </>
+                )}
                 {[0, 0.5, 1].map((fraction) => {
                   const timestamp = displayedWindow.start + (displayedWindow.end - displayedWindow.start) * fraction;
                   return <text key={fraction} className="fill-muted-foreground text-[11px]" x={x(timestamp)} y={CHART_HEIGHT - 7} textAnchor={fraction === 0 ? "start" : fraction === 1 ? "end" : "middle"}>{tickDate(timestamp)}</text>;
                 })}
                 {goal !== null && (
                   <g aria-label={`目標 ${goal.targetWeightKg} kg`}>
-                    <line className="stroke-primary stroke-[1.5]" strokeDasharray="5 5" x1={PLOT_LEFT} x2={chartWidth - PLOT_RIGHT} y1={y(goal.targetWeightKg)} y2={y(goal.targetWeightKg)} />
-                    <text className="fill-primary text-[11px] font-semibold" x={PLOT_LEFT + 3} y={y(goal.targetWeightKg) - 9}>
+                    <line className="stroke-primary stroke-[1.5]" strokeDasharray="5 5" x1={plotLeft} x2={chartWidth - PLOT_RIGHT} y1={y(goal.targetWeightKg)} y2={y(goal.targetWeightKg)} />
+                    <text className="fill-primary text-[11px] font-semibold" x={plotLeft + 3} y={y(goal.targetWeightKg) - 9}>
                       {`目標 ${goal.targetWeightKg.toFixed(1)} kg`}
                     </text>
                   </g>
@@ -175,7 +211,13 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
             )}
       </div>
       <figcaption className="mt-3 space-y-3">
-        <div className="flex justify-end gap-4 text-[0.65rem] text-muted-foreground">
+        <div className="flex flex-wrap justify-end gap-4 text-[0.65rem] text-muted-foreground">
+          {runningWeeks !== undefined && (
+            <span className="inline-flex items-center gap-1.5">
+              <i className="h-3 w-4 rounded-sm bg-chart-4/30" />
+              週の走行距離
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5">
             <i className="h-0.5 w-4 bg-primary" />
             実測値
@@ -187,9 +229,10 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
         </div>
         <p id={helpId} className="text-center text-xs text-muted-foreground">
           横にスワイプで移動・ピンチで拡大縮小
-          <span className="mt-1 block">タップで体重・長押しでなぞる</span>
+          <span className="mt-1 block">{runningWeeks === undefined ? "タップで体重・長押しでなぞる" : "タップで体重と週の走行距離を確認・長押しでなぞる"}</span>
           <span className="sr-only">。キーボードの左右キーで移動、プラス・マイナスで拡大縮小、End で最新へ戻ります。</span>
         </p>
+        {runningWeeks !== undefined && <p className="text-center text-xs text-muted-foreground">走行距離は月曜始まり。期間の端の週は、表示されている日だけの合計です。Powered by Strava</p>}
         <details className="rounded-lg border px-3">
           <summary className="cursor-pointer py-3 text-xs">日付を指定・ボタンで移動</summary>
           <div className="mb-3 flex justify-between gap-2">

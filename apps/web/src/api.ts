@@ -1,5 +1,5 @@
 import type { AppType } from "@life-console/api";
-import type { MonitorHistory, MonitoringSummary } from "@life-console/contracts";
+import type { StravaActivityPage, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
   PushConfiguration,
   PushSubscriptionInput,
@@ -56,6 +56,11 @@ const unwrap = async <T>(response: HttpResponse): Promise<T> => {
 };
 
 export const api = {
+  stravaStatus: async () => unwrap<StravaStatus>(await client.api.v1.strava.status.$get()),
+  authorizeStrava: async () => unwrap<string>(await client.api.v1.strava.authorize.$post()),
+  disconnectStrava: async () => unwrap<null>(await client.api.v1.strava.connection.$delete()),
+  stravaActivities: async (from: string, to: string, page: number, signal: AbortSignal) => unwrap<StravaActivityPage>(await client.api.v1.strava.activities.$get({ query: { from, to, page: String(page) } }, { init: { signal } })),
+  mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get({ query: { from, to } })),
   monitoring: async () => unwrap<MonitoringSummary>(await client.api.v1.monitoring.$get()),
   monitoringHistory: async (targetId?: string, before?: number) => unwrap<MonitorHistory[]>(await client.api.v1.monitoring.history.$get({ query: {
     ...(targetId === undefined ? {} : { targetId }), ...(before === undefined ? {} : { before: String(before) }),
@@ -85,7 +90,7 @@ export const api = {
   syncConnector: async (connector: CreateConnectorSyncInput["connector"]) => unwrap<Job>(await client.api.v1.connectors.sync.$post({
     json: { connector },
   })),
-  meals: async () => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get()),
+  meals: async () => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get({ query: {} })),
   createMealUpload: async (input: { readonly clientId: string; readonly contentType: "image/jpeg" | "image/png" | "image/webp" }) => unwrap<{ readonly photoId: string; readonly uploadUrl: string; readonly expiresAt: string; readonly requiredHeaders: Readonly<Record<string, string>> }>(await client.api.v1["meal-photos"].upload.$post({ json: input })),
   createMeal: async (input: Parameters<typeof client.api.v1.meals.$post>[0]["json"]) => unwrap<Meal>(await client.api.v1.meals.$post({ json: input })),
   weightGoal: async () => unwrap<WeightGoal | null>(await client.api.v1["weight-goal"].$get()),
