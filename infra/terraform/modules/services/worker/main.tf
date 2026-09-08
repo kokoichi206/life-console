@@ -31,25 +31,3 @@ resource "cloudflare_worker" "app" {
     ignore_changes = [subdomain]
   }
 }
-
-# コード・Cron・公開 URL の管理を移し、稼働中の Worker は削除しない。
-removed {
-  from = cloudflare_workers_script.app
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = cloudflare_workers_cron_trigger.app
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = cloudflare_workers_script_subdomain.app
-  lifecycle {
-    destroy = false
-  }
-}

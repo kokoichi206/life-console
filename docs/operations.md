@@ -12,7 +12,7 @@
 
 `infra` はコードなしの Worker・D1・R2 を作成し、その Worker ID で Access を設定します。`upload` は Web / API を build して Wrangler の version として登録し、`migration` が D1 の SQL を適用した後、`deploy` がその version ID に配信を切り替えて公開 URL と Cron を設定します。upload 時点では配信を切り替えず、preview URL も無効です。D1 ID と R2 名は、`deploy.yml` 内の step で適用済み Terraform output から取得し、`jq` で Wrangler の設定へ渡します。
 
-[開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例を、配置と SQL migration に使います。既存環境は `removed` と import で Worker の実体を削除せず管理を移し、GHA は削除・置き換えを含む plan を停止します。新規環境では Worker ID の入力・事前 import は不要です。state 保存先と資格情報の初回準備は [Terraform の手順](../infra/terraform/README.md#state-保存先の初回準備)を参照します。
+[開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例を、配置と SQL migration に使います。Worker ID の入力・事前 import は不要です。旧リソース型の state を持つ環境では、次回 deploy の前に state を移行します。移行処理は通常の Terraform 定義に含めません。GHA は削除・置き換えを含む plan を停止します。state 保存先と資格情報の初回準備は [Terraform の手順](../infra/terraform/README.md#state-保存先の初回準備)を参照します。
 
 GitHub Environment の配置許可ブランチは `development` が `develop`、`production` が `main` のみとします。デプロイ用 API token は対象アカウントに絞り、Workers Scripts・D1・R2・Access Apps・Access Policies の編集権限を付けて環境別に発行します。配置用の編集 token は各 Environment に登録します。Terraform の環境別入力と PR 用の読み取り専用 token は Repository Secrets で管理します。
 

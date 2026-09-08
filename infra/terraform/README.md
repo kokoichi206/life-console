@@ -58,7 +58,7 @@ infra/terraform/
 
 ローカルの provider token は D1 / R2 / Access Apps / Access Policies / Workers Scripts の読み取り専用で、import・refresh・plan に使える。GHA の配置には同じ 5 サービスの編集権限を持つ token を環境別に用意し、PR の plan には読み取り専用 token を使う。Cloudflare 側の権限範囲は対象アカウントで、GHA 側の Environment と許可ブランチで開発・本番の利用経路を分ける。
 
-`terraform.tfvars` と `imports.tf` は各 root 内の Git 管理外ファイル。新しい checkout では、`~/.config/life-console/terraform/` 以下の、リポジトリと同じ root 相対パスから `terraform.tfvars` を復元する（例: `envs/development/`）。`imports.tf` は未取り込みの資源がある場合だけ使い、取り込み済みの旧 Worker・Cron・subdomain の import block は削除する。入力は本人メールと本番 runner の既存 Service Token ID。既存 Worker の管理移行時だけ `access_worker_id` も指定する。Cloudflare account ID と workers.dev サブドメインは各 root の `locals.tf`、state bucket と R2 endpoint は `backend.tf` に固定する。`backend.hcl` の生成・復元は不要。state 保存先の root は入力変数を持たない。
+`terraform.tfvars` と `imports.tf` は各 root 内の Git 管理外ファイル。新しい checkout では、`~/.config/life-console/terraform/` 以下の、リポジトリと同じ root 相対パスから `terraform.tfvars` を復元する（例: `envs/development/`）。`imports.tf` は未取り込みの資源がある場合だけ使い、取り込み済みの import block は削除する。入力は本人メールと本番 runner の既存 Service Token ID。Cloudflare account ID と workers.dev サブドメインは各 root の `locals.tf`、state bucket と R2 endpoint は `backend.tf` に固定する。`backend.hcl` の生成・復元は不要。state 保存先の root は入力変数を持たない。
 
 state と plan は本人メールなどを含むため、Git や公開 CI artifact に保存しない。変更前のバックアップは `terraform state pull` で非公開の別保存先へ残す。state bucket 自体も管理対象だが、初回作成は backend の初期化より先に行う。
 
@@ -93,15 +93,15 @@ terraform plan -input=false -detailed-exitcode
 
 D1 / R2 / Access / Worker 本体は `prevent_destroy` を持つ。定義が残っている間の削除・置き換えを止めるもので、モジュール自体の削除や管理外の操作は防がない。state bucket は両環境の管理に必要なため、アプリ環境とは別の root に置き、通常の環境変更では操作しない。
 
-## 既存資源の取り込みと Worker の管理移行
+## 資源の管理
 
 新規環境では import は不要。別途作成済みの D1・R2・Access を取り込む場合だけ `imports.tf.example` の ID を実環境に合わせ、plan の差分を確認して import する。state と plan の検証記録は非公開の保存先へ置く。
 
-旧 `cloudflare_workers_script` で管理済みの開発・本番では、既存の `access_worker_id` をそのまま使う。`worker-import.tf` が同じ Worker を `cloudflare_worker` に取り込み、module 内の `removed { lifecycle { destroy = false } }` が旧 script・Cron・subdomain を state から外す。Worker の削除や再作成は行わない。移行後は `access_worker_id` を入力から省略できる。新規環境では最初から省略する。
+Terraform 定義と deploy workflow は現行構成の作成・更新だけを扱う。旧リソース型で管理中の環境を引き継ぐ場合は、次回 deploy の前に運用作業として state を移行する。移行用の入力変数や条件分岐は常設しない。
 
 Worker の `subdomain` は作成時だけ非公開にし、以降は `ignore_changes` で Wrangler に管理を任せる。provider は未指定でも `enabled = false` を補うため、単なる省略では既存 URL を無効にする差分になる。公開 URL は配信切替後の `wrangler triggers deploy` で有効化し、preview URL は無効のままにする。
 
-Worker・D1・R2・Access の `prevent_destroy` と、配置時の plan に対する削除・置き換え拒否を維持する。旧 script の `workers_tag` による assets 差分検出は不要になるため削除する。Wrangler の upload は既存の secret bindings を引き継ぐ。秘密値を Terraform 入力へ複製しない。
+Worker・D1・R2・Access の `prevent_destroy` と、配置時の plan に対する削除・置き換え拒否を維持する。Wrangler の upload は既存の secret bindings を引き継ぐ。秘密値を Terraform 入力へ複製しない。
 
 R2 の公開ドメインは定義しない。既存 bucket を import する場合は managed domain が無効で custom domain が空であることを実 API でも確認する。
 
@@ -151,7 +151,7 @@ R2 の state lock と GHA の環境別 concurrency を使う。plan と apply �
 ## アプリ環境の初回実行
 
 1. state bucket・API token・R2 backend 資格情報・GitHub Environment を準備する。別アカウントでは `locals.tf` と `backend.tf` も変更する。本番 runner の Service Auth を使う場合は Service Token の ID を入力する。
-2. `TERRAFORM_ENVIRONMENTS_JSON` の対象環境には本人メールを入れ、`access_worker_id` は指定しない。
+2. `TERRAFORM_ENVIRONMENTS_JSON` の対象環境に本人メールを入れる。
 3. 対象ブランチで deploy を手動実行する。`infra` がコードなしの非公開 Worker・D1・R2・Access を作成し、以降は通常と同じ upload → migration → 配信切替を実行する。
 
 通常の Worker は ECR 相当の独立したコンテナ registry を必要としない。ここで先に作るのはコードを載せる Worker 本体と、bindings が参照する D1・R2。state bucket の作成・認証資格情報の発行はアプリ配置の前提として分ける。
