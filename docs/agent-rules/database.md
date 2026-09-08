@@ -8,6 +8,7 @@ paths:
 # D1 と migration
 
 - schema の正本は `packages/db/src/schema.ts`。変更後は `pnpm --filter @life-console/db generate` で SQL と `migrations/meta/` を生成し、差分を読む。適用済みの migration の内容や ID を書き換えず、新しい migration を追加する。
+- `pnpm migrations:check` で schema と最新 snapshot の一致、journal 内の SQL ファイルの存在を確認する。`pnpm check` と PR の CI にも含まれる。生成した SQL と `migrations/meta/` は一緒に追加する。
 - 実行時のクエリは `apps/api/src/repositories` に置く。Drizzle は schema と migration の管理に使っており、Supabase 用の手順や `db push` に置き換えない。
 - NOT NULL、列削除、型変更などは既存行と既存の読み書きへの影響を確認する。schema の一致だけでデータ移行が成功したとしない。
 - job の claim・lease・heartbeat・完了報告と、下書き保存の lease・更新日時による競合検出は、既存 repository の条件を保つ。再実行で重複や古い実行結果の保存を生まないか確認する。
