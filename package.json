@@ -22,7 +22,8 @@
     "storybook:build": "pnpm --filter @life-console/web storybook:build",
     "storybook:test": "pnpm --filter @life-console/web storybook:test",
     "harness:check": "node .agents/scripts/check-harness.mjs",
-    "check": "pnpm harness:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
+    "migrations:check": "pnpm --filter @life-console/db migrations:check",
+    "check": "pnpm harness:check && pnpm migrations:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
   },
   "devDependencies": {
     "@life-console/eslint-config": "workspace:*",

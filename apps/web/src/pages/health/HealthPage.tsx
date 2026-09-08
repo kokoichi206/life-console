@@ -119,7 +119,7 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
           </div>
         </header>
         <Panel className="overflow-hidden rounded-3xl py-0">
-          <WeightTrendChart points={visibleWeightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
+          <WeightTrendChart points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
           <dl className="mx-4 my-3 grid grid-cols-2 gap-x-4 gap-y-4 rounded-2xl bg-muted/50 p-4 sm:grid-cols-4">
             {[
               { label: "最新", value: lastVisibleWeight?.weightKg.toFixed(1) ?? "—", unit: "kg", detail: lastVisibleWeight === undefined ? "記録なし" : shortDate(lastVisibleWeight.occurredAt) },

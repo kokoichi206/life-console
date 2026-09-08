@@ -113,7 +113,7 @@ pnpm --filter @life-console/web exec playwright install chromium
 pnpm check
 ```
 
-`pnpm check` は lint・型検査・テスト・ビルド・Storybook のブラウザテスト・AI 指示の整合性を確認します。`develop` / `main` 向け PR の CI でも実行します。
+`pnpm check` は migration の生成漏れ・lint・型検査・テスト・ビルド・Storybook のブラウザテスト・AI 指示の整合性を確認します。`develop` / `main` 向け PR の CI でも同じ検査を実行します。
 
 `pnpm storybook` で <http://localhost:6006> に UI カタログを起動できます。Android は別途 [Android の検証手順](clients/android/README.md#lint-と-ci) を使います。
 
