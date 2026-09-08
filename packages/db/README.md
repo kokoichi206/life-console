@@ -1,6 +1,6 @@
 # @life-console/db
 
-Drizzle schema、D1 migration、ローカル確認用の架空 seed を管理します。実行時の業務クエリと Result への変換は `apps/api/src/repositories` に置きます。
+Drizzle schema、D1 migration、ローカル確認用の架空 seed を管理します。実行時の業務クエリと Result への変換は `apps/api/src/repositories` に置きます。API からこのパッケージの schema を参照し、通常の読み書きには Drizzle のクエリビルダーを使います。SQL の方が条件を追いやすい箇所は残します。
 
 - `src/schema.ts`: テーブル定義
 - `migrations/`: SQL と Drizzle の生成履歴
@@ -26,3 +26,11 @@ storage テストは全 migration を独立したメモリ内 SQLite に適用�
 チェックは Drizzle Kit の API で現在の schema の snapshot をメモリ上に生成して比較するため、ファイルの書き込み、DB 接続、名前変更の対話入力はありません。UUID と rename の履歴は比較から除きます。SQL の実行結果や本番 DB との差は検査対象外で、SQL の適用は storage テストで確認します。
 
 旧 `packages/database` からの移動で SQL の内容や migration ID は変えていません。配置先の非公開 Wrangler 設定でも `migrations_dir` を `../../packages/db/migrations` に変更してください。
+
+## 実行時のクエリと確認
+
+`nutrition-repository.ts` の一覧と候補取得は Drizzle を使い、列の選択結果から型を推論します。推定結果がない食事は LEFT JOIN の結果を `null` として返します。保存は実行権限・対象・重複を同じ文で判定する既存の `INSERT ... SELECT` を維持しています。食事保存と初回ジョブ予約の D1 batch も変更していません。
+
+SQL の調査時は、この repository の `listQuery` / `candidatesQuery` を実行する直前で、デバッガーから `.toSQL().sql` を確認できます。Query Insights のクエリを repository メソッドと照合するために使います。`.toSQL().params` や `logger: true` によるバインド値の記録は行いません。SQL 式への `sql<T>` は型の指定であり、実際の結果型を検証しません。
+
+storage テストの D1 binding は SQLite を使った代替実装です。Drizzle の D1 driver が列順で結果を復元する `raw()` も SQLite の配列形式で実行します。driver の変更はこのテストだけで完了扱いにせず、ローカル D1 で保存・再取得と失敗時の結果を確認してください。

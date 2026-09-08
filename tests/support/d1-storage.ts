@@ -18,6 +18,11 @@ export const createJobStorage = () => {
     },
     all: async () => ({ results: database.prepare(sql).all(...parameters) }),
     first: async () => database.prepare(sql).get(...parameters) ?? null,
+    raw: async () => {
+      const query = database.prepare(sql);
+      query.setReturnArrays(true);
+      return query.all(...parameters);
+    },
   });
   let batches: Promise<unknown> = Promise.resolve();
   const binding = {

@@ -47,12 +47,18 @@ importers:
       '@life-console/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@life-console/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@life-console/env':
         specifier: workspace:*
         version: link:../../packages/env
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@5.20260901.1)
       hono:
         specifier: ^4.13.5
         version: 4.13.5
