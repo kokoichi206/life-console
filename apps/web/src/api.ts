@@ -122,6 +122,3 @@ export const api = {
   })),
   cancelJob: async (id: string) => unwrap<null>(await client.api.v1.jobs[":id"].cancel.$post({ param: { id } })),
 };
-
-export type DashboardData = Awaited<ReturnType<typeof api.dashboard>>;
-export type TaskData = Awaited<ReturnType<typeof api.tasks>>[number];

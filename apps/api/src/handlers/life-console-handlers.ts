@@ -102,5 +102,3 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   getAgentJobContext: (taskId: string, repositoryId: string) => dependencies.jobs.getAgentJobContext(taskId, repositoryId),
   runScheduledMaintenance: () => dependencies.jobs.runScheduledMaintenance(),
 });
-
-export type LifeConsoleHandlers = ReturnType<typeof createLifeConsoleHandlers>;

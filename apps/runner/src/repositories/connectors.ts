@@ -255,5 +255,3 @@ export const createConversationReplyRepository = (commands: CommandRepository): 
     return ok(undefined);
   },
 });
-
-export type TalknoteConnector = Connector;
