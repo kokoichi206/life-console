@@ -171,8 +171,6 @@ pnpm check
 
 `check.sh` は fmt を確認し、公開用の定義とテストだけを一時ディレクトリへコピーして、backend 接続なしの init / validate・mock test を実行する。実運用の backend 初期化情報は書き換えない。子 module のテストは環境 root から実行し、その lock file を使う。環境ごとの保存先、Worker ID の保護、環境内の本人条件、runner のパスと Service Auth、Worker の secret 保持と API / SPA の配信設定を確認する。
 
-続けて Python 3 の標準ライブラリでローカルの模擬 API を起動し、同じ lock file の実 provider で Worker の plan / apply を検証する。Web の変更・追加・削除と API の変更で起動時間が変わっても更新でき、変更なしなら配置しないことを確認する。実 Cloudflare への接続や実データの操作は行わない。
-
 [ci-terraform.yml](../../.github/workflows/ci-terraform.yml) の validate job は資格情報なしで同じ検証を行う。同じリポジトリ内のブランチから `develop` / `main` へ出した PR では、別の plan job が開発・本番をそれぞれ build し、読み取り専用 Cloudflare token で実環境の plan を取得する。fork PR には plan 用の資格情報を渡さず、validate のみ実行する。
 
 plan の変更資源・操作・検証コミット・実行ログへのリンクを、`actions/github-script` で環境ごとの PR コメントに表示する。push のたびに既存コメントを更新し、build・init・plan の失敗時も未完了として表示する。本人情報や Worker 本文を含む plan / state の値はコメントや artifact に載せない。
