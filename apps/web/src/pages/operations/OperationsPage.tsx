@@ -205,7 +205,7 @@ export const OperationsPage = () => {
           </div>
           {saveSourceRepositoryMapping.error !== null && <div className="px-5 pt-3"><FormError>{saveSourceRepositoryMapping.error.message}</FormError></div>}
         </Panel>
-        <form onSubmit={submitNote}>
+        <form id="note-entry" onSubmit={submitNote}>
           <Panel className="gap-4 px-5">
             <div className="space-y-1.5">
               <Eyebrow>QUICK NOTE</Eyebrow>

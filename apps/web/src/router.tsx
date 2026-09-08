@@ -1,37 +1,33 @@
 import { monitoringSearchSchema } from "@life-console/contracts";
 import { QueryClient } from "@tanstack/react-query";
-import { createRootRouteWithContext, createRoute, createRouter, redirect } from "@tanstack/react-router";
-import { lazy } from "react";
+import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Link, redirect } from "@tanstack/react-router";
 
 import { AppShell } from "./components/AppShell";
 import { Eyebrow, Panel } from "./components/DesignSystem";
-import { Button } from "./components/ui/Button";
+import { RouteError } from "./components/RouteError";
+import { buttonVariants } from "./components/ui/Button";
 import { jobsQuery } from "./features/jobs/queries";
 import { dashboardQuery } from "./features/overview/queries";
 import { repositoriesQuery } from "./features/repositories/queries";
 import { financeQuery } from "./pages/finance/queries";
 import { parseHealthSearch } from "./pages/health/health-search";
 import { mealsQuery, weightsQuery, weightGoalQuery } from "./pages/health/queries";
+import { sourceRepositoryMappingsQuery } from "./pages/operations/queries";
 import { parseWorkSearch } from "./pages/work/work-search";
 
 type RouterContext = {
   readonly queryClient: QueryClient;
 };
 
-const DashboardPage = lazy(async () => ({ default: (await import("./pages/dashboard/DashboardPage")).DashboardPage }));
-const TasksPage = lazy(async () => ({ default: (await import("./pages/work/TasksPage")).TasksPage }));
-const HealthPage = lazy(async () => ({ default: (await import("./pages/health/HealthRoutePage")).HealthRoutePage }));
-const FinancePage = lazy(async () => ({ default: (await import("./pages/finance/FinancePage")).FinancePage }));
-const OperationsPage = lazy(async () => ({ default: (await import("./pages/operations/OperationsPage")).OperationsPage }));
-
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: AppShell,
-  errorComponent: ({ error }) => (
+  errorComponent: RouteError,
+  notFoundComponent: () => (
     <Panel className="mx-auto mt-20 max-w-xl gap-4 px-5">
-      <Eyebrow>REQUEST FAILED</Eyebrow>
-      <h1 className="text-xl font-semibold">データを読み込めませんでした。</h1>
-      <p className="text-sm text-muted-foreground">{error.message}</p>
-      <Button className="w-fit" type="button" onClick={() => window.location.reload()}>再読み込み</Button>
+      <Eyebrow>404</Eyebrow>
+      <h1 className="text-xl font-semibold">ページが見つかりません。</h1>
+      <p className="text-sm text-muted-foreground">URL を確認するか、ホームから開き直してください。</p>
+      <Link to="/" className={buttonVariants({ className: "w-fit" })}>ホームへ戻る</Link>
     </Panel>
   ),
   pendingComponent: () => <div className="grid min-h-[50vh] place-items-center text-sm text-muted-foreground">Life Console を読み込んでいます。</div>,
@@ -41,14 +37,14 @@ const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   loader: ({ context }) => context.queryClient.ensureQueryData(dashboardQuery),
-  component: DashboardPage,
+  component: lazyRouteComponent(() => import("./pages/dashboard/DashboardPage"), "DashboardPage"),
 });
 
 const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks",
   validateSearch: parseWorkSearch,
-  component: TasksPage,
+  component: lazyRouteComponent(() => import("./pages/work/TasksPage"), "TasksPage"),
 });
 
 const healthRoute = createRoute({
@@ -60,14 +56,14 @@ const healthRoute = createRoute({
     context.queryClient.ensureQueryData(weightGoalQuery),
     context.queryClient.ensureQueryData(mealsQuery),
   ]),
-  component: HealthPage,
+  component: lazyRouteComponent(() => import("./pages/health/HealthRoutePage"), "HealthRoutePage"),
 });
 
 const financeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/finance",
   loader: ({ context }) => context.queryClient.ensureQueryData(financeQuery),
-  component: FinancePage,
+  component: lazyRouteComponent(() => import("./pages/finance/FinancePage"), "FinancePage"),
 });
 
 const operationsRoute = createRoute({
@@ -78,12 +74,22 @@ const operationsRoute = createRoute({
     context.queryClient.ensureQueryData(dashboardQuery),
     context.queryClient.ensureQueryData(repositoriesQuery),
     context.queryClient.ensureQueryData(jobsQuery),
+    context.queryClient.ensureQueryData(sourceRepositoryMappingsQuery),
   ]),
-  component: OperationsPage,
+  component: lazyRouteComponent(() => import("./pages/operations/OperationsPage"), "OperationsPage"),
+});
+
+// addChildren 内で生成すると型推論が any に広がり、遷移先の検証が抜ける。
+const draftsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/drafts",
+  beforeLoad: () => {
+    throw redirect({ to: "/tasks", search: { view: "inbox", status: "draft" }, replace: true });
+  },
 });
 
 const routeTree = rootRoute.addChildren([
-  createRoute({ getParentRoute: () => rootRoute, path: "/drafts", beforeLoad: () => { throw redirect({ to: "/tasks", search: { view: "inbox", status: "draft" }, replace: true }); } }),
+  draftsRoute,
   dashboardRoute,
   tasksRoute,
   healthRoute,
@@ -106,7 +112,10 @@ export const queryClient = new QueryClient({
 export const router = createRouter({
   routeTree,
   context: { queryClient },
+  search: { strict: true },
   defaultPreload: "intent",
+  // データの鮮度と重複取得の制御を Query に任せる。
+  defaultPreloadStaleTime: 0,
 });
 
 declare module "@tanstack/react-router" {

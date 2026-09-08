@@ -10,7 +10,7 @@ import { Badge } from "../../../components/ui/badge";
 import { Button, buttonVariants } from "../../../components/ui/Button";
 import { Textarea } from "../../../components/ui/textarea";
 import { activeJobStatuses, JobProgress } from "../../../features/jobs/JobProgress";
-import { serviceLabels, type WorkSearch } from "../work-search";
+import { serviceLabels } from "../work-search";
 
 import { CalendarDraftOptions, initialReplyCalendar } from "./CalendarDraftOptions";
 import { ReplyComposer, type DraftEdit } from "./ReplyComposer";
@@ -79,7 +79,7 @@ export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, 
         </div>
         {relatedTasks.map((task) => (
           <p key={task.id} className="text-xs leading-5">
-            <Link to="/tasks" search={(previous: WorkSearch) => ({ ...previous, view: "tasks", taskId: task.id })} className="text-primary underline underline-offset-4">{task.title}</Link>
+            <Link from="/tasks" to="/tasks" search={(previous) => ({ ...previous, view: "tasks", taskId: task.id })} className="text-primary underline underline-offset-4">{task.title}</Link>
             {" "}
             ·
             {" "}

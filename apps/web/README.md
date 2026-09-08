@@ -37,6 +37,20 @@ src/
 
 `router.tsx` は URL、遷移時の loader、共通レイアウトを担当します。各ページの queryKey は配置変更前と同じで、フィルター切り替えでもアプリ全体を再作成しません。
 
+## ルーティング
+
+- 各 `createRoute` は定数にしてから `addChildren` に渡します。配列内で直接生成すると型が `any` に広がる場合があり、`Register` の登録があっても不正な遷移先を検出できなくなります。
+- 内部遷移は `Link` / `useNavigate` を使います。ページ内で search を引き継ぐ `Link` は `from` を指定し、コールバックの型はルーターから推論させます。
+- `validateSearch` は URL の入力を検証し、`search.strict: true` で検証結果にない項目を URL と画面の状態から除去します。パーサーの戻り値から省くだけでは、元の不正な値が保持されます。パラメーターを消す操作には `undefined` を使うため、任意項目の型も明示的な `undefined` を許可します。常設フォームへのリンクは hash を使います。
+- ページは `lazyRouteComponent` で分割し、リンクの事前読み込みでコードも取得します。Query を使う loader では `ensureQueryData` を呼び、`defaultPreloadStaleTime: 0` でキャッシュの制御を Query に任せます。
+- 未定義の URL はホームへ戻れる 404 画面にします。取得エラーは Query のエラー状態をリセットし、`router.invalidate()` で再試行します。
+
+Web の `build` は型チェック後に Vite を実行します。`router.test-d.tsx` は型チェック専用で、存在しない path・不正な search・hook の対象ルートを `@ts-expect-error` で検証します。型の制約が抜けると、期待したエラーが消えたこと自体で失敗します。
+
+仕事の Storybook は実アプリの `search` 設定を使い、不正な search を含む URL の初期表示も検証します。React の `RouterProvider` が表示前に URL を正規化する経路を通し、`search.strict` を外すとブラウザテストが失敗します。
+
+参考: [型安全性](https://tanstack.com/router/latest/docs/guide/type-safety)、[ページの事前読み込み](https://tanstack.com/router/latest/docs/api/router/lazyRouteComponentFunction)、[外部キャッシュ連携](https://tanstack.com/router/latest/docs/guide/data-loading)、[Query のエラー処理](https://tanstack.com/router/latest/docs/guide/external-data-loading)。
+
 ## 開発
 
 ルートから `pnpm dev` で Web と API を起動します。Web は 5173、API は 8788 です。公開環境変数は `.env.development` と `.env.production` の `VITE_APP_ENV`。追加する場合は `src/env` の Zod schema でも検証してください。

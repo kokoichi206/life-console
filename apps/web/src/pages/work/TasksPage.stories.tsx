@@ -5,6 +5,8 @@ import { http, HttpResponse } from "msw";
 import { useMemo } from "react";
 import { expect } from "storybook/test";
 
+import { router as appRouter } from "../../router";
+
 import { TasksPage } from "./TasksPage";
 import { parseWorkSearch } from "./work-search";
 
@@ -19,12 +21,16 @@ const meta = {
   title: "Pages/仕事",
   component: TasksPage,
   parameters: { msw: { handlers: handlers(conversations) } },
-  decorators: [(Story) => {
+  decorators: [(Story, context) => {
     const router = useMemo(() => {
       const root = createRootRoute();
       const tasks = createRoute({ getParentRoute: () => root, path: "/tasks", validateSearch: parseWorkSearch, component: Story });
-      return createRouter({ routeTree: root.addChildren([tasks]), history: createMemoryHistory({ initialEntries: ["/tasks"] }) });
-    }, []);
+      return createRouter({
+        search: { ...appRouter.options.search },
+        routeTree: root.addChildren([tasks]),
+        history: createMemoryHistory({ initialEntries: [context.parameters.initialEntry ?? "/tasks"] }),
+      });
+    }, [context.parameters.initialEntry]);
     return <div className="flex h-[900px] flex-col"><RouterProvider router={router} /></div>;
   }],
 } satisfies Meta<typeof TasksPage>;
@@ -37,6 +43,15 @@ export const Inbox: Story = {
   },
 };
 export const Empty: Story = { parameters: { msw: { handlers: handlers([]) } } };
+export const InvalidInitialSearch: Story = {
+  parameters: { initialEntry: "/tasks?service=%5B%22gmail%22%5D&period=invalid&unexpected=keep" },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole("combobox", { name: /サービス/ })).toHaveValue("all");
+    await expect(canvas.getByRole("combobox", { name: /期間/ })).toHaveValue("7d");
+    await expect(await canvas.findByRole("heading", { name: "テストの依頼者" })).toBeVisible();
+    await expect(canvas.getByRole("link", { name: "タスク" })).not.toHaveAttribute("href", expect.stringContaining("unexpected"));
+  },
+};
 export const DraftFailure: Story = {
   parameters: { msw: { handlers: handlers(conversations, true) } },
   play: async ({ canvas }) => {

@@ -6,7 +6,6 @@ import { cn } from "../../lib/class-names";
 
 import { TaskBoard } from "./_components/TaskBoard";
 import { WorkInbox } from "./_components/WorkInbox";
-import type { WorkSearch } from "./work-search";
 
 export const TasksPage = () => {
   const search = useSearch({ from: "/tasks" });
@@ -21,8 +20,9 @@ export const TasksPage = () => {
         {([{ value: "inbox", label: "受信箱" }, { value: "tasks", label: "タスク" }] as const).map((item) => (
           <Link
             key={item.value}
+            from="/tasks"
             to="/tasks"
-            search={(previous: WorkSearch) => ({ ...previous, view: item.value })}
+            search={(previous) => ({ ...previous, view: item.value })}
             aria-current={view === item.value ? "page" : undefined}
             className={cn("border-b-2 px-5 py-3 text-sm font-medium transition-colors", view === item.value ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
           >
