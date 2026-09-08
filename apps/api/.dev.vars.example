@@ -10,3 +10,6 @@ R2_SECRET_ACCESS_KEY=
 # WEB_PUSH_PUBLIC_KEY=<generated-public-key>
 # WEB_PUSH_PRIVATE_KEY=<generated-private-key>
 # WEB_PUSH_SUBJECT=mailto:your-contact@example.com
+
+# 初回の runner 登録前から監視する ID。対象環境の runner と一致させる。
+# MONITORED_RUNNER_IDS=mac-local

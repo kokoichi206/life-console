@@ -1,3 +1,4 @@
+import type { MonitorObservation, MonitorTarget } from "@life-console/contracts";
 import { type WeightPoint, type Conversation, type CreateReplyDraftsInput, type SaveReplyDraftInput } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
 import { z } from "zod";
@@ -41,10 +42,11 @@ export type RunnerJob = z.infer<typeof jobSchema>;
 export type AgentJobContext = z.infer<typeof agentContextSchema>;
 
 export interface ApiRepository {
+  registerMonitors(targets: ReadonlyArray<MonitorTarget>): Promise<Result<null, RunnerError>>;
+  reportObservation(observation: MonitorObservation, historical: boolean): Promise<Result<null, RunnerError>>;
   replyCandidates(input: CreateReplyDraftsInput): Promise<Result<Conversation[], RunnerError>>;
   saveReplyDraft(input: SaveReplyDraftInput): Promise<Result<null, RunnerError>>;
   registerRunner(orcaStatus: string): Promise<Result<void, RunnerError>>;
-  heartbeatRunner(orcaStatus: string): Promise<Result<void, RunnerError>>;
   claimJob(): Promise<Result<RunnerJob | null, RunnerError>>;
   heartbeatJob(jobId: string, leaseToken: string, waitingForUser: boolean, progressSummary: string | null): Promise<Result<{ readonly cancelRequested: boolean }, RunnerError>>;
   completeJob(jobId: string, leaseToken: string, outcome: string, errorCode: string | null, summary: string): Promise<Result<void, RunnerError>>;
@@ -76,6 +78,7 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
       ...init,
       headers,
       redirect: "manual",
+      signal: init?.signal == null ? AbortSignal.timeout(20_000) : AbortSignal.any([init.signal, AbortSignal.timeout(20_000)]),
     }));
     if (!fetched.ok) return err(runnerError("api_unreachable", "Life Console API に接続できません。", fetched.error));
     if (fetched.value.status >= 300 && fetched.value.status < 400) {
@@ -104,6 +107,8 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
   });
 
   return {
+    registerMonitors: (targets) => jsonRequest("/api/v1/runner/monitoring/register", z.null(), { runnerId: configuration.runnerId, targets }),
+    reportObservation: (observation, historical) => jsonRequest("/api/v1/runner/monitoring/observations", z.null(), { observation, historical }),
     replyCandidates: (input) => request(`/api/v1/runner/reply-candidates?${new URLSearchParams({ connector: input.connector, period: input.period,
       ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }) }).toString()}`, z.array(z.object({
       id: z.string(), connector: z.string(), sourceId: z.string(), externalMessageId: z.string(), authorLabel: z.string(),
@@ -115,14 +120,6 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
         runnerId: configuration.runnerId,
         name: configuration.runnerName,
         tokenExpiresAt: null,
-        orcaStatus,
-      });
-      if (!result.ok) return result;
-      return ok(undefined);
-    },
-    async heartbeatRunner(orcaStatus) {
-      const result = await jsonRequest("/api/v1/runner/heartbeat", z.null(), {
-        runnerId: configuration.runnerId,
         orcaStatus,
       });
       if (!result.ok) return result;

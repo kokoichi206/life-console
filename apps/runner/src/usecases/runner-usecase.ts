@@ -1,6 +1,5 @@
 import type { LocalLogger } from "@runner/logger";
 import type { ApiRepository, RunnerJob } from "@runner/repositories/api-repository";
-import type { OrcaRepository } from "@runner/repositories/orca-repository";
 
 import type { JobExecutorUsecase } from "./job-executor-usecase";
 
@@ -9,7 +8,6 @@ type Dependencies = {
   readonly executor: JobExecutorUsecase;
   readonly heartbeatMilliseconds: number;
   readonly logger: LocalLogger;
-  readonly orca: OrcaRepository;
 };
 
 export interface RunnerUsecase {
@@ -97,8 +95,7 @@ export const createRunnerUsecase = (dependencies: Dependencies): RunnerUsecase =
 
   return {
     async register() {
-      const orcaStatus = await dependencies.orca.health();
-      const registered = await dependencies.api.registerRunner(orcaStatus);
+      const registered = await dependencies.api.registerRunner("unknown");
       if (!registered.ok) {
         dependencies.logger.error({
           event: "runner_registration_failed",
@@ -110,16 +107,6 @@ export const createRunnerUsecase = (dependencies: Dependencies): RunnerUsecase =
       return true;
     },
     async runOnce() {
-      const orcaStatus = await dependencies.orca.health();
-      const heartbeat = await dependencies.api.heartbeatRunner(orcaStatus);
-      if (!heartbeat.ok) {
-        dependencies.logger.error({
-          event: "runner_heartbeat_failed",
-          errorCode: heartbeat.error.code,
-          timestamp: new Date().toISOString(),
-        });
-        return;
-      }
       const claimed = await dependencies.api.claimJob();
       if (!claimed.ok) {
         dependencies.logger.error({

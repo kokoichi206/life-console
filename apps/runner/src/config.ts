@@ -1,10 +1,16 @@
+import { createHash } from "node:crypto";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
+
+import type { MonitorTarget } from "@life-console/contracts";
 
 import { runnerEnvironmentSchema } from "./environment";
 
 const environment = runnerEnvironmentSchema.parse(process.env);
 
 export type RunnerConfig = {
+  readonly monitorTargets: ReadonlyArray<MonitorTarget>;
+  readonly monitorQueuePath: string;
   readonly apiUrl: string;
   readonly backupDirectory: string | undefined;
   readonly cfAccessClientId: string | undefined;
@@ -32,6 +38,12 @@ export type RunnerConfig = {
 };
 
 export const runnerConfig: RunnerConfig = {
+  monitorTargets: [{ service: "runner", account: "process" }, ...environment.LIFE_CONSOLE_MONITOR_SERVICES.map((service) => ({ service,
+    account: ({ slack: environment.SLACK_WORKSPACE, chatwork: environment.CHATWORK_ACCOUNT, talknote: environment.TALKNOTE_ACCOUNT,
+      gmail: environment.GMAIL_ACCOUNT, calendar: environment.GMAIL_ACCOUNT, orca: "local" })[service] ?? "default",
+  }))],
+  monitorQueuePath: environment.LIFE_CONSOLE_MONITOR_QUEUE_PATH ?? resolve(homedir(), ".local/state/life-console/monitoring",
+    `${createHash("sha256").update(`${environment.LIFE_CONSOLE_API_URL}:${environment.LIFE_CONSOLE_RUNNER_ID}`).digest("hex")}.sqlite`),
   apiUrl: environment.LIFE_CONSOLE_API_URL.replace(/\/$/u, ""),
   backupDirectory: environment.BACKUP_DIRECTORY,
   cfAccessClientId: environment.CF_ACCESS_CLIENT_ID,

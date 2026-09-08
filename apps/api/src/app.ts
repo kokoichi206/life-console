@@ -1,4 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
+import { registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
 import { pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
@@ -7,6 +8,7 @@ import { z } from "zod";
 
 import { createLifeConsoleHandlers } from "./handlers/life-console-handlers";
 import { D1LifeConsoleRepository } from "./repositories/d1-life-console-repository";
+import { createMonitoringRepository } from "./repositories/monitoring-repository";
 import { createPushSubscriptionRepository } from "./repositories/push-subscription-repository";
 import { createWebPushRepository } from "./repositories/web-push-repository";
 import type { AppError } from "./shared/app-error";
@@ -21,6 +23,7 @@ import { createFinanceUsecase } from "./usecases/finance-usecase";
 import { createHealthUsecase } from "./usecases/health-usecase";
 import { createJobUsecase } from "./usecases/job-usecase";
 import { createMealPhotoUsecase } from "./usecases/meal-photo-usecase";
+import { createMonitoringUsecase } from "./usecases/monitoring-usecase";
 import { createNoteUsecase } from "./usecases/note-usecase";
 import { createPushNotificationUsecase } from "./usecases/push-notification-usecase";
 import { createReplyDraftUsecase } from "./usecases/reply-draft-usecase";
@@ -71,17 +74,18 @@ const createHandlers = (environment: ApiEnvironment) => {
   });
 };
 
+const pushKeys = (environment: ApiEnvironment) => environment.WEB_PUSH_PUBLIC_KEY === undefined
+  ? null
+  : {
+      publicKey: environment.WEB_PUSH_PUBLIC_KEY, privateKey: environment.WEB_PUSH_PRIVATE_KEY!, subject: environment.WEB_PUSH_SUBJECT!,
+    };
 const createPushHandlers = (environment: ApiEnvironment) => createPushNotificationUsecase(
-  createPushSubscriptionRepository(environment.DB),
-  createWebPushRepository(environment.WEB_PUSH_PUBLIC_KEY === undefined
-    ? null
-    : {
-        publicKey: environment.WEB_PUSH_PUBLIC_KEY,
-        privateKey: environment.WEB_PUSH_PRIVATE_KEY!,
-        subject: environment.WEB_PUSH_SUBJECT!,
-      }),
-  environment.WEB_PUSH_PUBLIC_KEY ?? null,
-  systemClock,
+  createPushSubscriptionRepository(environment.DB), createWebPushRepository(pushKeys(environment)), environment.WEB_PUSH_PUBLIC_KEY ?? null, systemClock,
+);
+export const createMonitoringHandlers = (environment: ApiEnvironment) => createMonitoringUsecase(
+  createMonitoringRepository(environment.DB), createPushSubscriptionRepository(environment.DB), createWebPushRepository(pushKeys(environment)), systemClock,
+  environment.WEB_PUSH_PUBLIC_KEY !== undefined,
+  environment.MONITORED_RUNNER_IDS?.split(",").map((id) => id.trim()) ?? [],
 );
 
 const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 500 | 502 => {
@@ -170,6 +174,16 @@ app.use("/api/*", async (context, next) => {
 app.use("/api/v1/runner/*", runnerAuthentication);
 
 const _routes = app
+  .post("/api/v1/runner/monitoring/register", zValidator("json", registerMonitorsSchema), async (context) => respond(context, await createMonitoringHandlers(context.get("environment")).register(context.req.valid("json"))))
+  .post("/api/v1/runner/monitoring/observations", zValidator("json", reportMonitoringSchema), async (context) => {
+    const input = context.req.valid("json");
+    return respond(context, await createMonitoringHandlers(context.get("environment")).record(input.observation, input.historical));
+  })
+  .get("/api/v1/monitoring", async (context) => respond(context, await createMonitoringHandlers(context.get("environment")).summary()))
+  .get("/api/v1/monitoring/history", zValidator("query", monitoringHistoryQuerySchema), async (context) => {
+    const input = context.req.valid("query");
+    return respond(context, await createMonitoringHandlers(context.get("environment")).history(input.targetId, input.before));
+  })
   .get("/api/v1/push/configuration", (context) => respond(context, createPushHandlers(context.get("environment")).configuration()))
   .post("/api/v1/push/subscription/status", zValidator("json", pushEndpointInputSchema), async (context) => respond(context, await createPushHandlers(context.get("environment")).status(context.req.valid("json").endpoint)))
   .put("/api/v1/push/subscription", zValidator("json", pushSubscriptionSchema), async (context) => respond(context, await createPushHandlers(context.get("environment")).subscribe(context.req.valid("json"))))

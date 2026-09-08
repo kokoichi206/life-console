@@ -1,5 +1,6 @@
 import { hostname } from "node:os";
 
+import { monitorServiceSchema } from "@life-console/contracts";
 import { APP_ENV, baseEnvSchema } from "@life-console/env";
 import { z } from "zod";
 
@@ -10,6 +11,8 @@ export const runnerEnvironmentSchema = baseEnvSchema.extend({
   LIFE_CONSOLE_RUNNER_TOKEN: z.string().min(1).optional(),
   CF_ACCESS_CLIENT_ID: z.string().min(1).optional(),
   CF_ACCESS_CLIENT_SECRET: z.string().min(1).optional(),
+  LIFE_CONSOLE_MONITOR_SERVICES: z.string().default("slack,chatwork,talknote,gmail,calendar,orca").transform((value) => Array.from(new Set(value.split(",").map((part) => part.trim()).filter(Boolean)))).pipe(z.array(monitorServiceSchema.exclude(["runner"]))),
+  LIFE_CONSOLE_MONITOR_QUEUE_PATH: z.string().min(1).optional(),
   LIFE_CONSOLE_POLL_SECONDS: z.coerce.number().int().min(10).default(60),
   LIFE_CONSOLE_HEARTBEAT_SECONDS: z.coerce.number().int().min(10).default(60),
   SLACK_WORKSPACE: z.string().min(1).optional(),

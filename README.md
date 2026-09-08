@@ -128,7 +128,35 @@ pnpm --filter @life-console/api exec wrangler secret put WEB_PUSH_SUBJECT --conf
 
 `push_subscriptions` の migration 適用後に Web / API を配置します。Service Worker の登録・更新、画面を閉じた状態での実配送、Access セッション失効中の受信とクリック後のログインは、対象端末で確認してください。配送先の 404 / 410 は購読失効として削除し、再登録を案内します。一時的な送信失敗では購読を保持します。
 
-この実装は通知登録・解除とテスト送信です。runner / CLI の定期監視と異常・復旧の自動通知は、設計段階であり未接続です。
+Web Push を有効にした端末には、死活監視の異常・未復旧・復旧も自動通知します。外部の通知 SaaS や Apple Developer Program への登録は不要です。VAPID 鍵と連絡先の設定、端末ごとの通知許可・購読登録が必要です。
+
+## 死活監視
+
+runner の生存確認と CLI 接続確認は job の実行ループから独立し、起動時と 2 分ごとに観測します。job heartbeat は既存の 1 分、lease は 3 分を維持します。単一の Cloudflare Cron は毎分、未着の判定と通知配送を行います。
+
+| 対象 | 接続確認・判定 |
+| --- | --- |
+| runner | 最終ライブ受信から 3 分で遅延表示、5 分で応答なし |
+| Slack | runner と同じ workspace の `sl auth status` による API 確認 |
+| Chatwork | runner と同じ account の `cw me` による API 確認 |
+| Talknote | runner と同じ account の `tn auth status` によるセッション確認 |
+| Gmail | `gog gmail labels list` による読み取り確認 |
+| Calendar | Gmail と同じ account の `gog calendar freebusy primary` を別途確認 |
+| Orca | `orca status --json` で runtime の到達と ready 状態を確認 |
+
+CLI の確認には 20 秒の上限を設けます。明確な認証切れ・権限不足・アカウント未設定は初回から通知し、それ以外の失敗は 2 回連続で通知します。判別できない失敗を認証切れとは扱いません。runner 自体が未着なら、CLI の確認停止通知は重ねません。新しい正常結果で復旧と判定します。
+
+runner の `LIFE_CONSOLE_MONITOR_SERVICES` は既定で `slack,chatwork,talknote,gmail,calendar,orca`。未使用のサービスはこのリストから外し、再起動して反映します。runner 自身は常に監視対象です。明示した account / workspace が未設定なら、既存 connector と同じ CLI の既定選択を使い、画面では `default` と表示します。Gmail と Calendar は Gmail 対応 account が 1 件のときだけ自動選択します。
+
+初回の runner 起動前から未着を検知する場合は、API の `MONITORED_RUNNER_IDS` に `LIFE_CONSOLE_RUNNER_ID` と同じ ID をカンマ区切りで設定します。最初の Cron で対象を登録し、5 分の猶予を設けます。未指定なら runner が API に監視対象を登録した時点から監視します。設定は環境ごとに分離してください。
+
+全観測は `monitor_observations` へ追加保存し、最新状態は `monitor_targets` に保持します。Mac では API 送信前に private な SQLite キューへ保存します。保存先は接続先・runner ID ごとに分離した `~/.local/state/life-console/monitoring/` 配下で、`LIFE_CONSOLE_MONITOR_QUEUE_PATH` による指定も可能です。通信断中の観測は復旧後に履歴として後送し、最新状態・復旧判定・job lease を更新しません。同じ観測 ID の再送は一度だけ保存します。停止中の観測を後から生成することはありません。job heartbeat の受理・拒否も `job_heartbeat_observations` に保存します。
+
+通知は `monitor_incidents` と `monitor_notifications` で管理します。障害・30 分の通知枠・端末の組を一意にし、通知予約と障害更新を D1 の同じトランザクションで保存します。送信担当は 60 秒の lease を取得し、送信失敗は同じ通知 ID で 1 分から最大 30 分の間隔で再試行します。古い未送信の再通知は取り消し、復旧時は異常通知の受付が確認できた端末だけに復旧通知を予約します。試行履歴は `monitor_delivery_attempts` に残します。正常観測・障害・通知履歴の自動削除は行いません。
+
+配送サービスへの送信成功直後に Worker が停止すると、受付済み記録が残らず再送する余地があります。DB の予約重複と同時送信は抑止しますが、端末への厳密な 1 回配送は保証しません。
+
+『同期・実行状況』で監視対象・最終受信・通知待ち・自動判定の最終成功・全件履歴を確認できます。履歴は対象別に 100 件ずつ遡れ、対象とページは URL に保持します。異常や監視 API の取得失敗は共通警告にも表示します。CLI の接続成功は全 source の読み取り成功を保証せず、通常同期の成否は従来の job 状態で確認します。Cloudflare 自体の停止を別基盤から通知する外部監視は未導入です。
 
 ## Android の記録ウィジェット
 
@@ -228,7 +256,7 @@ pnpm --filter @life-console/api deploy
 
 写真は `PHOTO_UPLOAD_MODE=worker` で同一 origin の API から非公開 R2 bucket に保存します。この方式では R2 S3 API の secret と bucket の CORS 設定は不要です。Access は静的ファイルと `/api/*` を含む Worker 全体に適用します。
 
-初回配置では本番 DB を空のままにし、ローカルの会話・下書き・体重データ、runner の接続先は変更しません。Cron は 5 分間隔ですが、本番 DB に同期 schedule がなく、runner も未接続なら外部サービスの取り込みは動きません。
+初回配置では本番 DB を空のままにし、ローカルの会話・下書き・体重データ、runner の接続先は変更しません。Cron は 1 分間隔ですが、本番 DB に同期 schedule がなく、runner も未接続なら外部サービスの取り込みは動きません。
 
 runner を本番へ接続するときは、別途 `RUNNER_TOKEN` と Access の機械認証を設定します。本人メールのみの Allow ポリシーでは runner の HTTP リクエストも拒否されます。job report の capability は Access を通過する資格情報ではないため、runner だけでなく job report の送信経路も含めて認証を設計・検証してから接続します。現時点の配置では認証を迂回する例外を設けません。
 

@@ -14,6 +14,7 @@ import { jobsQuery } from "../../features/jobs/queries";
 import { dashboardQuery } from "../../features/overview/queries";
 import { repositoriesQuery } from "../../features/repositories/queries";
 
+import { MonitoringPanel } from "./MonitoringPanel";
 import { PushNotificationSettings } from "./PushNotificationSettings";
 import { sourceRepositoryMappingsQuery } from "./queries";
 
@@ -74,6 +75,7 @@ export const OperationsPage = () => {
     <>
       <PageHeader eyebrow="LOCAL / OPERATIONS" title="同期・実行状況" description="連携の設定、同期の成否、エージェントの稼働を確認します。" />
       <PushNotificationSettings />
+      <MonitoringPanel />
       <div className="mb-4">
         <Panel>
           <SectionHeading

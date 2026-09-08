@@ -7,6 +7,7 @@ import type { CommandRepository } from "./command-repository";
 import { createChatworkConnector, createConversationReplyRepository, createSlackConnector } from "./connectors";
 
 const configuration: RunnerConfig = {
+  monitorTargets: [], monitorQueuePath: "/tmp/unused-monitor-queue.sqlite",
   apiUrl: "http://localhost:8787",
   backupDirectory: undefined,
   cfAccessClientId: undefined,

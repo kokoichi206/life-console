@@ -3,6 +3,7 @@ import { z } from "zod";
 
 export const apiEnvironmentSchema = baseEnvSchema.extend({
   PHOTO_UPLOAD_MODE: z.enum(["worker", "r2"]),
+  MONITORED_RUNNER_IDS: z.string().min(1).refine((value) => value.split(",").every((id) => id.trim().length > 0 && id.trim().length <= 200)).optional(),
   WEB_PUSH_PUBLIC_KEY: z.string().regex(/^[A-Za-z0-9_-]{87}$/u).optional(),
   WEB_PUSH_PRIVATE_KEY: z.string().regex(/^[A-Za-z0-9_-]{43}$/u).optional(),
   WEB_PUSH_SUBJECT: z.url().refine((value) => value.startsWith("mailto:") || value.startsWith("https://")).optional(),

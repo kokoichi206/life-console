@@ -1,4 +1,5 @@
 import type { AppType } from "@life-console/api";
+import type { MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
   PushConfiguration,
   PushSubscriptionInput,
@@ -54,6 +55,10 @@ const unwrap = async <T>(response: HttpResponse): Promise<T> => {
 };
 
 export const api = {
+  monitoring: async () => unwrap<MonitoringSummary>(await client.api.v1.monitoring.$get()),
+  monitoringHistory: async (targetId?: string, before?: number) => unwrap<MonitorHistory[]>(await client.api.v1.monitoring.history.$get({ query: {
+    ...(targetId === undefined ? {} : { targetId }), ...(before === undefined ? {} : { before: String(before) }),
+  } })),
   pushConfiguration: async () => unwrap<PushConfiguration>(await client.api.v1.push.configuration.$get()),
   pushSubscriptionStatus: async (endpoint: string) => unwrap<{ readonly registered: boolean }>(await client.api.v1.push.subscription.status.$post({ json: { endpoint } })),
   subscribePush: async (input: PushSubscriptionInput) => unwrap<null>(await client.api.v1.push.subscription.$put({ json: input })),

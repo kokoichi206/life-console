@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamps = {
@@ -244,4 +245,33 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
   auth: text("auth").notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
+});
+
+export const monitorTargets = sqliteTable("monitor_targets", {
+  id: text("id").primaryKey(), runnerId: text("runner_id").notNull(), service: text("service").notNull(), account: text("account").notNull(),
+  registeredAt: text("registered_at").notNull(), receivedAt: text("received_at"), outcome: text("outcome"),
+  failures: integer("failures").notNull().default(0), revision: integer("revision").notNull().default(0),
+});
+export const monitorObservations = sqliteTable("monitor_observations", {
+  sequence: integer("sequence").primaryKey({ autoIncrement: true }), id: text("id").notNull(), targetId: text("target_id").notNull(),
+  observedAt: text("observed_at").notNull(), receivedAt: text("received_at").notNull(), outcome: text("outcome").notNull(), historical: integer("historical").notNull(),
+}, (table) => [uniqueIndex("monitor_event_uidx").on(table.id), index("monitor_history_idx").on(table.targetId, table.sequence)]);
+export const monitorIncidents = sqliteTable("monitor_incidents", {
+  id: text("id").primaryKey(), targetId: text("target_id").notNull(), openedAt: text("opened_at").notNull(), resolvedAt: text("resolved_at"),
+  reason: text("reason").notNull(),
+}, (table) => [uniqueIndex("monitor_open_incident_uidx").on(table.targetId).where(sql`resolved_at IS NULL`)]);
+export const monitorNotifications = sqliteTable("monitor_notifications", {
+  id: text("id").primaryKey(), incidentId: text("incident_id").notNull(), endpoint: text("endpoint").notNull(),
+  kind: text("kind").notNull(), slot: integer("slot").notNull(), body: text("body").notNull(),
+  status: text("status").notNull(), attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at").notNull(), leaseToken: text("lease_token"), leaseExpiresAt: text("lease_expires_at"),
+  acceptedAt: text("accepted_at"), createdAt: text("created_at").notNull(),
+}, (table) => [uniqueIndex("monitor_delivery_uidx").on(table.incidentId, table.kind, table.slot, table.endpoint), index("monitor_delivery_due_idx").on(table.status, table.nextAttemptAt)]);
+export const monitorDeliveryAttempts = sqliteTable("monitor_delivery_attempts", {
+  id: text("id").primaryKey(), notificationId: text("notification_id").notNull(), startedAt: text("started_at").notNull(),
+  finishedAt: text("finished_at"), outcome: text("outcome"),
+});
+export const jobHeartbeatObservations = sqliteTable("job_heartbeat_observations", {
+  id: integer("id").primaryKey({ autoIncrement: true }), jobId: text("job_id").notNull(), runnerId: text("runner_id").notNull(),
+  receivedAt: text("received_at").notNull(), accepted: integer("accepted").notNull(),
 });
