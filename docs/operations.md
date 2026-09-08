@@ -6,11 +6,13 @@
 
 `develop` は開発環境、`main` は本番環境に対応します。Worker・D1・R2・Access・Secrets を環境ごとに分け、本番データを開発環境へコピーしません。ローカル用の架空 seed は実データ用 D1 に適用しないでください。
 
-[Terraform の定義と手順](../infra/terraform/README.md)で D1・写真用 R2・Access・Worker・Static Assets・Cron・公開 URL を管理します。`envs/development` と `envs/production` が module を組み合わせ、本人用 Access ポリシーも環境ごとに管理します。state は専用の非公開 R2 bucket `life-console-tfstate` 内の別キーに保存し、bucket 自体は `bootstrap/state-storage` が管理します。
+[Terraform の定義と手順](../infra/terraform/README.md)で D1・写真用 R2・Access・Worker 本体と観測設定を管理します。コード・Static Assets・bindings・Cron・公開 URL は Wrangler が管理します。state は専用の非公開 R2 bucket `life-console-tfstate` 内の環境別キーに保存し、bucket 自体は `bootstrap/state-storage` が管理します。
 
-品質検査・Storybook・Terraform 検証は PR の CI が担当します。`deploy.yml` は配置用の Web / API を build する job と、成果物を受け取る配置 job に分けます。配置 job は Terraform plan・SQL migration・Terraform apply を順に実行します。Worker と静的ファイルの配置も Terraform が担当し、Wrangler は bundle 作成と SQL migration に使います。D1 の接続先は Terraform output から取得します。GHA 用の入力と資格情報は [Terraform の手順](../infra/terraform/README.md#gha-からの配置)に従い、Repository Secrets と配置用 Environment Secrets に分けて登録します。
+品質検査・Storybook・Terraform 検証は PR の CI が担当します。`deploy.yml` は `detect → infra → upload → migration → deploy` の 5 job に分けます。最後に成功した同じブランチの deploy workflow からの変更を検出し、必要な job だけ実行します。初回と手動実行は全工程を実行します。失敗した deploy の変更は、次の push の検出対象に残ります。
 
-[開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例は SQL migration 用です。通常のアプリ配置には使いません。既存資源は import 済みで、GHA では削除・置き換えを含む plan を停止します。新規環境の初回準備は [Terraform の手順](../infra/terraform/README.md#gha-からの配置)を参照します。
+`infra` はコードなしの Worker・D1・R2 を作成し、その Worker ID で Access を設定します。`upload` は Web / API を build して Wrangler の version として登録し、`migration` が D1 の SQL を適用した後、`deploy` がその version ID に配信を切り替えて公開 URL と Cron を設定します。upload 時点では配信を切り替えず、preview URL も無効です。D1 ID と R2 名は適用済み Terraform output から取得します。
+
+[開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例を、配置と SQL migration に使います。既存環境は `removed` と import で Worker の実体を削除せず管理を移し、GHA は削除・置き換えを含む plan を停止します。新規環境では Worker ID の入力・事前 import は不要です。state 保存先と資格情報の初回準備は [Terraform の手順](../infra/terraform/README.md#state-保存先の初回準備)を参照します。
 
 GitHub Environment の配置許可ブランチは `development` が `develop`、`production` が `main` のみとします。デプロイ用 API token は対象アカウントに絞り、Workers Scripts・D1・R2・Access Apps・Access Policies の編集権限を付けて環境別に発行します。配置用の編集 token は各 Environment に登録します。Terraform の環境別入力と PR 用の読み取り専用 token は Repository Secrets で管理します。
 

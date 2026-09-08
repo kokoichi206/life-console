@@ -27,17 +27,4 @@ import {
   id = "${local.cloudflare_account_id}/replace-with-existing-owner-policy-id"
 }
 
-import {
-  to = module.worker.cloudflare_workers_script.app
-  id = "${local.cloudflare_account_id}/life-console"
-}
-
-import {
-  to = module.worker.cloudflare_workers_cron_trigger.app
-  id = "${local.cloudflare_account_id}/life-console"
-}
-
-import {
-  to = module.worker.cloudflare_workers_script_subdomain.app
-  id = "${local.cloudflare_account_id}/life-console"
-}
+# 既存 Worker の移行は access_worker_id と worker-import.tf で行う。
