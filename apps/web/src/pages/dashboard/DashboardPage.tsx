@@ -39,7 +39,6 @@ export const DashboardPage = () => {
   return (
     <>
       <PageHeader
-        eyebrow="TODAY / OVERVIEW"
         title="ホーム"
         actions={<CountBadge>{new Intl.DateTimeFormat("ja-JP", { dateStyle: "long" }).format(new Date())}</CountBadge>}
       />
@@ -47,8 +46,8 @@ export const DashboardPage = () => {
         <Link className={buttonVariants()} to="/tasks" search={{ create: true }}>タスクを追加</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/health" search={{ entry: "meal" }}>食事を記録</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/health" search={{ entry: "weight" }}>体重を記録</Link>
-        <Link className={buttonVariants({ variant: "outline" })} to="/finance" search={{ entry: "expense" }}>支出を記録</Link>
-        <Link className={buttonVariants({ variant: "outline" })} to="/operations" search={{ entry: "note" }}>メモを記録</Link>
+        <Link className={buttonVariants({ variant: "outline" })} to="/finance" hash="expense-entry">支出を記録</Link>
+        <Link className={buttonVariants({ variant: "outline" })} to="/operations" hash="note-entry">メモを記録</Link>
       </nav>
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard

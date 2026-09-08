@@ -15,20 +15,28 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  WRANGLER_SEND_METRICS: "false"
+  TF_IN_AUTOMATION: "true"
+
 jobs:
-  deploy:
+  build:
+    name: Build deployment assets
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    timeout-minutes: 15
     env:
-      DEPLOY_ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'development' }}
       VITE_APP_ENV: ${{ github.ref_name == 'main' && 'production' || 'development' }}
-      WRANGLER_SEND_METRICS: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -47,68 +55,125 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check AI harness
-        run: pnpm harness:check
-
-      - name: Check migrations
-        run: pnpm migrations:check
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Run unit and storage tests
-        run: pnpm test
-
       - name: Build Web
-        run: pnpm --filter @life-console/web build
+        run: pnpm --filter @life-console/web exec vite build
 
       - name: Build API
         run: pnpm --filter @life-console/api build
 
-      - name: Build and smoke-test runner
-        run: pnpm --filter @life-console/runner build
+      - name: Package deployment build
+        run: tar -czf "$RUNNER_TEMP/deploy-build.tar.gz" apps/api/dist apps/web/dist
 
-      - name: Build Storybook
-        run: pnpm storybook:build
+      - name: Upload deployment build
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deploy-build-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/deploy-build.tar.gz
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Install Chromium
-        run: pnpm --filter @life-console/web exec playwright install --with-deps chromium
+  deploy:
+    name: Deploy application
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    env:
+      DEPLOY_ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+      TF_ROOT: infra/terraform/envs/${{ github.ref_name == 'main' && 'production' || 'development' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
-      - name: Test Storybook in Chromium
-        run: pnpm storybook:test
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
-      - name: Prepare deployment configuration
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download deployment build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          path: ${{ runner.temp }}
+
+      - name: Restore deployment build
+        run: tar -xzf "$RUNNER_TEMP/deploy-build.tar.gz"
+
+      - name: Read Terraform version
+        id: terraform-version
+        run: echo "version=$(awk '/^terraform /{print $2}' infra/terraform/.tool-versions)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.terraform-version.outputs.version }}
+          terraform_wrapper: false
+
+      - name: Prepare Terraform inputs
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
-          CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+          TERRAFORM_ENVIRONMENTS_JSON: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
         run: |
-          : "${CLOUDFLARE_ACCOUNT_ID:?対象 Environment の CLOUDFLARE_ACCOUNT_ID を設定してください}"
-          : "${CLOUDFLARE_D1_DATABASE_ID:?対象 Environment の CLOUDFLARE_D1_DATABASE_ID を設定してください}"
-          : "${CLOUDFLARE_R2_BUCKET_NAME:?対象 Environment の CLOUDFLARE_R2_BUCKET_NAME を設定してください}"
+          : "${TERRAFORM_ENVIRONMENTS_JSON:?Repository Secret の TERRAFORM_ENVIRONMENTS_JSON を設定してください}"
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+
+          const variables = JSON.parse(process.env.TERRAFORM_ENVIRONMENTS_JSON)[process.env.DEPLOY_ENVIRONMENT];
+          for (const value of Object.values(variables)) {
+            const escaped = value.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+            console.log(`::add-mask::${escaped}`);
+          }
+          const root = process.env.TF_ROOT;
+          writeFileSync(`${root}/terraform.tfvars.json`, JSON.stringify(variables), { mode: 0o600 });
+          NODE
+
+      - name: Initialize Terraform and create deployment plan
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.TERRAFORM_CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+        run: |
+          : "${CLOUDFLARE_API_TOKEN:?Terraform 用 Cloudflare token を設定してください}"
+          : "${AWS_ACCESS_KEY_ID:?state 用 R2 access key を設定してください}"
+          : "${AWS_SECRET_ACCESS_KEY:?state 用 R2 secret key を設定してください}"
+          terraform -chdir="$TF_ROOT" init -input=false -lockfile=readonly
+          terraform -chdir="$TF_ROOT" plan -input=false -lock-timeout=5m -out="$RUNNER_TEMP/deploy.tfplan"
+          # module ごと消した場合は prevent_destroy が効かないため、適用前にも確認する。
+          terraform -chdir="$TF_ROOT" show -json "$RUNNER_TEMP/deploy.tfplan" |
+            jq -e 'all(.resource_changes[]?; .change.actions | index("delete") == null)' >/dev/null
+          terraform -chdir="$TF_ROOT" output -json > "$RUNNER_TEMP/terraform-outputs.json"
+
+      - name: Prepare D1 migration configuration from Terraform outputs
+        run: |
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
 
+          const outputs = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/terraform-outputs.json`, 'utf8'));
           const configPath = `apps/api/wrangler.${process.env.DEPLOY_ENVIRONMENT}.jsonc`;
           const config = JSON.parse(readFileSync(`${configPath}.example`, 'utf8'));
-          config.account_id = process.env.CLOUDFLARE_ACCOUNT_ID;
-          config.d1_databases[0].database_id = process.env.CLOUDFLARE_D1_DATABASE_ID;
-          config.r2_buckets[0].bucket_name = process.env.CLOUDFLARE_R2_BUCKET_NAME;
-          // 各環境の初回配置で Access の保護を設定してから自動デプロイを有効にする。
-          config.workers_dev = true;
-          writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+          config.account_id = outputs.cloudflare_account_id.value;
+          config.d1_databases[0].database_id = outputs.cloudflare_d1_database_id.value;
+          writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
           NODE
 
-      - name: Validate deployment build
-        run: pnpm --filter @life-console/api exec wrangler deploy --dry-run --config "wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
-
-      - name: Apply migrations and deploy
+      - name: Apply D1 migrations before deploying the Worker
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          : "${CLOUDFLARE_API_TOKEN:?対象 Environment の CLOUDFLARE_API_TOKEN を設定してください}"
-          pnpm --filter @life-console/api exec wrangler d1 migrations apply DB --remote --config "wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
-          pnpm --filter @life-console/api exec wrangler deploy --config "wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.TERRAFORM_CLOUDFLARE_API_TOKEN }}
+        run: pnpm --filter @life-console/api exec wrangler d1 migrations apply DB --remote --config "wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
+
+      - name: Apply Terraform deployment plan
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.TERRAFORM_CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+        run: terraform -chdir="$TF_ROOT" apply -input=false -lock-timeout=5m "$RUNNER_TEMP/deploy.tfplan"

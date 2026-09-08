@@ -17,6 +17,17 @@ packages/eslint-config/
 
 ## ルール
 
+TypeScript のソース・テスト・設定ファイルには `projectService` で型情報を与え、次のルールをすべて `error` で適用します。型検査用の `tsconfig.json` に含まれないファイルも Lint で失敗します。意図的に不正なコードを置く `fixtures` は対象外です。
+
+- `no-floating-promises`: Promise の処理忘れを検出。意図的な非同期実行を示す `void` は許可しますが、失敗の処理を代わりに行うものではありません。
+- `no-misused-promises`: 同期の判定や callback に Promise を誤って渡す処理を検出
+- `await-thenable`: Promise などの thenable ではない値の `await` を検出
+- `switch-exhaustiveness-check`: union / enum の分岐漏れを検出
+
+Web のソース・stories・設定には React Hooks の `rules-of-hooks` と `exhaustive-deps` も `error` で適用します。
+
+以下はプロジェクト固有のルールです。
+
 - [no-throw-statement](rules/no-throw-statement/README.md): handler / usecase / repository での throw を禁止
 - [require-result-return-type](rules/require-result-return-type/README.md): API の公開業務処理と factory が返すメソッドに Result を要求
 - [no-discarded-result](rules/no-discarded-result/README.md): API / runner で Result の戻り値を捨てる式を禁止

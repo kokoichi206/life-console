@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import { URL } from "node:url";
 
 import { D1LifeConsoleRepository } from "../../apps/api/src/repositories/d1-life-console-repository";
 

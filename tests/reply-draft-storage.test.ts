@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import { URL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 

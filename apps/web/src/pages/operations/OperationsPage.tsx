@@ -73,7 +73,7 @@ export const OperationsPage = () => {
 
   return (
     <>
-      <PageHeader eyebrow="LOCAL / OPERATIONS" title="同期・実行状況" description="連携の設定、同期の成否、エージェントの稼働を確認します。" />
+      <PageHeader title="同期・実行状況" />
       <PushNotificationSettings />
       <MonitoringPanel />
       <div className="mb-4">
@@ -205,7 +205,7 @@ export const OperationsPage = () => {
           </div>
           {saveSourceRepositoryMapping.error !== null && <div className="px-5 pt-3"><FormError>{saveSourceRepositoryMapping.error.message}</FormError></div>}
         </Panel>
-        <form onSubmit={submitNote}>
+        <form id="note-entry" onSubmit={submitNote}>
           <Panel className="gap-4 px-5">
             <div className="space-y-1.5">
               <Eyebrow>QUICK NOTE</Eyebrow>

@@ -1,7 +1,7 @@
 import { Dialog } from "@base-ui/react/dialog";
 import type { CreateMealInput } from "@life-console/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Camera, ImagePlus, X } from "lucide-react";
+import { Camera, ImagePlus, RotateCw, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { api } from "../../../api";
@@ -24,34 +24,51 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
   const [mealKind, setMealKind] = useState<CreateMealInput["mealKind"]>("dinner");
   const [memo, setMemo] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string>();
+  const [quarterTurns, setQuarterTurns] = useState(0);
+  const [preparedPhoto, setPreparedPhoto] = useState<{ source: File; quarterTurns: number; blob: Blob; url: string }>();
+  const [photoError, setPhotoError] = useState<string>();
+  const photoPreview = preparedPhoto?.source === photo && preparedPhoto.quarterTurns === quarterTurns ? preparedPhoto : undefined;
   const photoLibraryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
+    setPhotoError(undefined);
     if (photo === null) {
-      setPhotoPreviewUrl(undefined);
+      setPreparedPhoto(undefined);
       return;
     }
-    const url = URL.createObjectURL(photo);
-    setPhotoPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photo]);
+    let cancelled = false;
+    let previewUrl: string | undefined;
+    // 元の写真から変換し、回転を繰り返しても JPEG の再圧縮を重ねない。
+    void normalizeMealPhoto(photo, quarterTurns).then((blob) => {
+      if (cancelled) return;
+      previewUrl = URL.createObjectURL(blob);
+      setPreparedPhoto({ source: photo, quarterTurns, blob, url: previewUrl });
+    }).catch((error: unknown) => {
+      if (!cancelled) setPhotoError(error instanceof Error ? error.message : String(error));
+    });
+    return () => {
+      cancelled = true;
+      if (previewUrl !== undefined) URL.revokeObjectURL(previewUrl);
+    };
+  }, [photo, quarterTurns]);
   const selectPhoto = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
-    if (selected !== undefined) setPhoto(selected);
+    if (selected !== undefined) {
+      setPhoto(selected);
+      setQuarterTurns(0);
+    }
     event.target.value = "";
   };
   const createMeal = useMutation({
     mutationFn: async () => {
       const clientId = crypto.randomUUID();
       let photoId: string | null = null;
-      if (photo !== null) {
-        const normalized = await normalizeMealPhoto(photo);
+      if (photoPreview !== undefined) {
         const upload = await api.createMealUpload({ clientId, contentType: "image/jpeg" });
         const response = await fetch(upload.uploadUrl, {
           method: "PUT",
           headers: upload.requiredHeaders,
-          body: normalized,
+          body: photoPreview.blob,
         });
         if (!response.ok) throw new Error("写真のアップロードに失敗しました。");
         photoId = upload.photoId;
@@ -77,12 +94,21 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
         <legend className="sr-only">食事の内容と日時</legend>
         <div className="grid gap-3">
           <p className="text-xs text-muted-foreground">写真</p>
-          {photoPreviewUrl !== undefined && (
+          {photo !== null && (
             <div className="relative overflow-hidden rounded-xl border bg-muted">
-              <img src={photoPreviewUrl} alt="選択した食事の写真" className="max-h-52 w-full object-contain" />
+              {photoPreview !== undefined
+                ? <img src={photoPreview.url} alt="選択した食事の写真" className="h-52 w-full object-contain" />
+                : <p role="status" className="grid h-52 place-items-center text-xs text-muted-foreground">{photoError === undefined ? "写真を準備しています…" : "写真を読み込めませんでした。"}</p>}
               <Button type="button" variant="secondary" size="icon" className="absolute top-2 right-2" aria-label="選択した写真を取り消す" onClick={() => setPhoto(null)}><X /></Button>
             </div>
           )}
+          {photo !== null && (
+            <Button type="button" variant="outline" className="h-11" disabled={photoPreview === undefined} onClick={() => setQuarterTurns((turns) => (turns + 1) % 4)}>
+              <RotateCw />
+              右に 90° 回転
+            </Button>
+          )}
+          {photoError !== undefined && <FormError>{photoError}</FormError>}
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" variant="outline" className="h-12" onClick={() => photoLibraryInput.current?.click()}>
               <ImagePlus />
@@ -107,7 +133,7 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
         </Field>
         <Field label="食事の日時"><Input required type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></Field>
         <Field label="メモ"><Textarea rows={3} maxLength={2_000} placeholder="食べたものを記録" value={memo} onChange={(event) => setMemo(event.target.value)} /></Field>
-        <Button type="submit" disabled={createMeal.isPending || (photo === null && memo.trim() === "")} className="h-12 w-full rounded-2xl text-base">
+        <Button type="submit" disabled={createMeal.isPending || (photo !== null && photoPreview === undefined) || (photo === null && memo.trim() === "")} className="h-12 w-full rounded-2xl text-base">
           {createMeal.isPending ? "保存しています…" : "食事を保存"}
         </Button>
       </fieldset>

@@ -26,7 +26,7 @@ export const WorkInbox = () => {
   const period = search.period ?? "7d";
   const status = search.status ?? "pending";
   const [edits, setEdits] = useState<Readonly<Record<string, DraftEdit | null>>>({});
-  const changeFilters = (change: WorkSearch) => void navigate({ search: (previous: WorkSearch) => ({ ...previous, ...change, conversationId: undefined }), replace: true });
+  const changeFilters = (change: WorkSearch) => void navigate({ search: (previous) => ({ ...previous, ...change, conversationId: undefined }), replace: true });
   const conversations = useQuery({ ...conversationsQuery({ period, ...(service === "all" ? {} : { connector: service }) }), placeholderData: keepPreviousData });
   const drafts = useQuery(replyDraftsQuery);
   const jobs = useQuery(jobsQuery);
@@ -38,7 +38,7 @@ export const WorkInbox = () => {
   const firstConversationId = visible[0]?.id;
   useEffect(() => {
     if (search.conversationId === undefined && firstConversationId !== undefined && !conversations.isPlaceholderData) {
-      void navigate({ search: (previous: WorkSearch) => ({ ...previous, conversationId: firstConversationId }), replace: true });
+      void navigate({ search: (previous) => ({ ...previous, conversationId: firstConversationId }), replace: true });
     }
   }, [search.conversationId, firstConversationId, conversations.isPlaceholderData, navigate]);
   const sync = useMutation({
@@ -72,7 +72,7 @@ export const WorkInbox = () => {
   const latestIntakeJobs = intakeJobs.filter((job, index, all) => all.findIndex((other) => other.kind === job.kind
     && (job.kind !== "reply_drafts" || (JSON.parse(other.payloadJson) as CreateReplyDraftsInput).connector === (JSON.parse(job.payloadJson) as CreateReplyDraftsInput).connector)) === index);
   const failedIntakeCount = latestIntakeJobs.filter((job) => job.status === "failed").length;
-  const selectConversation = (conversation: Conversation) => void navigate({ search: (previous: WorkSearch) => ({ ...previous, conversationId: conversation.id }) });
+  const selectConversation = (conversation: Conversation) => void navigate({ search: (previous) => ({ ...previous, conversationId: conversation.id }) });
   const statusOptions = [{ value: "pending", label: "要対応" }, { value: "draft", label: "下書きあり" }, { value: "review", label: "確認待ち" }, { value: "all", label: "すべて" }] as const;
 
   return (

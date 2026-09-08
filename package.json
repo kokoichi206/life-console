@@ -14,7 +14,7 @@
     "dev:runner": "pnpm --filter @life-console/runner dev",
     "dev:runner:once": "pnpm --filter @life-console/runner dev:once",
     "local:setup": "pnpm --filter @life-console/web build && pnpm --filter @life-console/db migrate:local && pnpm --filter @life-console/db seed:local",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "tsc --noEmit && pnpm -r typecheck",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
@@ -26,7 +26,9 @@
     "check": "pnpm harness:check && pnpm migrations:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260901.1",
     "@life-console/eslint-config": "workspace:*",
+    "@types/node": "^24.13.3",
     "concurrently": "^10.0.5",
     "eslint": "^9.39.5",
     "tsx": "^4.23.13",

@@ -2,11 +2,11 @@ import { weightGoalSchema } from "@life-console/contracts";
 
 export type WeightRange = "d30" | "d90" | "all" | `year-${string}`;
 export type HealthSearch = {
-  readonly entry?: "weight" | "meal" | "goal";
-  readonly meal?: string;
-  readonly range?: WeightRange;
-  readonly from?: string;
-  readonly to?: string;
+  readonly entry?: "weight" | "meal" | "goal" | undefined;
+  readonly meal?: string | undefined;
+  readonly range?: WeightRange | undefined;
+  readonly from?: string | undefined;
+  readonly to?: string | undefined;
 };
 
 export const parseHealthSearch = (search: Record<string, unknown>): HealthSearch => {

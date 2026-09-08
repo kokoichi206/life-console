@@ -87,7 +87,7 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
 
   return (
     <>
-      <PageHeader eyebrow="LIFE / HEALTH" title="体重と食事" description="体重の実測値と 7 日移動平均、食事の記録をまとめて確認します。" />
+      <PageHeader title="体重と食事" />
       <div className="mb-4 grid grid-cols-2 gap-2 sm:ml-auto sm:max-w-sm">
         <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => onMealEntryOpenChange(true)}>食事を記録</Button>
         <Button className="h-11 rounded-xl px-5" onClick={() => onWeightEntryOpenChange(true)}>体重を記録</Button>
