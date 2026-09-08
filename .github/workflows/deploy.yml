@@ -43,6 +43,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+
       - name: Find last successful deployment
         id: baseline
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -57,6 +58,7 @@ jobs:
               per_page: 1,
             });
             core.setOutput('sha', data.workflow_runs[0]?.head_sha ?? '');
+
       - name: Detect required jobs
         id: changes
         env:
@@ -109,16 +111,19 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
+
       - name: Set up Terraform
         uses: ./.github/actions/setup-terraform
         with:
           environments-json: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
           state-access-key-id: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
           state-secret-access-key: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+
       - name: Plan and apply infrastructure
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.TERRAFORM_CLOUDFLARE_API_TOKEN }}
@@ -149,16 +154,20 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+
       - name: Set up deployment
         uses: ./.github/actions/setup-deployment
         with:
           environments-json: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
           state-access-key-id: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
           state-secret-access-key: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+
       - name: Build Web
         run: pnpm --filter @life-console/web exec vite build
+
       - name: Build API
         run: pnpm --filter @life-console/api build
+
       - name: Upload version without switching traffic
         id: upload
         env:
@@ -184,12 +193,14 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+
       - name: Set up deployment
         uses: ./.github/actions/setup-deployment
         with:
           environments-json: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
           state-access-key-id: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
           state-secret-access-key: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+
       - name: Apply D1 migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.TERRAFORM_CLOUDFLARE_API_TOKEN }}
@@ -211,17 +222,20 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+
       - name: Set up deployment
         uses: ./.github/actions/setup-deployment
         with:
           environments-json: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
           state-access-key-id: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
           state-secret-access-key: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+
       - name: Switch traffic to uploaded version
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.TERRAFORM_CLOUDFLARE_API_TOKEN }}
           VERSION_ID: ${{ needs.upload.outputs.version-id }}
         run: pnpm --filter @life-console/api exec wrangler versions deploy "$VERSION_ID@100%" --yes --config "wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
+
       - name: Apply public URL and Cron triggers
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.TERRAFORM_CLOUDFLARE_API_TOKEN }}
