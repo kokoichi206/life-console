@@ -65,7 +65,7 @@
 | schedule / job 状態 | Life Console の D1 |
 | 食事の入力事実 | D1 と R2 |
 | 食事の栄養推定 | D1 の派生レコード |
-| 体重の実測値 | 既存の `weight-trend.csv` |
+| 体重の実測値 | DB にある日は D1、DB にない過去分は既存 CSV（Obsidian 同期） |
 | 金融取引と残高 | 取込元の明細、手入力、補正レコード |
 | agent session / worktree / 詳細ログ | ローカルの Orca と各 agent |
 | チャンネル・ルームとリポジトリの対応 | D1 または非公開のローカル設定 |
@@ -255,11 +255,12 @@ Orca を経由しない暗黙的な fallback は設けない。Orca が使えな
 ### 6.6 体重
 
 - 実測値と 7 日移動平均を表示する。
-- 当面の source of truth は既存の `weight-trend.csv` とする。
+- Obsidian 同期では、DB にある日は D1、DB にない過去分は既存 CSV を正とする。
 - CSV の手動取込に対応する。
 - runner から自動取込できるようにする。
 - 手入力にも対応する。
 - 体重には `occurred_at` と `recorded_at` を持たせる。
+- Obsidian への同期では、runner が D1 の記録を既存の weight-trend.csv に日付でマージする。D1 にない過去分は削除せず、アーカイブを含めたグラフ用データを再生成する。日本時間で最後の測定を日別の代表値とし、同日の CSV と D1 の値が異なれば D1 を採用する。実行頻度と相対ディレクトリは DB、vault の実パスは Mac の非公開設定に置く。候補と制約は [同期仕様](weight-obsidian-export.md) を参照。
 
 Simple アプリは Health Connect へ体重を出力しない。現在の同期処理には Pixel の USB 接続、USB debugging、画面点灯、ロック解除が必要なため、固定の日次 job にはしない。手動または端末条件が揃ったときの日和見実行とし、条件不足は `skipped_precondition` として記録する。
 
@@ -318,6 +319,7 @@ Orca Automations で既に動いている job はそのまま残す。D1 に job
 ### 7.2 Schedule
 
 - schedule は `next_run_at` と timezone を持つ。
+- 処理別の入力は `payload_json` に保存し、job 作成時にコピーする。実際の個人設定はリポジトリに含めない。
 - JST の実行時刻を UTC に変換して保存する。
 - Cron は `next_run_at <= now` の schedule を job 化する。
 - Cron が失敗した場合、次回の成功時に未処理分を catch-up する。

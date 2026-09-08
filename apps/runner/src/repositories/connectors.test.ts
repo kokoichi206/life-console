@@ -28,6 +28,7 @@ const configuration: RunnerConfig = {
   runnerToken: "runner-token",
   slackSearchQuery: "to:me",
   slackWorkspace: undefined,
+  obsidianVaultPath: undefined,
   weightCsvPath: undefined,
   wranglerBin: undefined,
 };

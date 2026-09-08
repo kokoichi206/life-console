@@ -1,4 +1,4 @@
-import { createReplyDraftsSchema, type ReplyDraftDecision } from "@life-console/contracts";
+import { createReplyDraftsSchema, weightObsidianExportPayloadSchema, type ReplyDraftDecision } from "@life-console/contracts";
 import { ok, safeTry, type Result } from "@life-console/core";
 import type { RunnerConfig } from "@runner/config";
 import { runnerError, type RunnerError } from "@runner/errors";
@@ -13,6 +13,8 @@ import type { ReplyContextRepository } from "@runner/repositories/reply-context-
 import type { ReplyDraftGenerator } from "@runner/repositories/reply-draft-generator";
 import type { RepositoryScanner } from "@runner/repositories/repository-scanner";
 import { z } from "zod";
+
+import type { WeightObsidianExportUsecase } from "./weight-obsidian-export-usecase";
 
 const agentPayloadSchema = z.object({
   taskId: z.string(),
@@ -44,6 +46,7 @@ export type JobExecution = {
 
 type Dependencies = {
   readonly api: ApiRepository;
+  readonly weightExport: WeightObsidianExportUsecase;
   readonly backup: BackupRepository;
   readonly capabilities: CapabilityRepository;
   readonly chatwork: Connector;
@@ -226,6 +229,16 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
           if (!payload.ok) return failed(payload.error);
           const sent = await dependencies.conversationReplies.send(payload.value, signal);
           return sent.ok ? succeeded("会話へ返信しました。") : failed(sent.error);
+        }
+        case "weight_obsidian_export": {
+          const payload = await parsePayload(job, weightObsidianExportPayloadSchema);
+          if (!payload.ok) return failed(payload.error);
+          const exported = await dependencies.weightExport.execute(payload.value, signal);
+          if (signal.aborted) return { errorCode: null, outcome: "canceled", reportedExternally: false, summary: "書き出しを中止しました。" };
+          if (!exported.ok) return failed(exported.error);
+          return succeeded(exported.value.changed
+            ? `DB の ${String(exported.value.synchronizedDays)} 日分を反映し、過去分を含む ${String(exported.value.totalMeasuredDays)} 日分の体重グラフを更新しました。`
+            : "体重 CSV とグラフ用データに変更はありません。");
         }
         case "weight_import": {
           if (dependencies.configuration.weightCsvPath === undefined) return failed(runnerError("skipped_precondition", "WEIGHT_CSV_PATH が未設定です。"));

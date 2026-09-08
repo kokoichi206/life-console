@@ -26,6 +26,7 @@ export type RunnerConfig = {
   readonly runnerToken: string;
   readonly slackSearchQuery: string | undefined;
   readonly slackWorkspace: string | undefined;
+  readonly obsidianVaultPath: string | undefined;
   readonly weightCsvPath: string | undefined;
   readonly wranglerBin: string | undefined;
 };
@@ -52,6 +53,7 @@ export const runnerConfig: RunnerConfig = {
   runnerToken: environment.LIFE_CONSOLE_RUNNER_TOKEN,
   slackSearchQuery: environment.SLACK_SEARCH_QUERY,
   slackWorkspace: environment.SLACK_WORKSPACE,
+  obsidianVaultPath: environment.OBSIDIAN_VAULT_PATH,
   weightCsvPath: environment.WEIGHT_CSV_PATH,
   wranglerBin: environment.WRANGLER_BIN,
 };
