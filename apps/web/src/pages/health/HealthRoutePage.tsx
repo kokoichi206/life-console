@@ -7,17 +7,25 @@ export const HealthRoutePage = () => {
   const navigate = useNavigate({ from: "/health" });
   return (
     <HealthPage
+      search={search}
+      onRangeChange={(range) => {
+        void navigate({ search: { ...search, range: undefined, from: undefined, to: undefined, ...range }, replace: true, resetScroll: false });
+      }}
+      goalEntryOpen={search.entry === "goal"}
+      onGoalEntryOpenChange={(open) => {
+        void navigate({ search: { ...search, entry: open ? "goal" : undefined, meal: undefined }, replace: !open, resetScroll: false });
+      }}
       selectedMealId={search.entry === undefined ? search.meal : undefined}
       onSelectMeal={(id) => {
-        void navigate({ search: id === undefined ? {} : { meal: id }, replace: id === undefined, resetScroll: false });
+        void navigate({ search: { ...search, meal: id, entry: undefined }, replace: id === undefined, resetScroll: false });
       }}
       mealEntryOpen={search.entry === "meal"}
       onMealEntryOpenChange={(open) => {
-        void navigate({ search: open ? { entry: "meal" } : {}, replace: !open, resetScroll: false });
+        void navigate({ search: { ...search, entry: open ? "meal" : undefined, meal: undefined }, replace: !open, resetScroll: false });
       }}
       weightEntryOpen={search.entry === "weight"}
       onWeightEntryOpenChange={(open) => {
-        void navigate({ search: open ? { entry: "weight" } : {}, replace: !open, resetScroll: false });
+        void navigate({ search: { ...search, entry: open ? "weight" : undefined, meal: undefined }, replace: !open, resetScroll: false });
       }}
     />
   );

@@ -1,4 +1,4 @@
-import type { CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import { calculate7DayMovingAverage } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import { err, ok, safeTry } from "@life-console/core";
@@ -383,15 +383,35 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(undefined);
   }
 
+  async getWeightGoal(): Promise<Result<WeightGoal | null, AppError>> {
+    return toStorageError(await safeTry(() => this.#database.prepare(`
+      SELECT start_weight_grams / 1000.0 AS startWeightKg,
+        target_weight_grams / 1000.0 AS targetWeightKg, target_date AS targetDate
+      FROM weight_goal WHERE id = 1
+    `).first<WeightGoal>()));
+  }
+
+  async saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>> {
+    const result = await safeTry(() => input === null
+      ? this.#database.prepare("DELETE FROM weight_goal WHERE id = 1").run()
+      : this.#database.prepare(`
+        INSERT INTO weight_goal (id, start_weight_grams, target_weight_grams, target_date)
+        VALUES (1, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET start_weight_grams = excluded.start_weight_grams,
+          target_weight_grams = excluded.target_weight_grams, target_date = excluded.target_date
+      `).bind(Math.round(input.startWeightKg * 1000), Math.round(input.targetWeightKg * 1000), input.targetDate).run());
+    return result.ok ? ok(undefined) : err(appError.storage(result.error));
+  }
+
   listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
-    return this.#readWeights(730);
+    return this.#readWeights();
   }
 
   listWeightsForExport(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
-    return this.#readWeights(-1);
+    return this.#readWeights();
   }
 
-  async #readWeights(limit: number): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
+  async #readWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
     type WeightRow = Omit<WeightPoint, "weightKg"> & { readonly weightGrams: number };
     const result = await safeTry(() => this.#database.prepare(`
       SELECT id, source, weight_grams AS weightGrams,
@@ -399,8 +419,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
       FROM weights
       WHERE deleted_at IS NULL
       ORDER BY julianday(occurred_at) ASC, id ASC
-      LIMIT ?
-    `).bind(limit).all<WeightRow>());
+    `).all<WeightRow>());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(result.value.results.map((row) => ({
       id: row.id,
