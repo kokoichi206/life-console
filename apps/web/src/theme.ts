@@ -12,8 +12,5 @@ export const applyTheme = (theme: Theme) => {
     ? window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
     : theme;
   document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
-  document.querySelectorAll<HTMLMetaElement>("meta[name=\"theme-color\"]").forEach((meta) => {
-    meta.content = resolvedTheme === "dark" ? "#090807" : "#f5f7fa";
-  });
   localStorage.setItem(THEME_STORAGE_KEY, theme);
 };
