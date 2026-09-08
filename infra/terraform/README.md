@@ -118,8 +118,10 @@ R2 の公開ドメイン設定はこの定義では作成しない。import 前�
 
 `deploy.yml` は `develop` で開発、`main` で本番を扱う。`workflow_dispatch` でも対象ブランチを選んで同じ処理を実行できる。GitHub Environment の許可ブランチは開発が `develop`、本番が `main` のみとする。
 
-1. `quality`・`build`・`storybook`・`terraform-check` の 4 job で、品質検査・アプリ build・Storybook 検査・Terraform 検証を並列に行う。
-2. 全 job の成功後、`deploy` job が同じ run の build 成果物を artifact ID で受け取る。artifact は API / Web の `dist` だけを含み、7 日間保存する。配置 job の再実行では成功済み build の成果物を使う。
+品質検査・単体／保存テスト・Storybook・Terraform 検証・runner の build は PR の CI が担当する。deploy では繰り返さず、配置対象の Web / API の build と配置だけを行う。Web は環境名を埋め込むため、対象環境向けに Vite で build する。
+
+1. `build` job で配置用の Web / API を build する。
+2. build の成功後、`deploy` job が同じ run の build 成果物を artifact ID で受け取る。artifact は API / Web の `dist` だけを含み、7 日間保存する。配置 job の再実行では成功済み build の成果物を使う。
 3. Repository Secret から対象環境の入力を選び、Environment の配置用資格情報で R2 backend を初期化して plan を保存する。
 4. plan に削除・置き換えがあれば停止する。module の定義を消した場合も対象にする。
 5. Terraform output から D1 の接続先を生成し、既存の SQL migration を適用する。
