@@ -9,6 +9,13 @@ import { MealEntryDialog } from "./MealEntryDialog";
 
 const savedMeal = fn();
 const uploadedPhoto = fn();
+const photoFile = () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 4;
+  canvas.height = 4;
+  const png = Uint8Array.from(atob(canvas.toDataURL("image/png").slice("data:image/png;base64,".length)), (char) => char.charCodeAt(0));
+  return new File([png], "meal.png", { type: "image/png" });
+};
 const meta = {
   title: "Health/食事を記録",
   component: MealEntryDialog,
@@ -60,6 +67,8 @@ export const Empty: Story = {
     const screen = within(canvasElement.ownerDocument.body);
     await expect(await screen.findByRole("button", { name: "食事を保存" })).toBeDisabled();
     await expect(screen.getByLabelText("食事の日時")).toBeRequired();
+    await expect(screen.getByLabelText("保存済みの写真")).not.toHaveAttribute("capture");
+    await expect(screen.getByLabelText("カメラで撮影する写真")).toHaveAttribute("capture", "environment");
   },
 };
 export const Dark: Story = { name: "ダーク", globals: { theme: "dark" } };
@@ -81,11 +90,8 @@ export const SavePhoto: Story = {
   name: "写真だけで保存",
   play: async ({ canvasElement, userEvent, args }) => {
     const screen = within(canvasElement.ownerDocument.body);
-    const canvas = document.createElement("canvas");
-    canvas.width = 4;
-    canvas.height = 4;
-    const png = Uint8Array.from(atob(canvas.toDataURL("image/png").slice("data:image/png;base64,".length)), (char) => char.charCodeAt(0));
-    await userEvent.upload(await screen.findByLabelText("写真"), new File([png], "meal.png", { type: "image/png" }));
+    await userEvent.upload(await screen.findByLabelText("保存済みの写真"), photoFile());
+    await expect(await screen.findByRole("img", { name: "選択した食事の写真" })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
     await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
     await expect(uploadedPhoto).toHaveBeenCalledWith(expect.objectContaining({ contentType: "image/jpeg", signature: [255, 216] }));
@@ -114,8 +120,27 @@ export const Saving: Story = {
     await userEvent.type(await screen.findByLabelText("メモ"), "カレー");
     await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
     await expect(screen.getByRole("button", { name: "保存しています…" })).toBeDisabled();
-    await expect(screen.getByLabelText("写真")).toBeDisabled();
+    await expect(screen.getByLabelText("保存済みの写真")).toBeDisabled();
+    await expect(screen.getByRole("button", { name: "写真を選ぶ" })).toBeDisabled();
+    await expect(screen.getByRole("button", { name: "カメラで撮る" })).toBeDisabled();
     await expect(screen.getByLabelText("食事区分")).toBeDisabled();
     await expect(screen.getByLabelText("メモ")).toBeDisabled();
+  },
+};
+
+export const ReplacePhoto: Story = {
+  name: "写真の選び直しと取り消し",
+  play: async ({ canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.upload(await screen.findByLabelText("保存済みの写真"), photoFile());
+    await expect(await screen.findByRole("img", { name: "選択した食事の写真" })).toBeVisible();
+    await userEvent.upload(screen.getByLabelText("カメラで撮影する写真"), photoFile());
+    await expect(screen.getAllByRole("img", { name: "選択した食事の写真" })).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "選択した写真を取り消す" }));
+    await expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    await expect(screen.getByRole("button", { name: "食事を保存" })).toBeDisabled();
+    await userEvent.upload(screen.getByLabelText("保存済みの写真"), photoFile());
+    await expect(await screen.findByRole("img", { name: "選択した食事の写真" })).toBeVisible();
+    await expect(screen.getByRole("button", { name: "食事を保存" })).toBeEnabled();
   },
 };

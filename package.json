@@ -21,14 +21,16 @@
     "storybook": "pnpm --filter @life-console/web storybook",
     "storybook:build": "pnpm --filter @life-console/web storybook:build",
     "storybook:test": "pnpm --filter @life-console/web storybook:test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
+    "harness:check": "node .agents/scripts/check-harness.mjs",
+    "check": "pnpm harness:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
   },
   "devDependencies": {
+    "@life-console/eslint-config": "workspace:*",
     "concurrently": "^10.0.5",
     "eslint": "^9.39.5",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11",
-    "@life-console/eslint-config": "workspace:*"
+    "yaml": "2.9.0"
   }
 }

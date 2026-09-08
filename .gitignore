@@ -3,6 +3,7 @@ dist/
 .wrangler/
 .dev.vars
 wrangler.production.jsonc
+wrangler.development.jsonc
 .env
 .env.local
 coverage/
@@ -10,5 +11,9 @@ storybook-static/
 test-results/
 *.log
 .DS_Store
+__pycache__/
 private/
 backups/
+.claude/settings.local.json
+CLAUDE.local.md
+AGENTS.override.md

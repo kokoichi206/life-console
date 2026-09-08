@@ -1,8 +1,9 @@
-name: Deploy production
+name: deploy
 
 on:
   push:
     branches:
+      - develop
       - main
     paths-ignore:
       - "**/*.md"
@@ -15,16 +16,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-production
+  group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
     env:
+      DEPLOY_ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+      VITE_APP_ENV: ${{ github.ref_name == 'main' && 'production' || 'development' }}
       WRANGLER_SEND_METRICS: "false"
     steps:
       - name: Checkout
@@ -50,35 +53,35 @@ jobs:
       - name: Run quality checks
         run: pnpm check
 
-      - name: Prepare production configuration
+      - name: Prepare deployment configuration
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
         run: |
-          : "${CLOUDFLARE_ACCOUNT_ID:?production の CLOUDFLARE_ACCOUNT_ID を設定してください}"
-          : "${CLOUDFLARE_D1_DATABASE_ID:?production の CLOUDFLARE_D1_DATABASE_ID を設定してください}"
-          : "${CLOUDFLARE_R2_BUCKET_NAME:?production の CLOUDFLARE_R2_BUCKET_NAME を設定してください}"
+          : "${CLOUDFLARE_ACCOUNT_ID:?対象 Environment の CLOUDFLARE_ACCOUNT_ID を設定してください}"
+          : "${CLOUDFLARE_D1_DATABASE_ID:?対象 Environment の CLOUDFLARE_D1_DATABASE_ID を設定してください}"
+          : "${CLOUDFLARE_R2_BUCKET_NAME:?対象 Environment の CLOUDFLARE_R2_BUCKET_NAME を設定してください}"
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
 
-          const configPath = 'apps/api/wrangler.production.jsonc';
+          const configPath = `apps/api/wrangler.${process.env.DEPLOY_ENVIRONMENT}.jsonc`;
           const config = JSON.parse(readFileSync(`${configPath}.example`, 'utf8'));
           config.account_id = process.env.CLOUDFLARE_ACCOUNT_ID;
           config.d1_databases[0].database_id = process.env.CLOUDFLARE_D1_DATABASE_ID;
           config.r2_buckets[0].bucket_name = process.env.CLOUDFLARE_R2_BUCKET_NAME;
-          // 初回の Access 設定を済ませた既存の本番 Worker を更新する。
+          // 各環境の初回配置で Access の保護を設定してから自動デプロイを有効にする。
           config.workers_dev = true;
           writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
           NODE
 
-      - name: Validate production build
-        run: pnpm --filter @life-console/api exec wrangler deploy --dry-run --config wrangler.production.jsonc
+      - name: Validate deployment build
+        run: pnpm --filter @life-console/api exec wrangler deploy --dry-run --config "wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
 
       - name: Apply migrations and deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          : "${CLOUDFLARE_API_TOKEN:?production の CLOUDFLARE_API_TOKEN を設定してください}"
-          pnpm --filter @life-console/api exec wrangler d1 migrations apply DB --remote --config wrangler.production.jsonc
-          pnpm --filter @life-console/api exec wrangler deploy --config wrangler.production.jsonc
+          : "${CLOUDFLARE_API_TOKEN:?対象 Environment の CLOUDFLARE_API_TOKEN を設定してください}"
+          pnpm --filter @life-console/api exec wrangler d1 migrations apply DB --remote --config "wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
+          pnpm --filter @life-console/api exec wrangler deploy --config "wrangler.${DEPLOY_ENVIRONMENT}.jsonc"

@@ -3,12 +3,13 @@ import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-q
 import { useMemo, useState, type ChangeEvent } from "react";
 
 import { api } from "../../api";
-import { EmptyState, Eyebrow, Field, FormError, MetricCard, Panel, SectionHeading } from "../../components/DesignSystem";
+import { Eyebrow, Field, FormError, MetricCard, Panel } from "../../components/DesignSystem";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/input";
 
 import { MealEntryDialog } from "./_components/MealEntryDialog";
+import { MealGallery } from "./_components/MealGallery";
 import { WeightEntryDialog } from "./_components/WeightEntryDialog";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
 import { mealsQuery, weightsQuery } from "./queries";
@@ -24,7 +25,9 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
   day: "numeric",
 }).format(new Date(occurredAt));
 
-export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange }: {
+export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+  readonly selectedMealId: string | undefined;
+  readonly onSelectMeal: (id: string | undefined) => void;
   readonly mealEntryOpen: boolean;
   readonly onMealEntryOpenChange: (open: boolean) => void;
   readonly weightEntryOpen: boolean;
@@ -70,8 +73,9 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
 
   return (
     <>
-      <PageHeader eyebrow="LIFE / HEALTH" title="体重と食事" description="体重の実測値と7日移動平均、食事の記録をまとめて確認します。" />
+      <PageHeader eyebrow="LIFE / HEALTH" title="体重と食事" description="体重の実測値と 7 日移動平均、食事の記録をまとめて確認します。" />
       <div className="mb-6 flex flex-wrap justify-end gap-3">
+        <a href="#meals" className="mr-auto inline-flex h-11 items-center rounded-xl px-3 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring">食事の一覧を見る</a>
         <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => onMealEntryOpenChange(true)}>食事を記録</Button>
         <Button className="h-11 rounded-xl px-5" onClick={() => onWeightEntryOpenChange(true)}>体重を記録</Button>
       </div>
@@ -91,7 +95,7 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
             </p>
           </div>
           <div className="flex flex-wrap gap-1 rounded-lg border bg-card p-1" role="group" aria-label="表示期間">
-            <Button type="button" size="sm" variant={weightRange === "d90" ? "default" : "ghost"} onClick={() => setWeightRange("d90")}>直近90日</Button>
+            <Button type="button" size="sm" variant={weightRange === "d90" ? "default" : "ghost"} onClick={() => setWeightRange("d90")}>直近 90 日</Button>
             {availableYears.map((year) => (
               <Button key={year} type="button" size="sm" variant={weightRange === `year-${year}` ? "default" : "ghost"} onClick={() => setWeightRange(`year-${year}`)}>{year}</Button>
             ))}
@@ -160,7 +164,7 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
               <table className="w-full border-collapse text-xs tabular-nums">
                 <thead>
                   <tr className="bg-muted/60">
-                    {["日付", "体重", "種類", "7日平均", "窓内件数"].map((heading) => <th key={heading} className="border-b px-3 py-2.5 text-right font-semibold whitespace-nowrap">{heading}</th>)}
+                    {["日付", "体重", "種類", "7 日平均", "窓内件数"].map((heading) => <th key={heading} className="border-b px-3 py-2.5 text-right font-semibold whitespace-nowrap">{heading}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -189,10 +193,11 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
               </table>
             </div>
           )}
-          <p className="border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7日移動平均は当日を含む直近7暦日の実測値から算出します。記録のない日は補間しません。</p>
+          <p className="border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
         </Panel>
       </section>
-      <div className="grid items-start gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+      <MealGallery meals={meals} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} />
+      <div>
         <Panel className="gap-4 px-5">
           <div className="space-y-1.5">
             <Eyebrow>WEIGHT IMPORT</Eyebrow>
@@ -200,21 +205,6 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
           </div>
           <Field label="CSV を取り込む"><Input type="file" accept=".csv,text/csv" onChange={selectWeightCsv} /></Field>
           {importCsv.error !== null && <FormError>{importCsv.error.message}</FormError>}
-        </Panel>
-        <Panel>
-          <SectionHeading eyebrow="RECENT MEALS" title="最近の食事" />
-          <div className="px-5">
-            {meals.slice(0, 8).map((meal) => (
-              <article key={meal.id} className="grid grid-cols-[auto_1fr] items-center gap-3 border-t py-3 first:border-t-0">
-                <span className="grid size-8 place-items-center rounded-full bg-accent text-xs font-bold text-accent-foreground">{({ breakfast: "朝", lunch: "昼", dinner: "夜", snack: "間" }[meal.mealKind] ?? "食")}</span>
-                <div className="min-w-0">
-                  <strong className="block truncate text-xs">{meal.memo || "メモなし"}</strong>
-                  <small className="text-[0.65rem] text-muted-foreground">{new Date(meal.occurredAt).toLocaleString("ja-JP")}</small>
-                </div>
-              </article>
-            ))}
-            {meals.length === 0 && <EmptyState>まだ食事記録がありません。</EmptyState>}
-          </div>
         </Panel>
       </div>
     </>

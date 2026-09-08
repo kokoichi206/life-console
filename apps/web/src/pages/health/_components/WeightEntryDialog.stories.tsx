@@ -74,8 +74,8 @@ export const SaveSelectedWeightAndTime: Story = {
     fireEvent.change(screen.getByLabelText("計測日"), { target: { value: "2026-09-06" } });
     fireEvent.change(screen.getByLabelText("計測時刻"), { target: { value: "07:35" } });
     await userEvent.click(screen.getByRole("button", { name: "体重を保存" }));
-    await expect(savedWeight).toHaveBeenCalledWith(expect.objectContaining({ weightKg: 81.5, occurredAt: new Date("2026-09-06T07:35").toISOString(), source: "manual" }));
     await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
+    await expect(savedWeight).toHaveBeenCalledWith(expect.objectContaining({ weightKg: 81.5, occurredAt: new Date("2026-09-06T07:35").toISOString(), source: "manual" }));
   },
 };
 export const SaveFailure: Story = {

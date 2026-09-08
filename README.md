@@ -22,6 +22,10 @@ API は `handler -> usecase -> repository` の向きに依存し、外部境界�
 
 責務と使い方は [core](packages/core/README.md)、[db](packages/db/README.md)、[env](packages/env/README.md)、[ESLint](packages/eslint-config/README.md)、[Web / Storybook](apps/web/README.md)、[ネイティブクライアント](clients/README.md) を参照してください。フロントのページ専用部品・query・テスト・stories はページの近くに配置しています。
 
+## AI を使った開発
+
+Claude Code / Codex の共通指示は [AGENTS.md](AGENTS.md)、スキルの使い方と設定の更新手順は [AI ハーネス](docs/agent-configuration.md) を参照してください。
+
 ## 必要環境
 
 - Node.js 24 以上
@@ -114,11 +118,13 @@ Storybook の `Health/体重を記録` でライト・ダーク・初回・保�
 
 ## 食事の記録
 
-『健康』の『食事を記録』から、写真・食事区分・日時・メモを入力するシートを開きます。写真かメモのどちらかを入力して保存します。写真は端末で縮小して JPEG に再生成し、EXIF を除去します。
+『健康』の『食事を記録』から、写真・食事区分・日時・メモを入力するシートを開きます。『写真を選ぶ』で端末に保存済みの写真を選び、『カメラで撮る』で撮影します。選択後はプレビューを確認でき、選び直し・取り消しもできます。過去の写真を記録するときは食事の日時を変更します。写真かメモのどちらかを入力して保存します。写真は端末で縮小して JPEG に再生成し、EXIF を除去します。
 
 `/health?entry=meal` から直接開けます。再読み込みと戻る・進むにも対応し、閉じるか保存すると `entry` を URL から除きます。写真・メモ・入力中の日時は URL に含めません。開くたびに入力を初期化し、保存失敗時は入力を保持します。
 
-Storybook の `Health/食事を記録` でライト・ダーク・写真のみの保存・メモと日時の保存・保存失敗・保存中を確認できます。`Pages/健康` に『URL から食事記録を開く』も追加しています。
+『健康』の『食事の記録』に直近 100 件を新しい順で表示します。写真を並べたカードから拡大写真・日時・メモを確認できます。写真なしの記録も表示します。詳細の選択は `/health?meal=<id>` に保持し、再読み込みと戻る・進むで復元します。
+
+Storybook の `Health/食事の一覧` で写真・メモのみ・空・写真取得失敗・ダーク・狭い表示幅を確認できます。`Health/食事を記録` でライト・ダーク・写真のみの保存・メモと日時の保存・保存失敗・保存中を確認できます。`Pages/健康` に『URL から食事記録を開く』も追加しています。
 
 ## 返信下書き
 
@@ -150,13 +156,15 @@ Storybook の `Health/食事を記録` でライト・ダーク・写真のみ�
 
 ## 品質確認
 
-`develop` と `main` 向けの PR では GitHub Actions の `CI / Quality checks` が `pnpm check` を実行します。両ブランチの Rulesets で `Quality checks` を必須チェックに設定します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
+`develop` と `main` 向けの PR では GitHub Actions の `ci / Quality checks` が `pnpm check` を実行します。両ブランチの Rulesets で `Quality checks` を必須チェックに設定します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
+
+Android の変更には [ci-android](.github/workflows/ci-android.yml) で ktlint、カスタムルールのテスト、Android Lint、Debug APK ビルドを実行します。手元でのコマンドは [Android の README](clients/android/README.md#lint-と-ci) を参照してください。workflow 自体は [ci-github-workflows](.github/README.md) で zizmor と運用規約の検査にかけます。
 
 ```bash
 pnpm check
 ```
 
-上記で ESLint、TypeScript strict、Vitest、Web/API/runner の production build、Storybook のビルドとブラウザテストを順に実行します。初回だけ `pnpm --filter @life-console/web exec playwright install chromium` でテスト用 Chromium を準備してください。自動修正は `pnpm lint:fix` です。
+上記で AI ハーネスの整合性、ESLint、TypeScript strict、Vitest、Web/API/runner の production build、Storybook のビルドとブラウザテストを順に実行します。初回だけ `pnpm --filter @life-console/web exec playwright install chromium` でテスト用 Chromium を準備してください。自動修正は `pnpm lint:fix` です。
 
 runner のビルドには TS ソースを公開する共通パッケージも含めます。ビルド後に Node.js で実行し、テスト専用 API への登録・heartbeat・空のジョブ取得まで確認します。このテストは外部 CLI を探索せず、実 API や実ジョブを使用しません。
 
@@ -169,6 +177,17 @@ APP_ENV は `local` / `development` / `production` を使い、Zod で検証し�
 環境名の未指定を local とみなす処理はありません。local 以外では API の runner token が未設定なら認証を拒否します。R2 直接 upload を選んだ場合だけ S3 の資格情報も要求します。環境変数を追加する際は各アプリの検証境界に定義し、利用箇所で直接読み直さないでください。
 
 ## Cloudflare へ配置する場合
+
+クラウドは開発・本番の 2 環境を使います。ローカル開発の `local` は別に維持します。
+
+| ブランチ | GitHub Environment / APP_ENV | Worker | D1 | R2 bucket |
+| --- | --- | --- | --- | --- |
+| `develop` | `development` | `life-console-development` | `life-console-development` | `life-console-development-meal-photos` |
+| `main` | `production` | `life-console` | `life-console` | `life-console-meal-photos` |
+
+Worker、D1、R2、Access アプリケーション、Secrets を環境ごとに分けます。本番のデータ・写真・runner 接続先を開発環境へコピーしません。開発環境でも Access による本人認証を通して画面・API を使います。
+
+### 本番の初回配置
 
 1. 配置先アカウントを `pnpm --filter @life-console/api exec wrangler whoami` で確認し、専用の D1 と非公開 R2 bucket を作成します。
 2. [production 設定例](apps/api/wrangler.production.jsonc.example)を `apps/api/wrangler.production.jsonc` にコピーし、`account_id` を追加して、D1 ID と bucket 名を private な値へ変更します。初回は `workers_dev: false`、`preview_urls: false`、`routes: []` のままにします。
@@ -191,37 +210,67 @@ runner を本番へ接続するときは、別途 `RUNNER_TOKEN` と Access の�
 
 Workers、D1、R2 の使用量は Cloudflare dashboard で実測します。account token をアプリへ渡していないため、Life Console 内には未取得値やゼロ固定値を表示しません。
 
+### 開発環境の初回配置
+
+`develop` への自動デプロイを開始する前に、次の順に構築します。本番の Worker とデータは更新しません。
+
+1. `wrangler whoami` で本番と同じ配置先アカウントを確認し、開発専用の D1 と非公開 R2 bucket を作成します。複数アカウントに所属する場合は `CLOUDFLARE_ACCOUNT_ID` を明示します。
+
+   ```bash
+   pnpm --filter @life-console/api exec wrangler d1 create life-console-development
+   pnpm --filter @life-console/api exec wrangler r2 bucket create life-console-development-meal-photos
+   ```
+
+2. [development 設定例](apps/api/wrangler.development.jsonc.example)を `apps/api/wrangler.development.jsonc` にコピーし、`account_id` と作成した開発用 D1 の `database_id` を設定します。`workers_dev: false`、`preview_urls: false`、`routes: []` のまま migration と初回配置を実行します。
+
+   ```bash
+   pnpm --filter @life-console/api exec wrangler d1 migrations apply DB --remote --config wrangler.development.jsonc
+   pnpm --filter @life-console/api deploy:development
+   ```
+
+3. Cloudflare Access に開発専用アプリケーションを作り、`life-console-development.<account-subdomain>.workers.dev` とそのプレビュー URL を対象に、本人メール完全一致の Allow ポリシーを設定します。本番の Access 設定は変更せず、Bypass や公開 R2 は追加しません。
+4. Access の対象とポリシーを確認してから、private な development 設定の `workers_dev` を `true` にして再配置します。未ログインの画面・API が Access へ転送され、本人のログイン後に開発画面を開けることを確認します。
+5. GitHub Environment `development` を作り、Branch `develop` だけを許可します。下記の Secrets に開発用の値を登録してから、この workflow を `develop` へ取り込みます。
+
+開発 D1 は migration のみを適用した空の状態で始めます。Cron は開発 D1 だけを参照し、schedule と runner が未設定なら外部サービスの取り込みは動きません。開発 runner を使う場合は、開発専用の `RUNNER_TOKEN`、Access の機械認証、接続先、runner の保存先を分離してから接続します。
+
 ### GitHub Actions からの更新
 
-[Deploy production](.github/workflows/deploy.yml) は `main` への push、または Actions 画面の『Run workflow』で実行します。Markdown、`docs/`、`.agents/`、`.claude/` だけの変更では自動実行を省略します。手動実行でも `main` を選択してください。他のブランチではデプロイ job を実行しません。
+[deploy](.github/workflows/deploy.yml) は `develop` / `main` への push、または Actions 画面の『Run workflow』で実行します。`develop` は `development`、`main` は `production` へ配置します。他のブランチやタグで手動実行してもデプロイ job は実行しません。Markdown、`docs/`、`.agents/`、`.claude/` だけの変更では自動実行を省略します。
 
-クラウドは本番の 1 環境とし、開発中の変更はローカルと PR の CI で確認します。通常は feature ブランチから `develop` へ取り込み、リリース時に `develop` から `main` への PR を merge commit でマージします。`develop` へのマージだけでは本番を更新しません。GitHub の default branch は `develop` を維持します。現在の `develop` の Ruleset は default branch を対象としているため、default branch を変更する場合はルールの対象も見直してください。
+通常は feature ブランチから `develop` へ取り込んで開発環境で確認し、リリース時に `develop` から `main` への PR を merge commit でマージします。`develop` の更新で本番は変わりません。GitHub の default branch は `develop` を維持します。
 
-この workflow は、上記の初回配置と Cloudflare Access の保護設定を済ませた本番 Worker の更新用です。production 設定例から設定を生成し、`workers_dev: true`、`preview_urls: false`、`routes: []` で既存の Worker を更新します。配置設定を変える場合は、設定例と workflow も更新してください。
+workflow は対象環境の `wrangler.<environment>.jsonc.example` と Environment secrets から設定を生成します。初回配置と Access の保護設定を終えた Worker の更新用で、`workers_dev: true`、`preview_urls: false`、`routes: []` を使います。GitHub Environment の作成だけでは Cloudflare のリソースは作られません。Workers Builds の Git 連携は追加せず、更新の起点をこの workflow に統一します。
 
-GitHub リポジトリの Settings → Environments で `production` を作成します。『Deployment branches and tags』を『Selected branches and tags』にし、種類を Branch、名前を `main` としたルールだけを登録してください。workflow の条件に加えて、Environment 側でも他のブランチやタグからのデプロイと Secrets の利用を制限します。
+GitHub リポジトリの Settings → Environments で、各環境の『Deployment branches and tags』を『Selected branches and tags』にし、種類を Branch、名前を次の 1 件だけに制限します。
 
-本番ブランチは GitHub 側で指定し、Cloudflare では既存の Worker、D1、R2、Access 設定を使い続けます。GitHub の Environment は Secrets とデプロイ許可の管理単位で、Cloudflare に別環境を作る指定ではありません。Workers Builds の Git 連携は追加せず、本番更新の起点をこの workflow に統一します。
+| Environment | 許可する Branch |
+| --- | --- |
+| `development` | `develop` |
+| `production` | `main` |
 
-次の Environment secrets を登録します。
+次の Secrets をそれぞれの Environment に登録します。同じ名前でも値は環境ごとに持ち、開発環境へ本番の D1 ID・R2 bucket 名・token を複製しません。リポジトリ共通の Secrets には置きません。
 
 | Secret | 値 |
 | --- | --- |
-| `CLOUDFLARE_API_TOKEN` | 配置先アカウントに限定したデプロイ用 API token |
-| `CLOUDFLARE_ACCOUNT_ID` | private 設定の `account_id` |
-| `CLOUDFLARE_D1_DATABASE_ID` | private 設定の `d1_databases[0].database_id` |
-| `CLOUDFLARE_R2_BUCKET_NAME` | private 設定の `r2_buckets[0].bucket_name` |
+| `CLOUDFLARE_API_TOKEN` | 環境ごとに発行したデプロイ用 API token |
+| `CLOUDFLARE_ACCOUNT_ID` | 配置先の `account_id` |
+| `CLOUDFLARE_D1_DATABASE_ID` | その環境専用の `d1_databases[0].database_id` |
+| `CLOUDFLARE_R2_BUCKET_NAME` | その環境専用の `r2_buckets[0].bucket_name` |
 
-API token は [Cloudflare の GitHub Actions 手順](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)の『Edit Cloudflare Workers』を基に、D1 の migration 適用に必要な `Account / D1 / Edit` 権限も付けます。`Account / Workers R2 Storage / Edit` 権限も含めてください。権限名は [API token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)を参照してください。対話ログイン用の OAuth token は使いません。API token は次のコマンドでも入力できます。
+API token は [Cloudflare の GitHub Actions 手順](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)の『Edit Cloudflare Workers』を基に、D1 の migration 適用に必要な `Account / D1 / Edit` と `Account / Workers R2 Storage / Edit` を含め、配置先アカウントと必要な権限へ絞ります。対話ログイン用の OAuth token は使いません。アカウント単位の権限を持つ token を環境別に発行しても、それだけで同一アカウント内の別 Worker / D1 / R2 を操作できなくなるわけではありません。GitHub のブランチ制限と、配置設定の参照先も合わせて管理します。
 
 ```bash
+gh secret set CLOUDFLARE_API_TOKEN --env development
 gh secret set CLOUDFLARE_API_TOKEN --env production
 ```
 
-Node.js 24 と `package.json` 指定の pnpm を使い、lockfile に従ってインストールします。`pnpm check` と本番設定の dry-run が成功した後、remote D1 に未適用の migration を適用し、ビルド済みの Web と API をまとめて deploy します。Mac の runner の更新と本番 seed の投入は含みません。
+Node.js 24 と `package.json` 指定の pnpm を使い、lockfile に従ってインストールします。Web の `VITE_APP_ENV` を対象環境に明示し、API の `APP_ENV` と揃えてビルドします。Vite の production build の最適化は開発クラウドでも維持します。ローカルの `pnpm dev` は引き続き `local` です。
 
-同時に実行できる本番デプロイは 1 件です。後続の push が来ても実行中の migration と deploy は自動キャンセルしません。migration 成功後に deploy が失敗した場合、適用済みの migration は残るため、変更は稼働中の Worker と互換性を保ってください。
+`pnpm check` と対象環境の Wrangler dry-run が成功した後、その環境の remote D1 に未適用の migration を適用し、Web と API を deploy します。Mac の runner の更新、seed や実データの投入は含みません。
+
+デプロイの同時実行制御はブランチごとです。同じ環境の migration / deploy は直列にし、後続の push でも実行中の処理を自動キャンセルしません。開発と本番のデプロイは互いを待ちません。migration 成功後に deploy が失敗した場合、適用済みの migration は残るため、変更は稼働中の Worker と互換性を保ってください。
 
 ## データ保護
 
-`.dev.vars`、`.env`、`.env.local`、production Wrangler 設定、`private/`、`backups/` は Git 対象外です。リポジトリの seed、CSV 例、設定例には実データやローカル絶対パスを入れないでください。agent transcript、terminal 出力、connector 資格情報は Mac の外へ送らない設計です。
+`.dev.vars`、`.env`、`.env.local`、development / production の private な Wrangler 設定、`private/`、`backups/` は Git 対象外です。リポジトリの seed、CSV 例、設定例には実データやローカル絶対パスを入れないでください。agent transcript、terminal 出力、connector 資格情報は Mac の外へ送らない設計です。
