@@ -1,185 +1,134 @@
 # Life Console
 
-仕事、会話、家計、体重、食事を一か所で扱う、本人用のダッシュボードです。Web/API は Cloudflare、外部サービスとの同期と coding agent の実行は Mac の runner が担当します。
+仕事の連絡とタスク、体重と食事、収支と資産を一か所で扱う、本人用のダッシュボードです。届いた会話から返信案を作り、作業が必要ならタスクにして、ローカルの Codex / Claude Code へ渡せます。日々の記録はスマホから入力し、推移や実行結果は同じ Web アプリで確認します。
 
-- 仕事: タスク管理、会話の取り込み、返信下書き、GitHub Issue / Project への昇格、Codex / Claude Code の起動
-- 健康: 体重・目標・食事の記録、体重グラフ、CSV 取込、Obsidian への書き出し
-- お金: 収支・残高・純資産の集計
-- 同期・実行状況: 定期実行、バックアップ、runner と外部 CLI の監視、端末への通知
+利用者は本人 1 人を想定しています。コードを公開し、会話・生活記録・写真・資格情報は非公開で管理します。
 
-## ローカル起動
+## 何ができるか
 
-Node.js 24 以上と、`package.json` 指定の pnpm を使います。
-
-```bash
-pnpm install --frozen-lockfile
-pnpm local:setup
-pnpm dev
-```
-
-- Web: <http://localhost:5173>
-- API health: <http://localhost:8788/api/v1/health>
-
-`pnpm local:setup` はローカル D1 の migration と架空 seed を適用します。再実行しても既存の入力は上書きしません。
-
-### runner
-
-同期や agent 実行を使う場合は、別のターミナルで起動します。
-
-```bash
-pnpm dev:runner
-```
-
-1 回だけ実行する場合は `pnpm dev:runner:once`。ローカルの接続先は `http://localhost:8788` です。
-
-使う連携に応じて `sl`、`cw`、`gog`、`tn`、`orca`、`claude` などの CLI を準備・認証します。[設定例](apps/runner/.env.example)を参照し、必要な環境変数を shell または secret store から渡してください。`.env.example` は自動では読み込みません。コード・環境変数を変更したら runner を再起動します。
-
-CSV の形式は、体重が `date,weight_kg,ma7_kg,window_samples`、家計が [サンプル](apps/runner/examples/finance.csv) の形式です。体重を Obsidian に反映する場合は [書き出し設定](docs/weight-obsidian-export.md) を参照してください。
-
-## 返信下書き
-
-『仕事』で会話を選ぶと、返信案を作成・編集・保存・コピーできます。一括作成はサービスと期間を選んで『未返信の下書きをまとめて作成』から実行します。
-
-| サービス | 取り込み対象・設定 |
+| 画面 | できること |
 | --- | --- |
-| Gmail | 既定は直近 7 日の受信トレイのメインカテゴリ。`GMAIL_ACCOUNT` / `GMAIL_SEARCH_QUERY` で指定 |
-| Slack | 既定は直近 7 日の本人へのメンション。`SLACK_WORKSPACE` / `SLACK_SEARCH_QUERY` で指定 |
-| Chatwork | 本人への To / 返信と未完了タスク。`CHATWORK_ACCOUNT` / `CHATWORK_ROOM_IDS` で指定。room 未指定時は参加中の全 room |
-| Talknote | DM と参加ノートの投稿・コメント。`TALKNOTE_ACCOUNT` で指定。セッション切れは `tn auth guide` から再認証 |
+| ホーム | 対応するタスク、未処理の会話、収支・純資産、最新の体重と推移を確認。タスク・食事・体重・支出・メモの入力へ進む |
+| 仕事 | 複数サービスの会話を整理し、返信下書きやタスクを作成。タスクの期限・状態・作業リポジトリを管理し、agent 起動や GitHub への昇格を依頼する |
+| 健康 | 体重・目標・食事を記録。実測値と 7 日移動平均、目標への進捗、食事の写真とメモを見返す |
+| お金 | 収入・支出・残高を記録。月ごとの収支、カテゴリ別・支払手段別の支出、資産配分と純資産の推移を確認する |
+| 同期・実行状況 | 同期と agent の実行経過、失敗理由、runner・外部 CLI の接続状態を確認。手動同期、中止要求、端末への通知設定を行う |
 
-生成には認証済みの Claude Code を使い、会話本文をモデルへ送ります。下書きはアプリ内に保存され、生成だけでは送信も Gmail 下書きの作成も行いません。手動編集した本文は再生成で上書きしません。
+### 会話を取り込み、対応する
 
-Slack / Chatwork への送信は、内容を確認して『確認して送信を依頼』を押します。送信結果が不明になった job は `lost` と表示し、自動再送しません。元のサービスで投稿の有無を確認してください。
+『仕事』の受信箱に連絡を集め、サービス・期間・対応状況で絞り込みます。会話を選ぶと、取り込んだ本文の抜粋、返信案、関連タスク、実行経過をまとめて確認できます。元のサービスを開くリンクも保持します。
 
-返信済み・返信不要は既定で非表示です。判断が必要な会話や取得・生成の失敗は確認待ちになります。外部サービスで返信した後は、下書きを再作成すると判定を更新できます。
+| 連携先 | 取り込む内容 | Mac で使う CLI |
+| --- | --- | --- |
+| Slack | 本人へのメンション。既定は直近 7 日 | `sl` |
+| Chatwork | 本人への To / 返信と未完了タスク | `cw` |
+| Gmail | 受信トレイのメインカテゴリ。既定は直近 7 日 | `gog` |
+| Talknote | DM と参加ノートの投稿・コメント | `tn` |
 
-日程候補を含める場合は、個別の会話で『カレンダーの空き時間を使う』を選びます。`GMAIL_ACCOUNT` のメインカレンダーを参照するため、Calendar の認証権限が必要です。アカウント未指定時は Gmail 用アカウントが 1 件の場合のみ自動選択します。他のカレンダー・祝日・移動時間・相手の予定は確認しません。日程を使う返信案は確認待ちになり、予約や招待への承諾は行いません。
+会話は『タスクにする』『参考情報にする』『対応不要にする』で整理できます。タスクにすると元の会話とのつながりが残り、タスク側から本文や返信案に戻れます。
 
-## スマホで使う
+### 返信下書き
 
-本番 URL をブラウザで開き、Cloudflare Access にログインしてからホーム画面に追加します。
+個別の会話、またはサービスと期間を指定した未返信の会話に対して、Claude Code で返信案を作れます。生成時には CLI で会話履歴を再取得し、本人の返信履歴も照合します。返信済み・返信不要と判定した会話は通常の一覧から外れ、不明点や本人の判断が必要な内容は、本文とは別の確認事項として残ります。
 
-- Android の Chrome: 『ホーム画面に追加』→『インストール』
-- iPhone の Safari: 共有メニュー→『ホーム画面に追加』。『Web アプリとして開く』が表示される場合は有効化
+下書きはアプリ内で編集・保存・コピーできます。手動編集した本文は再生成で上書きしません。生成には会話本文をモデルへ渡しますが、この操作だけで送信や Gmail 下書きの作成は行いません。
 
-利用にはネットワーク接続が必要です。Access のセッションが切れた場合は再ログインします。
+Slack / Chatwork は送信内容を確認してから、アプリ内で送信を依頼できます。Gmail / Talknote は本文をコピーして元のサービスで送信します。送信結果が不明になった場合は『結果不明』として残し、自動再送しません。
 
-[Android ウィジェット](clients/android/README.md) を使うと、ホーム画面から体重・食事の入力画面を直接開けます。
+日程調整では、個別の会話で『カレンダーの空き時間を使う』を選ぶと、指定した期間・時間帯・所要時間に合う候補を返信案へ含められます。参照するのは Gmail と同じアカウントのメインカレンダーです。他のカレンダー・祝日・移動時間・相手の予定は確認対象に含まず、予定の予約や招待への承諾も行いません。
 
-## Web Push 通知
+### タスクから coding agent へ渡す
 
-『同期・実行状況』の『この端末への通知』で、端末ごとに有効・無効を切り替えます。『テスト通知を送る』で OS の通知が届くことを確認してください。
+タスクにはタイトル・説明・期限・状態・作業リポジトリを設定できます。Slack のチャンネル、Chatwork のルームとリポジトリの対応も保存でき、会話から作ったタスクの作業先に使います。
 
-iPhone / iPad は iOS / iPadOS 16.4 以降で、ホーム画面に追加した Web アプリから通知を許可します。通知を押すと『同期・実行状況』を開きます。
+作業リポジトリを設定したタスクでは、Codex / Claude Code と作業場所を選んで起動を依頼できます。作業場所は新しい worktree または既存の main checkout です。Mac の runner が Orca を通して agent を起動し、タスクのタイトルと説明を渡します。結果はタスクに紐づく job として確認でき、作業後も worktree・terminal・session は残ります。
 
-通知を使う環境では VAPID 鍵を一度生成し、継続して同じ鍵を使います。
+GitHub で追跡したいタスクは、Issue の作成や非公開 Project への追加を依頼できます。タスク管理の基準は Life Console に置き、GitHub への昇格は一方向です。GitHub 側の変更をタスクへ書き戻す双方向同期は行いません。
 
-```sh
-pnpm --filter @life-console/api exec web-push generate-vapid-keys
+### 体重と食事を記録する
+
+体重は日時と実測値を入力し、目標体重・目標日と合わせて管理します。グラフは 30 日・直近 90 日・年別・全期間で切り替えられ、拡大・移動や表での確認にも対応します。7 日移動平均は当日を含む直近 7 暦日の実測値から計算し、記録のない日は補間しません。
+
+過去の体重は CSV から取り込めます。Obsidian への書き出しを設定すると、DB にある日の値を優先し、CSV にだけ残る過去分を保ちながら体重グラフ用データを更新します。
+
+食事は朝食・昼食・夕食・間食に分けて、日時・写真・メモを記録します。写真のないメモだけの記録も可能です。一覧から記録を選ぶと写真とメモを開けます。現在は記録と閲覧に対応しており、写真からのカロリー・栄養素の自動推定は未実装です。
+
+### 収支と資産を把握する
+
+収入・支出には金額、カテゴリ、支払手段、支払先、日時を記録します。月を選ぶと収支と支出の内訳を確認でき、家計 CSV の取り込みにも対応します。取込元の金額を補正するときは、元の取引を残して差額と理由を別レコードに保存します。
+
+残高は口座名と時点を指定し、現金・金融資産・負債に分けて記録します。各口座の残高から資産配分と純資産を集計し、推移をグラフで表示します。
+
+### スマホから記録し、異常を通知で知る
+
+Web アプリはスマホでも使え、ホーム画面への追加に対応しています。Android には体重・食事の入力画面を直接開く [ウィジェット](clients/android/README.md) もあります。利用にはネットワーク接続と Cloudflare Access へのログインが必要です。
+
+『同期・実行状況』では runner と外部 CLI の状態・履歴を確認できます。端末ごとに Web Push を有効にすると、異常・未復旧・復旧の通知が届きます。CLI の接続状態と各同期 job の成否は別々に確認できます。
+
+## どう動いているか
+
+```mermaid
+flowchart TB
+  browser["PC / スマホの Web アプリ"]
+
+  subgraph cloud["Cloudflare"]
+    access["Access: 本人・runner の認証"]
+    api["Workers: Web 配信 / Hono API"]
+    db[("D1: 記録・会話・タスク・job")]
+    photos[("R2: 食事写真")]
+    cron["Cron: 定期 job の登録・状態の監視"]
+    access --> api
+    api <--> db
+    api <--> photos
+    cron --> api
+  end
+
+  subgraph mac["本人の Mac"]
+    runner["runner: job の取得・実行・結果報告"]
+    cli["外部サービスの CLI"]
+    drafts["Claude Code: 返信生成"]
+    orca["Orca: Codex / Claude Code の起動"]
+    files["CSV / Obsidian / バックアップ"]
+    runner --> cli
+    runner --> drafts
+    runner --> orca
+    runner <--> files
+  end
+
+  browser --> access
+  runner <-->|"HTTPS"| access
+  cli <--> services["Slack / Chatwork / Gmail / Talknote / Calendar"]
 ```
 
-生成した鍵と本人の連絡先を次の環境変数に設定します。ローカルは `apps/api/.dev.vars`、クラウドは対象環境の Wrangler secret に保存します。
+Web は React の SPA で、画面遷移に TanStack Router、API データの取得・更新に TanStack Query を使います。Hono API と同じ Cloudflare Worker から配信し、記録は D1、食事写真は非公開の R2 に保存します。
 
-| 環境変数 | 値 |
+体重・食事・収支・タスクなどの入力と写真の保存は、Web から Cloudflare へ直接行います。Mac が停止していても、これらの記録と保存済みデータの閲覧は続けられます。
+
+外部サービスとの同期、返信生成、coding agent の起動、ローカルの CSV・Obsidian との連携は Mac の runner が担当します。各サービスの CLI の資格情報を Mac に置いたまま処理し、取得した会話や生成結果を API 経由で D1 に保存します。agent の作業環境と詳細ログはローカルに残し、Web では job の状態と結果要約を扱います。
+
+### 非同期処理と定期実行
+
+画面からの同期・送信・agent 起動の依頼は、まず D1 に job として保存されます。定期処理も D1 のスケジュールを基準に Cloudflare Cron が job を登録し、runner が API を定期的に確認して実行します。スケジュールの登録は API から行います。
+
+実行中の job は期限付きの実行権（lease）と heartbeat で管理します。agent の完了は明示的な結果報告で確定し、プロセス終了や idle だけでは成功にしません。agent 起動・GitHub 昇格・返信送信が実行途中で追跡不能になった場合は `lost` として残し、重複実行を避けるため自動でやり直しません。
+
+バックアップ job は D1 の SQL dump と R2 の写真を Mac へ保存します。runner の応答や外部 CLI の認証・接続も監視対象ですが、Cloudflare 自体の停止を検知する外部監視はありません。
+
+## コードと資料の入口
+
+| 場所 | 役割 |
 | --- | --- |
-| `WEB_PUSH_PUBLIC_KEY` | public key |
-| `WEB_PUSH_PRIVATE_KEY` | private key |
-| `WEB_PUSH_SUBJECT` | 本人の連絡先 `mailto:` URL または HTTPS URL |
+| [apps/web](apps/web/README.md) | 画面・共通 UI・Storybook |
+| [apps/api](apps/api/src/app.ts) | Hono の HTTP API。入力の検証、業務処理、D1 / R2 への保存 |
+| [apps/runner](apps/runner/src/usecases/job-executor-usecase.ts) | Mac 上での外部 CLI・agent・ファイル連携の実行 |
+| [packages/contracts](packages/contracts/src) | Web・API・runner が共有する Zod schema と型 |
+| [packages/db](packages/db/README.md) | Drizzle のテーブル定義、D1 migration、架空 seed |
+| [packages/core](packages/core/README.md) / [packages/env](packages/env/README.md) | Result・logger と環境変数の共通定義 |
+| [clients/android](clients/android/README.md) | 体重・食事の入力を開く Android ウィジェット |
 
-```sh
-pnpm --filter @life-console/api exec wrangler secret put WEB_PUSH_PUBLIC_KEY --config wrangler.production.jsonc
-pnpm --filter @life-console/api exec wrangler secret put WEB_PUSH_PRIVATE_KEY --config wrangler.production.jsonc
-pnpm --filter @life-console/api exec wrangler secret put WEB_PUSH_SUBJECT --config wrangler.production.jsonc
-```
+実行コマンドは [package.json](package.json)、連携設定は [runner の設定例](apps/runner/.env.example)、CI・デプロイは [.github](.github/README.md) を参照してください。
 
-開発環境では `--config wrangler.development.jsonc` を指定します。
-
-## 死活監視
-
-『同期・実行状況』で runner と外部 CLI の状態・履歴を確認できます。通知を有効にした端末には、異常・未復旧・復旧を通知します。
-
-- runner と CLI は起動時と 2 分ごとに確認。runner は最終受信から 3 分で遅延、5 分で応答なしと判定します。
-- 明確な認証切れ・権限不足・アカウント未設定は初回から、それ以外は 2 回連続の失敗で通知します。通信断中の観測は Mac に保存し、復旧後に履歴へ反映します。
-- 未使用の連携は `LIFE_CONSOLE_MONITOR_SERVICES` から外して runner を再起動します。既定の対象は [設定例](apps/runner/.env.example) を参照してください。
-- 初回起動前から runner の未着を検知する場合は、API の `MONITORED_RUNNER_IDS` に対象の `LIFE_CONSOLE_RUNNER_ID` をカンマ区切りで設定します。未指定なら初回接続後から監視します。
-
-CLI の接続確認と通常の同期結果は別です。同期の成否は job の状態で確認してください。Cloudflare 自体の停止を外部から検知する監視はありません。
-
-## 品質確認
-
-```bash
-# 初回のみ
-pnpm --filter @life-console/web exec playwright install chromium
-pnpm check
-```
-
-`pnpm check` は migration の生成漏れ・lint・型検査・テスト・ビルド・Storybook のブラウザテスト・AI 指示の整合性を確認します。`develop` / `main` 向け PR の CI でも同じ検査を実行します。
-
-`pnpm storybook` で <http://localhost:6006> に UI カタログを起動できます。Android は別途 [Android の検証手順](clients/android/README.md#lint-と-ci) を使います。
-
-## Cloudflare へ配置する場合
-
-| ブランチ | GitHub Environment / APP_ENV | Worker / D1 | R2 bucket |
-| --- | --- | --- | --- |
-| `develop` | `development` | `life-console-development` | `life-console-development-meal-photos` |
-| `main` | `production` | `life-console` | `life-console-meal-photos` |
-
-Worker・D1・R2・Access・Secrets は環境ごとに分けます。本番データを開発環境へコピーせず、実データ用 D1 にローカル seed を適用しないでください。
-
-### 初回配置
-
-1. `pnpm --filter @life-console/api exec wrangler whoami` で配置先アカウントを確認し、対象環境の D1 と非公開 R2 bucket を作成します。
-2. [development 設定例](apps/api/wrangler.development.jsonc.example) または [production 設定例](apps/api/wrangler.production.jsonc.example) を、末尾の `.example` を外した名前でコピーします。`account_id`、D1 の `database_id`、bucket 名を設定し、`workers_dev: false`、`preview_urls: false`、`routes: []` のまま migration と初回配置を実行します。
-3. Cloudflare Access で対象 Worker の通常 URL とプレビュー URL を保護し、本人メール完全一致の Allow ポリシーを設定します。
-4. Access の対象とポリシーを確認してから `workers_dev` を `true` にして再配置します。未ログインの画面・API が Access に転送され、本人のログイン後に開けることを確認します。
-
-開発環境:
-
-```bash
-pnpm --filter @life-console/api exec wrangler d1 create life-console-development
-pnpm --filter @life-console/api exec wrangler r2 bucket create life-console-development-meal-photos
-pnpm --filter @life-console/api exec wrangler d1 migrations apply DB --remote --config wrangler.development.jsonc
-pnpm --filter @life-console/api deploy:development
-```
-
-本番環境:
-
-```bash
-pnpm --filter @life-console/api exec wrangler d1 create life-console
-pnpm --filter @life-console/api exec wrangler r2 bucket create life-console-meal-photos
-pnpm --filter @life-console/api exec wrangler d1 migrations apply DB --remote --config wrangler.production.jsonc
-pnpm --filter @life-console/api deploy
-```
-
-### GitHub Actions からの更新
-
-初回配置と Access の設定を終えてから、GitHub Environment を作成します。『Deployment branches and tags』で `development` は Branch `develop`、`production` は Branch `main` のみを許可し、各 Environment に次の Secrets を登録します。
-
-| Secret | 値 |
-| --- | --- |
-| `CLOUDFLARE_API_TOKEN` | 対象環境のデプロイ用 API token |
-| `CLOUDFLARE_ACCOUNT_ID` | 配置先アカウント ID |
-| `CLOUDFLARE_D1_DATABASE_ID` | 対象環境の D1 ID |
-| `CLOUDFLARE_R2_BUCKET_NAME` | 対象環境の R2 bucket 名 |
-
-デプロイ用 API token は Workers の編集権限に `Account / D1 / Edit` と `Account / Workers R2 Storage / Edit` を加え、対象アカウントに絞ります。環境別に発行し、リポジトリ共通の Secrets には置きません。
-
-[deploy workflow](.github/workflows/deploy.yml) が対象ブランチへの push 後に検証・migration・Web/API の配置を実行します。文書だけの変更は自動配置を省略します。同じ環境への配置は直列に実行します。migration 後に配置が失敗すると migration は残るため、稼働中の Worker との互換性を保ってください。
-
-通常は feature ブランチから `develop` へ取り込んで開発環境で確認し、リリース時に `develop` → `main` の PR を merge commit でマージします。
-
-### クラウドに接続する runner
-
-`APP_ENV`、`LIFE_CONSOLE_API_URL`、`LIFE_CONSOLE_RUNNER_TOKEN` を対象環境に合わせ、API 側には同じ値の `RUNNER_TOKEN` を設定します。Access の機械認証には `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` を使います。本人メールの Allow ポリシーだけでは runner の接続は通りません。job report の送信経路も含めて確認してください。
-
-常駐には [LaunchAgent の例](apps/runner/launchd/com.life-console.runner.plist.example) を使えます。例はローカル用なので、接続先と環境名を変更し、secret は plist に直接書かず secret store から渡します。開発用と本番用で token・接続先・保存先を分けてください。GitHub Actions は Mac の runner を更新しません。
-
-## 開発資料
-
-- [要件定義](docs/requirements.md)
-- [開発ルール](AGENTS.md) / [AI 設定](docs/agent-configuration.md)
-- [Web / Storybook](apps/web/README.md) / [ネイティブクライアント](clients/README.md)
-- [core](packages/core/README.md) / [DB](packages/db/README.md) / [環境変数](packages/env/README.md) / [ESLint](packages/eslint-config/README.md)
-- [GitHub Actions の検査](.github/README.md)
-
-実データ、資格情報、agent transcript はリポジトリに含めません。設定例・seed・CSV 例には架空データを使います。
+- [運用上の注意](docs/operations.md): 配置・runner の接続、外部サービスの認証、通知の前提
+- [体重の Obsidian 書き出し](docs/weight-obsidian-export.md)
+- [要件定義](docs/requirements.md): 目的と記録済みの要件。未実装の計画を含む
+- [開発ルール](AGENTS.md) / [AI 設定](docs/agent-configuration.md) / [ESLint](packages/eslint-config/README.md)

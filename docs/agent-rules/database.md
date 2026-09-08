@@ -13,4 +13,4 @@ paths:
 - NOT NULL、列削除、型変更などは既存行と既存の読み書きへの影響を確認する。schema の一致だけでデータ移行が成功したとしない。
 - job の claim・lease・heartbeat・完了報告と、下書き保存の lease・更新日時による競合検出は、既存 repository の条件を保つ。再実行で重複や古い実行結果の保存を生まないか確認する。
 - [storage テスト](../../packages/db/README.md) は全 migration をメモリ内 SQLite に適用する。変更箇所の storage テストに加え、D1 固有の挙動を変えた場合はローカル D1 でも対象操作を確認する。
-- ローカルへの適用は `pnpm --filter @life-console/db migrate:local`。seed は架空のローカル用データに限定し、実データ用 DB へ適用しない。本番への適用は README の配置手順と依頼の許可範囲を確認する。
+- ローカルへの適用は `pnpm --filter @life-console/db migrate:local`。seed は架空のローカル用データに限定し、実データ用 DB へ適用しない。本番への適用は [配置と認証](../operations.md#配置と認証) と依頼の許可範囲を確認する。

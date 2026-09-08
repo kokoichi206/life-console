@@ -25,7 +25,7 @@
 | lint の変更・違反 | [ESLint](packages/eslint-config/README.md) と該当ルールの README |
 | Android などの native client | [クライアント](clients/README.md)、[Android](clients/android/README.md) |
 | AI 設定、rule、skill | [ハーネスの管理](docs/agent-configuration.md) |
-| 本番配置、認証、運用設定 | README の配置・runner 手順、[デプロイ workflow](.github/workflows/deploy.yml) |
+| 本番配置、認証、運用設定 | [運用上の注意](docs/operations.md)、[デプロイ workflow](.github/workflows/deploy.yml) |
 
 ## 実装から検証まで
 
