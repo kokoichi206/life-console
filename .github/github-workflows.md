@@ -1,3 +1,5 @@
+<!-- .github/README.md はルートの README.md より優先して表示されるため、このファイル名を使う。 -->
+
 # GitHub のテンプレートと CI
 
 ## PR・Issue テンプレート
