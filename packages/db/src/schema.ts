@@ -275,3 +275,10 @@ export const jobHeartbeatObservations = sqliteTable("job_heartbeat_observations"
   id: integer("id").primaryKey({ autoIncrement: true }), jobId: text("job_id").notNull(), runnerId: text("runner_id").notNull(),
   receivedAt: text("received_at").notNull(), accepted: integer("accepted").notNull(),
 });
+
+export const weightGoal = sqliteTable("weight_goal", {
+  id: integer("id").primaryKey(),
+  startWeightGrams: integer("start_weight_grams").notNull(),
+  targetWeightGrams: integer("target_weight_grams").notNull(),
+  targetDate: text("target_date"),
+});

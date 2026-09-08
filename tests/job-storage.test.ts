@@ -64,7 +64,7 @@ describe("ジョブの時刻と実行権限", () => {
     database.close();
   });
 
-  it("書き出しは 730 件を超える最新の記録を含め、削除済みを除外する", async () => {
+  it("画面と書き出しは 730 件を超える最新の記録を含め、削除済みを除外する", async () => {
     const { database, repository } = createJobStorage();
     for (let index = 0; index < 735; index += 1) {
       const occurredAt = new Date(Date.parse("2024-01-01T00:00:00Z") + index * 86_400_000).toISOString();
@@ -73,7 +73,8 @@ describe("ジョブの時刻と実行権限", () => {
     }
     database.prepare("UPDATE weights SET deleted_at = ? WHERE id = ?").run(now, "weight-1");
     const listed = await repository.listWeights();
-    expect(listed.ok && listed.value.length).toBe(730);
+    expect(listed.ok && listed.value.length).toBe(734);
+    expect(listed.ok && listed.value.at(-1)?.id).toBe("weight-734");
     const exported = await repository.listWeightsForExport();
     expect(exported.ok && exported.value.length).toBe(734);
     expect(exported.ok && exported.value.at(-1)?.id).toBe("weight-734");

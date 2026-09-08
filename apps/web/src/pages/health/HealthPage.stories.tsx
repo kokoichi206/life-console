@@ -1,4 +1,4 @@
-import type { WeightPoint } from "@life-console/contracts";
+import type { WeightPoint, WeightGoal } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { http, HttpResponse } from "msw";
@@ -13,7 +13,12 @@ const weights: WeightPoint[] = [
   { id: "csv", source: "csv", weightKg: 80, occurredAt: "2026-09-07T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
   { id: "manual", source: "manual", weightKg: 81.4, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
 ];
-const handlers = (entries: WeightPoint[]) => [
+const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null) => [
+  http.get("*/api/v1/weight-goal", () => HttpResponse.json({ data: goal })),
+  http.put("*/api/v1/weight-goal", async ({ request }) => {
+    goal = await request.json() as WeightGoal | null;
+    return HttpResponse.json({ data: null });
+  }),
   http.get("*/api/v1/weights", () => HttpResponse.json({ data: entries })),
   http.get("*/api/v1/meals", () => HttpResponse.json({ data: [] })),
 ];
@@ -89,4 +94,66 @@ export const MealEntryOpen: Story = {
     await userEvent.click(screen.getByRole("button", { name: "体重を記録" }));
     await expect(await screen.findByRole("dialog", { name: "体重を記録" })).toBeVisible();
   },
+};
+
+export const Goal: Story = {
+  parameters: { msw: { handlers: handlers(weights, { startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-12-31" }) } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "目標を編集" }));
+    const dialog = await screen.findByRole("dialog", { name: "体重の目標を設定" });
+    await userEvent.clear(within(dialog).getByLabelText("目標体重 (kg)"));
+    await userEvent.type(within(dialog).getByLabelText("目標体重 (kg)"), "79");
+    await userEvent.click(within(dialog).getByRole("button", { name: "目標を保存" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await expect(canvas.getByText("目標 79.0 kg")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "目標を編集" }));
+    await expect(await screen.findByLabelText("目標体重 (kg)")).toHaveValue(79);
+    await userEvent.click(screen.getByRole("button", { name: "目標を解除" }));
+    await waitFor(() => expect(canvas.getByRole("button", { name: "目標を設定" })).toBeVisible());
+  },
+};
+export const GoalSaveError: Story = {
+  parameters: { entry: "goal", msw: { handlers: [http.put("*/api/v1/weight-goal", () => HttpResponse.json({ error: { message: "目標を保存できませんでした。" } }, { status: 500 })), ...handlers(weights)] } },
+  play: async ({ canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.type(await screen.findByLabelText("目標体重 (kg)"), "79");
+    await userEvent.click(screen.getByRole("button", { name: "目標を保存" }));
+    await expect(await screen.findByRole("alert")).toHaveTextContent("目標を保存できませんでした。");
+    await expect(screen.getByLabelText("目標体重 (kg)")).toHaveValue(79);
+  },
+};
+export const RangeControls: Story = {
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "全期間" }));
+    const start = canvas.getByLabelText("表示開始日");
+    await expect(start).toHaveValue("2026-08-31");
+    await userEvent.click(canvas.getByRole("button", { name: "表示期間を狭める" }));
+    await expect(start).not.toHaveValue("2026-08-31");
+    await userEvent.click(canvas.getByRole("button", { name: "体重を記録" }));
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await screen.findByRole("button", { name: "体重の記録を閉じる" }));
+    await expect(start).not.toHaveValue("2026-08-31");
+  },
+};
+
+const trendWeights: WeightPoint[] = Array.from({ length: 120 }, (_, index) => ({
+  id: `trend-${index}`, source: "manual", weightKg: Math.round((90 - index * 0.08 + Math.sin(index * 0.7) * 0.5) * 10) / 10,
+  occurredAt: new Date(Date.UTC(2026, 4, 1 + index)).toISOString(), recordedAt: "2026-09-01T00:00:00Z",
+}));
+export const GoalOverview: Story = {
+  parameters: { msw: { handlers: handlers(trendWeights, { startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-09-30" }) } },
+};
+
+export const MobileWeightOverview: Story = {
+  name: "体重・目標・グラフ（スマホ）",
+  parameters: {
+    ...GoalOverview.parameters,
+    viewport: {
+      options: {
+        weightMobile: { name: "体重グラフ · 412 × 840", styles: { width: "412px", height: "840px" }, type: "mobile" },
+      },
+    },
+  },
+  globals: { viewport: { value: "weightMobile", isRotated: false } },
 };

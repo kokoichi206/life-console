@@ -17,6 +17,7 @@ import type {
   SourceRepositoryMapping,
   Task,
   WeightPoint,
+  WeightGoal,
 } from "@life-console/contracts";
 import { hc } from "hono/client";
 
@@ -87,6 +88,8 @@ export const api = {
   meals: async () => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get()),
   createMealUpload: async (input: { readonly clientId: string; readonly contentType: "image/jpeg" | "image/png" | "image/webp" }) => unwrap<{ readonly photoId: string; readonly uploadUrl: string; readonly expiresAt: string; readonly requiredHeaders: Readonly<Record<string, string>> }>(await client.api.v1["meal-photos"].upload.$post({ json: input })),
   createMeal: async (input: Parameters<typeof client.api.v1.meals.$post>[0]["json"]) => unwrap<Meal>(await client.api.v1.meals.$post({ json: input })),
+  weightGoal: async () => unwrap<WeightGoal | null>(await client.api.v1["weight-goal"].$get()),
+  saveWeightGoal: async (input: WeightGoal | null) => unwrap<null>(await client.api.v1["weight-goal"].$put({ json: input })),
   weights: async () => unwrap<ReadonlyArray<WeightPoint>>(await client.api.v1.weights.$get()),
   createWeight: async (input: Parameters<typeof client.api.v1.weights.$post>[0]["json"]) => unwrap<null>(await client.api.v1.weights.$post({ json: input })),
   importWeightCsv: async (csv: string) => unwrap<number>(await fetch("/api/v1/weights/import", {

@@ -320,3 +320,10 @@ export type SyncRepositoriesInput = z.infer<typeof syncRepositoriesSchema>;
 export type UpsertSourceRepositoryMappingInput = z.infer<typeof upsertSourceRepositoryMappingSchema>;
 export type JobKind = z.infer<typeof jobKindSchema>;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
+
+export const weightGoalSchema = z.object({
+  startWeightKg: z.number().min(0.1).max(500),
+  targetWeightKg: z.number().min(0.1).max(500),
+  targetDate: z.iso.date().nullable(),
+});
+export type WeightGoal = z.infer<typeof weightGoalSchema>;
