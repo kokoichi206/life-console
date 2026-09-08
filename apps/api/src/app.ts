@@ -207,7 +207,6 @@ const _routes = app
     return respond(context, await createHandlers(context.get("environment")).createMealPhotoUpload(
       input.clientId,
       input.contentType,
-      new URL(context.req.url).origin,
     ));
   })
   .put("/api/v1/meal-photos/:id/content", zValidator("param", identifierParameterSchema), zValidator("query", photoUploadQuerySchema), async (context) => {

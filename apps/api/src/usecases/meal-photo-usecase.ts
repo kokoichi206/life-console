@@ -43,7 +43,7 @@ const extensionFor = (contentType: string): string => {
 };
 
 export interface MealPhotoUsecase {
-  createUpload(clientId: string, contentType: string, requestOrigin: string): Promise<Result<MealPhotoUpload, AppError>>;
+  createUpload(clientId: string, contentType: string): Promise<Result<MealPhotoUpload, AppError>>;
   confirmUploaded(photoId: string): Promise<Result<void, AppError>>;
   uploadViaWorker(photoId: string, token: string, contentType: string, body: ReadableStream): Promise<Result<void, AppError>>;
   read(photoId: string): Promise<Result<{ readonly body: ReadableStream; readonly contentType: string; readonly etag: string }, AppError>>;
@@ -56,7 +56,7 @@ export const createMealPhotoUsecase = (
   clock: Clock,
   idGenerator: IdGenerator,
 ): MealPhotoUsecase => ({
-  async createUpload(clientId, contentType, requestOrigin) {
+  async createUpload(clientId, contentType) {
     const photoId = idGenerator.create();
     const token = idGenerator.create();
     const now = clock.now();
@@ -77,7 +77,7 @@ export const createMealPhotoUsecase = (
     if (configuration.mode === "worker") {
       return ok({
         photoId,
-        uploadUrl: `${requestOrigin}/api/v1/meal-photos/${photoId}/content?token=${token}`,
+        uploadUrl: `/api/v1/meal-photos/${photoId}/content?token=${token}`,
         expiresAt,
         requiredHeaders: { "Content-Type": contentType },
       });

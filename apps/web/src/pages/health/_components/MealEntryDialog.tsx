@@ -1,12 +1,11 @@
 import { Dialog } from "@base-ui/react/dialog";
 import type { CreateMealInput } from "@life-console/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { Camera, ImagePlus, X } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { api } from "../../../api";
 import { Field, FormError } from "../../../components/DesignSystem";
-import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/input";
 import { NativeSelect } from "../../../components/ui/native-select";
@@ -25,6 +24,23 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
   const [mealKind, setMealKind] = useState<CreateMealInput["mealKind"]>("dinner");
   const [memo, setMemo] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string>();
+  const photoLibraryInput = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (photo === null) {
+      setPhotoPreviewUrl(undefined);
+      return;
+    }
+    const url = URL.createObjectURL(photo);
+    setPhotoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+  const selectPhoto = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0];
+    if (selected !== undefined) setPhoto(selected);
+    event.target.value = "";
+  };
   const createMeal = useMutation({
     mutationFn: async () => {
       const clientId = crypto.randomUUID();
@@ -59,8 +75,28 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
     <form onSubmit={submit} className="mt-6">
       <fieldset disabled={createMeal.isPending} className="grid min-w-0 gap-4">
         <legend className="sr-only">食事の内容と日時</legend>
-        <Field label="写真"><Input type="file" accept="image/*" capture="environment" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} /></Field>
-        {photo !== null && <Badge variant="secondary" className="max-w-full truncate">{photo.name}</Badge>}
+        <div className="grid gap-3">
+          <p className="text-xs text-muted-foreground">写真</p>
+          {photoPreviewUrl !== undefined && (
+            <div className="relative overflow-hidden rounded-xl border bg-muted">
+              <img src={photoPreviewUrl} alt="選択した食事の写真" className="max-h-52 w-full object-contain" />
+              <Button type="button" variant="secondary" size="icon" className="absolute top-2 right-2" aria-label="選択した写真を取り消す" onClick={() => setPhoto(null)}><X /></Button>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant="outline" className="h-12" onClick={() => photoLibraryInput.current?.click()}>
+              <ImagePlus />
+              写真を選ぶ
+            </Button>
+            <Button type="button" variant="outline" className="h-12" onClick={() => cameraInput.current?.click()}>
+              <Camera />
+              カメラで撮る
+            </Button>
+          </div>
+          <input ref={photoLibraryInput} type="file" accept="image/*" aria-label="保存済みの写真" className="hidden" onChange={selectPhoto} />
+          <input ref={cameraInput} type="file" accept="image/*" capture="environment" aria-label="カメラで撮影する写真" className="hidden" onChange={selectPhoto} />
+          {photo !== null && <p className="truncate text-xs text-muted-foreground">{photo.name}</p>}
+        </div>
         <Field label="食事区分">
           <NativeSelect className="w-full" value={mealKind} onChange={(event) => setMealKind(event.target.value as CreateMealInput["mealKind"])}>
             <option value="breakfast">朝食</option>
