@@ -1,5 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
-import { assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
+import { pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
 import { createMiddleware } from "hono/factory";
@@ -7,6 +7,8 @@ import { z } from "zod";
 
 import { createLifeConsoleHandlers } from "./handlers/life-console-handlers";
 import { D1LifeConsoleRepository } from "./repositories/d1-life-console-repository";
+import { createPushSubscriptionRepository } from "./repositories/push-subscription-repository";
+import { createWebPushRepository } from "./repositories/web-push-repository";
 import type { AppError } from "./shared/app-error";
 import { appError } from "./shared/app-error";
 import { systemClock } from "./shared/clock";
@@ -20,6 +22,7 @@ import { createHealthUsecase } from "./usecases/health-usecase";
 import { createJobUsecase } from "./usecases/job-usecase";
 import { createMealPhotoUsecase } from "./usecases/meal-photo-usecase";
 import { createNoteUsecase } from "./usecases/note-usecase";
+import { createPushNotificationUsecase } from "./usecases/push-notification-usecase";
 import { createReplyDraftUsecase } from "./usecases/reply-draft-usecase";
 import { createRepositoryUsecase } from "./usecases/repository-usecase";
 import { createTaskUsecase } from "./usecases/task-usecase";
@@ -67,6 +70,19 @@ const createHandlers = (environment: ApiEnvironment) => {
     tasks: createTaskUsecase(repository, systemClock, cryptoIdGenerator),
   });
 };
+
+const createPushHandlers = (environment: ApiEnvironment) => createPushNotificationUsecase(
+  createPushSubscriptionRepository(environment.DB),
+  createWebPushRepository(environment.WEB_PUSH_PUBLIC_KEY === undefined
+    ? null
+    : {
+        publicKey: environment.WEB_PUSH_PUBLIC_KEY,
+        privateKey: environment.WEB_PUSH_PRIVATE_KEY!,
+        subject: environment.WEB_PUSH_SUBJECT!,
+      }),
+  environment.WEB_PUSH_PUBLIC_KEY ?? null,
+  systemClock,
+);
 
 const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 500 | 502 => {
   switch (error.code) {
@@ -154,6 +170,11 @@ app.use("/api/*", async (context, next) => {
 app.use("/api/v1/runner/*", runnerAuthentication);
 
 const _routes = app
+  .get("/api/v1/push/configuration", (context) => respond(context, createPushHandlers(context.get("environment")).configuration()))
+  .post("/api/v1/push/subscription/status", zValidator("json", pushEndpointInputSchema), async (context) => respond(context, await createPushHandlers(context.get("environment")).status(context.req.valid("json").endpoint)))
+  .put("/api/v1/push/subscription", zValidator("json", pushSubscriptionSchema), async (context) => respond(context, await createPushHandlers(context.get("environment")).subscribe(context.req.valid("json"))))
+  .delete("/api/v1/push/subscription", zValidator("json", pushEndpointInputSchema), async (context) => respond(context, await createPushHandlers(context.get("environment")).unsubscribe(context.req.valid("json").endpoint)))
+  .post("/api/v1/push/test", zValidator("json", pushEndpointInputSchema), async (context) => respond(context, await createPushHandlers(context.get("environment")).sendTest(context.req.valid("json").endpoint)))
   .get("/api/v1/reply-drafts", async (context) => respond(context, await createHandlers(context.get("environment")).listReplyDrafts()))
   .post("/api/v1/reply-drafts/generate", zValidator("json", createReplyDraftsSchema), async (context) => respond(
     context, await createHandlers(context.get("environment")).generateReplyDrafts(context.req.valid("json")),

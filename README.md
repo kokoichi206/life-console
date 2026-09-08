@@ -104,7 +104,31 @@ D1 の体重を Obsidian の既存 CSV とグラフに定期的に反映する�
 
 追加した Life Console のアイコンから、ホーム画面をアドレスバーなしで開けます。利用にはネットワーク接続が必要です。Access のセッションが切れた場合は再ログインします。
 
-manifest は認証 Cookie を送って取得します。Service Worker とオフラインキャッシュは使いません。アイコンの編集元は `apps/web/public/icons/app.svg`、配信用の PNG は同じディレクトリに置いています。
+manifest は認証 Cookie を送って取得します。通知を有効にした端末では Push 受信用の Service Worker を登録します。オフラインキャッシュは使いません。アイコンの編集元は `apps/web/public/icons/app.svg`、配信用の PNG は同じディレクトリに置いています。
+
+## Web Push 通知
+
+『同期・実行状況』の『この端末への通知』から、端末ごとに通知を有効・無効にできます。通知許可はボタン操作で求め、購読先を D1 に保存します。『テスト通知を送る』はこの端末だけを対象にします。配送サービスの受付と端末への到達は別であり、画面の受付表示後に OS の通知を確認してください。
+
+Chrome、Firefox、Safari の Push 配送先に対応します。iPhone / iPad は iOS / iPadOS 16.4 以降で、ホーム画面に追加した Web アプリから通知を許可してください。通知を押すと `/operations` を開き、Access のセッションが切れていれば再ログインします。通知本文は Push payload から表示し、受信時に認証付き API を再取得しません。
+
+送信元の VAPID 鍵は環境ごとに一度生成し、同じ鍵を継続して使います。
+
+```sh
+pnpm --filter @life-console/api exec web-push generate-vapid-keys
+```
+
+生成した public / private key と、本人の連絡先 `mailto:` URL または HTTPS URL をそれぞれ `WEB_PUSH_PUBLIC_KEY`、`WEB_PUSH_PRIVATE_KEY`、`WEB_PUSH_SUBJECT` に設定します。ローカルは gitignore 対象の `apps/api/.dev.vars`、本番は対象環境の Wrangler secret に保存します。3 項目すべて未設定なら画面に未準備と表示し、部分設定は起動・リクエストの設定検証で拒否します。鍵・購読先・暗号化用情報はログやリポジトリへ転記しません。
+
+```sh
+pnpm --filter @life-console/api exec wrangler secret put WEB_PUSH_PUBLIC_KEY --config wrangler.production.jsonc
+pnpm --filter @life-console/api exec wrangler secret put WEB_PUSH_PRIVATE_KEY --config wrangler.production.jsonc
+pnpm --filter @life-console/api exec wrangler secret put WEB_PUSH_SUBJECT --config wrangler.production.jsonc
+```
+
+`push_subscriptions` の migration 適用後に Web / API を配置します。Service Worker の登録・更新、画面を閉じた状態での実配送、Access セッション失効中の受信とクリック後のログインは、対象端末で確認してください。配送先の 404 / 410 は購読失効として削除し、再登録を案内します。一時的な送信失敗では購読を保持します。
+
+この実装は通知登録・解除とテスト送信です。runner / CLI の定期監視と異常・復旧の自動通知は、設計段階であり未接続です。
 
 ## Android の記録ウィジェット
 

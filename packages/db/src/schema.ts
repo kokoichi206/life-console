@@ -237,3 +237,11 @@ export const systemState = sqliteTable("system_state", {
   value: text("value").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const pushSubscriptions = sqliteTable("push_subscriptions", {
+  endpoint: text("endpoint").primaryKey(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

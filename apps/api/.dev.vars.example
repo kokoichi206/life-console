@@ -5,3 +5,8 @@ R2_ACCOUNT_ID=
 R2_BUCKET_NAME=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
+
+# Web Push を使う場合は 3 項目すべて設定する。未使用ならコメントのままにする。
+# WEB_PUSH_PUBLIC_KEY=<generated-public-key>
+# WEB_PUSH_PRIVATE_KEY=<generated-private-key>
+# WEB_PUSH_SUBJECT=mailto:your-contact@example.com
