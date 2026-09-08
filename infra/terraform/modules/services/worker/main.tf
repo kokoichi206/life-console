@@ -1,6 +1,10 @@
 locals {
   worker_bundle = "${path.module}/../../../../../apps/api/dist/index.js"
   web_assets    = "${path.module}/../../../../../apps/web/dist"
+  deployment_sha256 = sha256(jsonencode({
+    worker = filesha256(local.worker_bundle)
+    assets = { for filename in fileset(local.web_assets, "**") : filename => filesha256("${local.web_assets}/${filename}") }
+  }))
 }
 
 resource "cloudflare_workers_script" "app" {
@@ -14,6 +18,11 @@ resource "cloudflare_workers_script" "app" {
   usage_model         = "standard"
   logpush             = false
   tail_consumers      = []
+
+  # Web だけの更新も設定差分にし、provider が起動時間を旧 state の値に固定するのを防ぐ。
+  annotations = {
+    workers_tag = local.deployment_sha256
+  }
 
   # 既存の runner・Web Push の秘密値を state へ取り込まず、配置時も保持する。
   keep_bindings = ["secret_text"]

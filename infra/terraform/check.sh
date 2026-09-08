@@ -25,3 +25,7 @@ for configuration in bootstrap/state-storage envs/development envs/production; d
   terraform -chdir="$configuration_directory" validate -no-color
   terraform -chdir="$configuration_directory" test -no-color
 done
+
+# mock_provider は実 provider の plan modifier を実行しないため、更新経路を別に検証する。
+python3 "$terraform_root/tests/worker-assets-update.py" \
+  "$check_terraform_root/envs/development/.terraform/providers"
