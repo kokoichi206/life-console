@@ -47,11 +47,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check AI harness
+        run: pnpm harness:check
+
+      - name: Check migrations
+        run: pnpm migrations:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Run unit and storage tests
+        run: pnpm test
+
+      - name: Build Web
+        run: pnpm --filter @life-console/web build
+
+      - name: Build API
+        run: pnpm --filter @life-console/api build
+
+      - name: Build and smoke-test runner
+        run: pnpm --filter @life-console/runner build
+
+      - name: Build Storybook
+        run: pnpm storybook:build
+
       - name: Install Chromium
         run: pnpm --filter @life-console/web exec playwright install --with-deps chromium
 
-      - name: Run quality checks
-        run: pnpm check
+      - name: Test Storybook in Chromium
+        run: pnpm storybook:test
 
       - name: Prepare deployment configuration
         env:

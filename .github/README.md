@@ -13,6 +13,10 @@ GitHub の作成画面で使うには、テンプレートをデフォルトブ�
 
 ## GitHub Actions の検査
 
+[ci](workflows/ci.yml) の `Quality checks` と [deploy](workflows/deploy.yml) の配置前検査は、AI ハーネス、migration、lint、型検査、Vitest、Web / API / runner の各ビルド、Storybook のビルドとブラウザテストを個別の step で実行します。Chromium はブラウザテストの直前に準備し、それ以前の検査が失敗したら準備を省きます。step は順次実行です。
+
+ローカルの一括確認には `pnpm check` を使います。検査を追加・変更するときは `package.json` の `check` / `build` と両 workflow の検査内容を揃えてください。
+
 [ci-github-workflows](workflows/ci-github-workflows.yml) は `.github/workflows/` と `.github/scripts/` の変更を含む `develop` / `main` 向け PR・両ブランチへの push、手動実行で動きます。
 
 - zizmor `1.30.0`: action の SHA 固定、token の権限、shell への式の直接展開、checkout の認証情報保持などを検査。結果は annotation に出力します。

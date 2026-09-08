@@ -214,7 +214,7 @@ Storybook の `Health/食事の一覧` で写真・メモのみ・空・写真�
 
 ## 品質確認
 
-`develop` と `main` 向けの PR では GitHub Actions の `ci / Quality checks` が `pnpm check` を実行します。両ブランチの Rulesets で `Quality checks` を必須チェックに設定します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
+`develop` と `main` 向けの PR では GitHub Actions の `ci / Quality checks` が、`pnpm check` と同じ検査を個別の step で実行します。失敗した検査名、所要時間、ログを step ごとに確認できます。両ブランチの Rulesets で `Quality checks` を必須チェックに設定します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
 
 Android の変更には [ci-android](.github/workflows/ci-android.yml) で ktlint、カスタムルールのテスト、Android Lint、Debug APK ビルドを実行します。手元でのコマンドは [Android の README](clients/android/README.md#lint-と-ci) を参照してください。workflow 自体は [ci-github-workflows](.github/README.md) で zizmor と運用規約の検査にかけます。
 
