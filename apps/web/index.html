@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f5f7fa" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#090807" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-title" content="Life Console" />
     <!-- Access の認証 Cookie を manifest の取得にも送る。 -->
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
