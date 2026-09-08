@@ -7,7 +7,7 @@ import type { Clock } from "../shared/clock";
 import type { IdGenerator } from "../shared/id-generator";
 
 export interface HealthUsecase {
-  listMeals(): Promise<Result<ReadonlyArray<Meal>, AppError>>;
+  listMeals(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<Meal>, AppError>>;
   createMeal(input: CreateMealInput): Promise<Result<Meal, AppError>>;
   getWeightGoal(): Promise<Result<WeightGoal | null, AppError>>;
   saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>>;
@@ -22,7 +22,7 @@ export const createHealthUsecase = (
   clock: Clock,
   idGenerator: IdGenerator,
 ): HealthUsecase => ({
-  listMeals: () => repository.listMeals(),
+  listMeals: (period) => repository.listMeals(period),
   createMeal: (input) => repository.createMeal(idGenerator.create(), input, clock.now().toISOString()),
   getWeightGoal: () => repository.getWeightGoal(),
   saveWeightGoal: (input) => repository.saveWeightGoal(input),

@@ -17,6 +17,7 @@ const calendarDate = (timestamp: number) => new Date(timestamp).toISOString().sl
 const tickDate = (timestamp: number) => new Intl.DateTimeFormat("ja-JP", { timeZone: "UTC", month: "numeric", day: "numeric" }).format(timestamp);
 
 type WeightTrendChartProps = {
+  readonly latestDay: number;
   readonly points: ReadonlyArray<WeightPointWithMovingAverage>;
   readonly window: WeightWindow;
   readonly bounds: WeightWindow;
@@ -24,7 +25,7 @@ type WeightTrendChartProps = {
   readonly goal: WeightGoal | null;
 };
 
-export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal }: WeightTrendChartProps) => {
+export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal, latestDay }: WeightTrendChartProps) => {
   const container = useRef<HTMLDivElement>(null);
   const clipId = useId();
   const helpId = useId();
@@ -74,15 +75,13 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
   const detailPoint = hovered ?? visiblePoints.at(-1);
   // 点が重なって線を隠さないよう、拡大して間隔が取れるときだけ各記録の点を描く。
   const showSampleMarkers = visiblePoints.length <= plotWidth / 8;
-  const latestPoint = points.at(-1);
-  const latestDay = latestPoint === undefined ? undefined : weightCalendarDayTimestamp(latestPoint.occurredAt);
   const yTicks = Array.from({ length: Math.round((yMaximum - yMinimum) / tickStep) + 1 }, (_, index) => yMinimum + index * tickStep);
   const selectWindow = (next: WeightWindow) => {
     dismissInspection();
     onWindowChange(snapWeightWindow(next));
   };
   const returnToLatest = () => {
-    if (latestDay !== undefined) selectWindow({ start: latestDay - (window.end - window.start), end: latestDay });
+    selectWindow({ start: latestDay - (window.end - window.start), end: latestDay });
   };
   const changeScale = (factor: number) => {
     const midpoint = (window.start + window.end) / 2;
@@ -100,7 +99,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
         <div className="flex items-center gap-1" role="group" aria-label="グラフの拡大と移動">
           <Button variant="ghost" className="size-11" size="icon" aria-label="表示期間を広げる" disabled={window.end - window.start >= bounds.end - bounds.start} onClick={() => changeScale(2)}>−</Button>
           <Button variant="ghost" className="size-11" size="icon" aria-label="表示期間を狭める" disabled={window.end - window.start <= WEIGHT_DAY_MS} onClick={() => changeScale(0.5)}>＋</Button>
-          <Button variant="outline" className="h-11 shrink-0" size="sm" disabled={latestDay === undefined || window.end === latestDay} onClick={returnToLatest}>最新へ</Button>
+          <Button variant="outline" className="h-11 shrink-0" size="sm" disabled={window.end === latestDay} onClick={returnToLatest}>最新へ</Button>
         </div>
       </div>
       <div ref={container} className="relative min-w-0">
@@ -110,7 +109,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal 
               ? (
                   <div className="space-y-1 text-xs text-muted-foreground">
                     <p>この期間の体重記録はありません</p>
-                    <p>横に動かすか『最新へ』で記録のある期間へ戻れます</p>
+                    <p>横に動かすか、日付を指定して記録のある期間を選べます</p>
                   </div>
                 )
               : (

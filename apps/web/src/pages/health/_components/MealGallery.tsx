@@ -19,7 +19,8 @@ const MealPhoto = ({ photoId, alt, className }: { readonly photoId: string; read
     : <img src={`/api/v1/meal-photos/${encodeURIComponent(photoId)}/content`} alt={alt} loading="lazy" className={className} onError={() => setFailed(true)} />;
 };
 
-export const MealGallery = ({ meals, selectedMealId, onSelectMeal }: {
+export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel = "新しい順・直近 100 件まで" }: {
+  readonly periodLabel?: string;
   readonly meals: ReadonlyArray<Meal>;
   readonly selectedMealId: string | undefined;
   readonly onSelectMeal: (id: string | undefined) => void;
@@ -29,7 +30,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal }: {
     <Panel className="mb-6" id="meals">
       <SectionHeading eyebrow="MEALS" title="食事の記録" />
       <div className="px-5">
-        <p className="mb-4 text-xs text-muted-foreground">新しい順・直近 100 件まで</p>
+        <p className="mb-4 text-xs text-muted-foreground">{periodLabel}</p>
         {meals.length === 0
           ? <EmptyState>まだ食事記録がありません。『食事を記録』から写真やメモを残せます。</EmptyState>
           : (

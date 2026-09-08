@@ -301,16 +301,18 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(insertedCount);
   }
 
-  async listMeals(): Promise<Result<ReadonlyArray<Meal>, AppError>> {
+  async listMeals(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<Meal>, AppError>> {
     type MealRow = Omit<Meal, "tags"> & { readonly tagsJson: string };
-    const result = await safeTry(() => this.#database.prepare(`
+    const statement = this.#database.prepare(`
       SELECT id, photo_id AS photoId, memo, meal_kind AS mealKind,
              occurred_at AS occurredAt, recorded_at AS recordedAt, tags_json AS tagsJson
       FROM meals
       WHERE deleted_at IS NULL
+      ${period === undefined ? "" : "AND julianday(occurred_at) >= julianday(?) AND julianday(occurred_at) < julianday(?, '+1 day')"}
       ORDER BY occurred_at DESC
-      LIMIT 100
-    `).all<MealRow>());
+      ${period === undefined ? "LIMIT 100" : ""}
+    `);
+    const result = await safeTry(() => (period === undefined ? statement : statement.bind(`${period.from}T00:00:00+09:00`, `${period.to}T00:00:00+09:00`)).all<MealRow>());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(result.value.results.map((row) => ({
       ...row,

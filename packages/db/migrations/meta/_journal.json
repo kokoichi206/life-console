@@ -50,6 +50,13 @@
       "when": 1788874014374,
       "tag": "0006_silky_ravenous",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788882342441,
+      "tag": "0007_hard_tarantula",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ const weights: WeightPoint[] = [
   { id: "manual", source: "manual", weightKg: 81.4, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
 ];
 const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null) => [
+  http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: false, athleteId: null } })),
   http.get("*/api/v1/weight-goal", () => HttpResponse.json({ data: goal })),
   http.put("*/api/v1/weight-goal", async ({ request }) => {
     goal = await request.json() as WeightGoal | null;
@@ -212,5 +213,35 @@ export const TapWeightDetails: Story = {
     await expect(canvas.getByRole("tooltip")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "表示期間を狭める" }));
     await expect(canvas.queryByRole("tooltip")).not.toBeInTheDocument();
+  },
+};
+
+export const WeeklyExerciseAndMeals: Story = {
+  name: "週を選んで体重・運動・食事を一緒に振り返る",
+  parameters: { msw: { handlers: [
+    http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+    http.get("*/api/v1/strava/activities", ({ request }) => HttpResponse.json({ data: new URL(request.url).searchParams.get("page") === "1"
+      ? {
+          activities: [{ id: "123", name: "架空の朝ラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 15000, movingSeconds: 5400, elapsedSeconds: 5500, averageHeartrate: 145 }], nextPage: 2,
+        }
+      : { activities: [], nextPage: null } })),
+    http.get("*/api/v1/meals", ({ request }) => {
+      const from = new URL(request.url).searchParams.get("from")!;
+      return HttpResponse.json({ data: [
+        { id: "current-meal", photoId: null, memo: "架空の食事メモ・今週", mealKind: "lunch", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
+        { id: "previous-meal", photoId: null, memo: "架空の食事メモ・前週", mealKind: "lunch", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
+      ].filter((meal) => meal.occurredAt.slice(0, 10) >= from) });
+    }),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas, userEvent }) => {
+    await canvas.findByRole("table", { name: "週ごとの運動・体重・食事" });
+    await expect(canvas.getByText("架空の食事メモ・前週")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: /2026-09-07 〜/ }));
+    await waitFor(() => expect(canvas.queryByText("架空の食事メモ・前週")).not.toBeInTheDocument());
+    await expect(await canvas.findByText("架空の食事メモ・今週")).toBeVisible();
+    await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-09-07");
+    await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-13");
+    await userEvent.click(canvas.getByRole("button", { name: "2026/9/7 12:00 の昼食を開く" }));
   },
 };

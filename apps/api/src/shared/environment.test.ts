@@ -25,3 +25,12 @@ describe("Worker の環境変数", () => {
     expect(apiEnvironmentSchema.safeParse({ APP_ENV: "production", PHOTO_UPLOAD_MODE: "worker", RUNNER_TOKEN: "local-runner-token" }).success).toBe(false);
   });
 });
+
+it("Strava は設定なしを許容し、部分設定・公開 HTTP・不正な暗号鍵を拒否する", () => {
+  const base = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker" };
+  const strava = { STRAVA_CLIENT_ID: "123", STRAVA_CLIENT_SECRET: "secret", STRAVA_TOKEN_KEY: "ab".repeat(32), STRAVA_REDIRECT_URI: "http://localhost:5173/api/v1/strava/callback" };
+  expect(apiEnvironmentSchema.safeParse({ ...base, ...strava }).success).toBe(true);
+  expect(apiEnvironmentSchema.safeParse({ ...base, STRAVA_CLIENT_ID: "123" }).success).toBe(false);
+  expect(apiEnvironmentSchema.safeParse({ ...base, ...strava, STRAVA_TOKEN_KEY: "short" }).success).toBe(false);
+  expect(apiEnvironmentSchema.safeParse({ ...base, ...strava, STRAVA_REDIRECT_URI: "http://example.com/api/v1/strava/callback" }).success).toBe(false);
+});

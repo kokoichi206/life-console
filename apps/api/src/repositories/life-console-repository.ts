@@ -182,7 +182,7 @@ export interface LifeConsoleRepository {
   classifyConversation(id: string, classification: string, now: string): Promise<Result<void, AppError>>;
   createTaskFromConversation(id: string, input: CreateTaskInput, conversationId: string, now: string): Promise<Result<Task, AppError>>;
   saveConversations(conversations: ReadonlyArray<NewConversation>, sourceLabel: string, watermark: string, now: string): Promise<Result<number, AppError>>;
-  listMeals(): Promise<Result<ReadonlyArray<Meal>, AppError>>;
+  listMeals(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<Meal>, AppError>>;
   createMeal(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>>;
   createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>>;
   getMealPhoto(id: string): Promise<Result<{ readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>>;
