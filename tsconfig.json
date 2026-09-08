@@ -8,5 +8,5 @@
     },
     "types": ["node", "@cloudflare/workers-types"]
   },
-  "include": ["tests", "vitest.config.ts"]
+  "include": ["vitest.config.ts"]
 }

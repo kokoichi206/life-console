@@ -2,7 +2,7 @@
 paths:
   - "packages/db/**"
   - "apps/api/src/repositories/**"
-  - "tests/*storage.test.ts"
+  - "apps/api/tests/integration/**"
 ---
 
 # D1 と migration

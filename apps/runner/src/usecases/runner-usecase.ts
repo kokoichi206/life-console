@@ -1,7 +1,7 @@
 import type { LocalLogger } from "@runner/logger";
 import type { ApiRepository, RunnerJob } from "@runner/repositories/api-repository";
 
-import type { JobExecutorUsecase } from "./job-executor-usecase";
+import type { JobExecution, JobExecutorUsecase } from "./job-executor-usecase";
 
 type Dependencies = {
   readonly api: ApiRepository;
@@ -29,6 +29,7 @@ export const createRunnerUsecase = (dependencies: Dependencies): RunnerUsecase =
     const leaseToken = job.leaseToken;
     const abortController = new AbortController();
     let heartbeatActive = true;
+    let heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
     let leaseLost = false;
     const waitingForUser = job.kind === "agent" || job.kind === "github_promotion";
 
@@ -40,6 +41,7 @@ export const createRunnerUsecase = (dependencies: Dependencies): RunnerUsecase =
         waitingForUser,
         waitingForUser ? "agent の明示的な完了報告を待っています。" : "実行中",
       );
+      if (!heartbeatActive) return false;
       if (!result.ok) {
         leaseLost = result.error.code === "invalid_lease";
         dependencies.logger.error({
@@ -55,7 +57,7 @@ export const createRunnerUsecase = (dependencies: Dependencies): RunnerUsecase =
         abortController.abort();
         return true;
       }
-      setTimeout(() => {
+      heartbeatTimer = setTimeout(() => {
         void heartbeat();
       }, dependencies.heartbeatMilliseconds);
       return true;
@@ -65,10 +67,15 @@ export const createRunnerUsecase = (dependencies: Dependencies): RunnerUsecase =
       heartbeatActive = false;
       return;
     }
-    const execution = abortController.signal.aborted
-      ? { outcome: "canceled" as const, errorCode: null, summary: "実行前に中止しました。", reportedExternally: false }
-      : await dependencies.executor.execute(job, abortController.signal);
-    heartbeatActive = false;
+    let execution: JobExecution;
+    try {
+      execution = abortController.signal.aborted
+        ? { outcome: "canceled" as const, errorCode: null, summary: "実行前に中止しました。", reportedExternally: false }
+        : await dependencies.executor.execute(job, abortController.signal);
+    } finally {
+      heartbeatActive = false;
+      clearTimeout(heartbeatTimer);
+    }
     if (execution.reportedExternally || leaseLost) return;
     const completed = await dependencies.api.completeJob(
       job.id,

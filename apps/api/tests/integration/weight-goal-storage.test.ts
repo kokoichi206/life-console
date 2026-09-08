@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { app } from "../apps/api/src/app";
+import { app } from "../../src/app";
 
-import { createJobStorage } from "./support/d1-storage";
+import { createApiStorage } from "./support/d1-storage";
 
 describe("体重の目標の保存", () => {
   it("未設定から登録・更新・解除し、HTTP で読み直せる", async () => {
-    const { database, binding } = createJobStorage();
+    const { database, binding } = createApiStorage();
     const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
     const read = async () => (await app.request("/api/v1/weight-goal", {}, environment)).json();
     const save = (goal: unknown) => app.request("/api/v1/weight-goal", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(goal) }, environment);

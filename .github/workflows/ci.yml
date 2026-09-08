@@ -50,7 +50,7 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Run unit and storage tests
+      - name: Run unit and API integration tests
         run: pnpm test
 
       - name: Build Web
@@ -61,6 +61,9 @@ jobs:
 
       - name: Build and smoke-test runner
         run: pnpm --filter @life-console/runner build
+
+      - name: Run API and runner E2E
+        run: pnpm test:e2e:run
 
       - name: Build Storybook
         run: pnpm storybook:build

@@ -14,12 +14,12 @@ pnpm --filter @life-console/db generate
 pnpm migrations:check
 pnpm --filter @life-console/db migrate:local
 pnpm --filter @life-console/db seed:local
-pnpm exec vitest run tests/job-storage.test.ts tests/reply-draft-storage.test.ts
+pnpm exec vitest run apps/api/tests/integration
 ```
 
-storage テストは全 migration を独立したメモリ内 SQLite に適用します。実際の D1、体重、会話、下書きは変更しません。本番 DB に seed を適用しないでください。
+[API の DB 結合テスト](../../apps/api/tests/integration/README.md) は全 migration を独立したメモリ内 SQLite に適用します。実際の D1、体重、会話、下書きは変更しません。本番 DB に seed を適用しないでください。
 
-`pnpm typecheck` はルートの storage テストと、このパッケージの migration 検査テストも対象にします。テストの実行と型検査の両方で、実装の変更への追従を確認します。
+`pnpm typecheck` はAPI の DB 結合テストと、このパッケージの migration 検査テストも対象にします。テストの実行と型検査の両方で、実装の変更への追従を確認します。
 
 `pnpm migrations:check` は `pnpm check` に含まれ、`develop` / `main` 向け PR の CI でも実行します。schema だけ変更して migration を生成し忘れた場合や、生成した SQL ファイルを追加し忘れた場合は失敗します。schema が一致しなければ `pnpm --filter @life-console/db generate` を実行し、SQL と `migrations/meta/` を変更に含めてください。SQL ファイルの欠落なら、エラーに表示された生成済みのファイルを追加・復元してください。
 
