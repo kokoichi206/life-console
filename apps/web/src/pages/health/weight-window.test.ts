@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseHealthSearch } from "./health-search";
-import { constrainWeightWindow, gestureWeightWindow, WEIGHT_DAY_MS as day } from "./weight-window";
+import { constrainWeightWindow, gestureWeightWindow, snapWeightWindow, WEIGHT_DAY_MS as day } from "./weight-window";
 
 const bounds = { start: 0, end: 100 * day };
 const window = { start: 40 * day, end: 60 * day };
@@ -17,6 +17,12 @@ describe("体重グラフの表示期間", () => {
     expect(constrainWeightWindow({ start: -10 * day, end: 10 * day }, bounds)).toEqual({ start: 0, end: 20 * day });
     expect(constrainWeightWindow({ start: 99 * day, end: 120 * day }, bounds)).toEqual({ start: 79 * day, end: 100 * day });
     expect(gestureWeightWindow(window, bounds, [49, 51], [0, 100], 100).end - gestureWeightWindow(window, bounds, [49, 51], [0, 100], 100).start).toBe(day);
+  });
+  it("操作中は日未満の移動を保ち、確定時だけ日付へ丸める", () => {
+    const moved = gestureWeightWindow(window, bounds, [25, 75], [26, 76], 100);
+    expect(moved.start / day).toBeCloseTo(39.8);
+    expect(moved.end - moved.start).toBe(20 * day);
+    expect(snapWeightWindow(moved)).toEqual(window);
   });
   it("期間と目標設定の URL を復元し、不正な日付や逆転期間を受け付けない", () => {
     expect(parseHealthSearch({ entry: "goal", range: "all", from: "2026-08-01", to: "2026-09-01" })).toEqual({ entry: "goal", range: "all", from: "2026-08-01", to: "2026-09-01" });
