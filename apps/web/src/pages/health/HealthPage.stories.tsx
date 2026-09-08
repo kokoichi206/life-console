@@ -31,8 +31,8 @@ const meta = {
     const router = useMemo(() => {
       const root = createRootRoute();
       const health = createRoute({ getParentRoute: () => root, path: "/health", validateSearch: parseHealthSearch, component: Story });
-      return createRouter({ routeTree: root.addChildren([health]), history: createMemoryHistory({ initialEntries: [context.parameters.entry === undefined ? "/health" : `/health?entry=${context.parameters.entry}`] }) });
-    }, [context.parameters.entry, Story]);
+      return createRouter({ routeTree: root.addChildren([health]), history: createMemoryHistory({ initialEntries: [context.parameters.initialUrl ?? (context.parameters.entry === undefined ? "/health" : `/health?entry=${context.parameters.entry}`)] }) });
+    }, [context.parameters.entry, context.parameters.initialUrl, Story]);
     return <RouterProvider router={router} />;
   }],
 } satisfies Meta<typeof HealthRoutePage>;
@@ -218,7 +218,7 @@ export const TapWeightDetails: Story = {
 
 export const WeeklyExerciseAndMeals: Story = {
   name: "週を選んで体重・運動・食事を一緒に振り返る",
-  parameters: { msw: { handlers: [
+  parameters: { initialUrl: "/health?from=2026-08-31&to=2026-09-13", msw: { handlers: [
     http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
     http.get("*/api/v1/strava/activities", ({ request }) => HttpResponse.json({ data: new URL(request.url).searchParams.get("page") === "1"
       ? {
@@ -235,13 +235,75 @@ export const WeeklyExerciseAndMeals: Story = {
     ...handlers(weights),
   ] } },
   play: async ({ canvas, userEvent }) => {
-    await canvas.findByRole("table", { name: "週ごとの運動・体重・食事" });
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" });
+    await expect(chart).toHaveTextContent("15.0 km ・ 1 回");
     await expect(canvas.getByText("架空の食事メモ・前週")).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: /2026-09-07 〜/ }));
+    await userEvent.click(canvas.getByRole("button", { name: "この週のランと食事を見る" }));
     await waitFor(() => expect(canvas.queryByText("架空の食事メモ・前週")).not.toBeInTheDocument());
     await expect(await canvas.findByText("架空の食事メモ・今週")).toBeVisible();
     await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-09-07");
     await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-13");
+    await expect(await canvas.findByText("架空の朝ラン")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "2026/9/7 12:00 の昼食を開く" }));
+  },
+};
+
+const combinedTrendHandlers = [
+  http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+  http.get("*/api/v1/strava/activities", ({ request }) => HttpResponse.json({ data: {
+    activities: new URL(request.url).searchParams.get("page") === "1"
+      ? Array.from({ length: 12 }, (_, index) => ({
+          id: `synthetic-${index}`, name: "架空のランニング", sportType: "Run", occurredAt: new Date(Date.UTC(2026, 5, 15 + index * 7)).toISOString(),
+          distanceMeters: [10000, 18000, 0, 22000, 15000, 0, 9000, 19000, 25000, 8000, 16000, 23000][index]!, movingSeconds: 3600, elapsedSeconds: 3700, averageHeartrate: 145,
+        })).filter((run) => run.distanceMeters > 0)
+      : [], nextPage: new URL(request.url).searchParams.get("page") === "1" ? 2 : null,
+  } })),
+  ...handlers(trendWeights),
+];
+export const CombinedTrendOverview: Story = {
+  name: "体重の線と週の走行距離を重ねる",
+  parameters: { initialUrl: "/health?from=2026-06-12&to=2026-09-09", msw: { handlers: combinedTrendHandlers } },
+  play: async ({ canvas, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" });
+    await expect(canvas.getByText("この週の体重記録はありません")).toBeVisible();
+    chart.scrollIntoView({ block: "center" });
+    const bounds = chart.getBoundingClientRect();
+    await userEvent.pointer({ target: chart, keys: "[MouseLeft]", coords: { clientX: bounds.left + bounds.width * 0.65, clientY: bounds.top + 180 } });
+    await expect(canvas.getByRole("tooltip")).toBeVisible();
+    await userEvent.unhover(chart);
+    await expect(canvas.getByRole("button", { name: "この週のランと食事を見る" })).toBeVisible();
+  },
+};
+export const CombinedTrendDark: Story = { ...CombinedTrendOverview, globals: { theme: "dark" } };
+export const CombinedTrendMobile: Story = { ...CombinedTrendOverview, parameters: { ...CombinedTrendOverview.parameters, viewport: MobileWeightOverview.parameters?.viewport }, globals: { viewport: { value: "weightMobile", isRotated: false } } };
+export const CombinedTrendMobileDark: Story = { ...CombinedTrendMobile, globals: { ...CombinedTrendMobile.globals, theme: "dark" } };
+export const ExerciseFetchFailure: Story = {
+  name: "運動の取得が途中で失敗したら棒グラフを出さない",
+  parameters: { msw: { handlers: [
+    http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+    http.get("*/api/v1/strava/activities", ({ request }) => new URL(request.url).searchParams.get("page") === "1"
+      ? HttpResponse.json({ data: { activities: [{ id: "synthetic-run", name: "架空のラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 15000, movingSeconds: 5400, elapsedSeconds: 5500, averageHeartrate: null }], nextPage: 2 } })
+      : HttpResponse.json({ error: { message: "Strava の取得に失敗しました。" } }, { status: 502 })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText(/期間全体を取得できていないため/)).toBeVisible();
+    await expect(canvas.queryByRole("img", { name: "体重と週ごとの走行距離の推移" })).not.toBeInTheDocument();
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "この週のランと食事を見る" })).not.toBeInTheDocument();
+  },
+};
+
+export const RunningWithoutWeight: Story = {
+  name: "体重未記録でも走行距離を表示する",
+  parameters: { initialUrl: "/health?from=2026-06-12&to=2026-09-09", msw: { handlers: [
+    http.get("*/api/v1/weights", () => HttpResponse.json({ data: [] })), ...combinedTrendHandlers,
+  ] } },
+  play: async ({ canvas }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" });
+    await expect(chart).toBeVisible();
+    await expect(chart).toHaveTextContent("25.0 km ・ 1 回");
+    await expect(canvas.getByText("この週の体重記録はありません")).toBeVisible();
+    await expect(canvas.queryByText("表示できる体重記録がありません。")).not.toBeInTheDocument();
   },
 };

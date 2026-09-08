@@ -15,8 +15,10 @@ import { WeightEntryDialog } from "./_components/WeightEntryDialog";
 import { WeightGoalDialog } from "./_components/WeightGoalDialog";
 import { WeightGoalProgress } from "./_components/WeightGoalProgress";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
+import { exerciseWeeks } from "./exercise-weeks";
 import type { HealthSearch } from "./health-search";
 import { mealsForPeriodQuery, weightsQuery, weightGoalQuery } from "./queries";
+import { useStravaActivities } from "./use-strava-activities";
 import { WEIGHT_DAY_MS, type WeightWindow } from "./weight-window";
 
 const ONE_DAY_MILLISECONDS = WEIGHT_DAY_MS;
@@ -60,6 +62,8 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
   const periodFrom = new Date(visibleWindow.start).toISOString().slice(0, 10);
   const periodTo = new Date(visibleWindow.end).toISOString().slice(0, 10);
   const meals = useQuery(mealsForPeriodQuery(periodFrom, periodTo));
+  const strava = useStravaActivities(periodFrom, periodTo);
+  const runningWeeks = strava.complete ? exerciseWeeks(periodFrom, periodTo, strava.records, [], []) : undefined;
   const windowBounds = {
     start: Math.min(Date.parse(`${new Date(earliestDay).getUTCFullYear()}-01-01`), latestDay - 89 * WEIGHT_DAY_MS, visibleWindow.start),
     end: Math.max(Date.parse(`${new Date(latestDay).getUTCFullYear()}-12-31`), visibleWindow.end),
@@ -104,7 +108,7 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
       <section className="mb-6">
         <header className="mb-4 flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">体重の推移</h2>
+            <h2 className="text-xl font-semibold tracking-tight">{strava.connected ? "体重と走行距離の推移" : "体重の推移"}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               実測
               {" "}
@@ -124,7 +128,7 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
           </div>
         </header>
         <Panel className="overflow-hidden rounded-3xl py-0">
-          <WeightTrendChart latestDay={latestDay} points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
+          <WeightTrendChart runningWeeks={runningWeeks} onSelectWeek={onRangeChange} latestDay={latestDay} points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
           <dl className="mx-4 my-3 grid grid-cols-2 gap-x-4 gap-y-4 rounded-2xl bg-muted/50 p-4 sm:grid-cols-4">
             {[
               { label: "最新", value: lastVisibleWeight?.weightKg.toFixed(1) ?? "—", unit: "kg", detail: lastVisibleWeight === undefined ? "記録なし" : shortDate(lastVisibleWeight.occurredAt) },
@@ -184,7 +188,7 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
           <p className="rounded-b-xl border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
         </Panel>
       </section>
-      <StravaActivities from={periodFrom} to={periodTo} weights={weights} meals={meals.data} onSelectWeek={onRangeChange} />
+      <StravaActivities strava={strava} from={periodFrom} to={periodTo} weights={weights} meals={meals.data} onSelectWeek={onRangeChange} />
       {meals.isPending && <p role="status">食事を読み込んでいます。</p>}
       {meals.error !== null && <FormError>{meals.error.message}</FormError>}
       {meals.data !== undefined && <MealGallery meals={meals.data} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} periodLabel={`${periodFrom} 〜 ${periodTo}・新しい順`} />}

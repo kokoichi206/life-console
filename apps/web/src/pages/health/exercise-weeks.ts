@@ -2,6 +2,7 @@ import { weightCalendarDate, type Meal, type StravaActivity, type WeightPoint } 
 
 const DAY = 86_400_000;
 const dayString = (timestamp: number) => new Date(timestamp).toISOString().slice(0, 10);
+export type ExerciseWeek = ReturnType<typeof exerciseWeeks>[number];
 export const isRunning = (sportType: string): boolean => ["Run", "TrailRun", "VirtualRun"].includes(sportType);
 export const sportLabel = (sportType: string): string => ({ Run: "ランニング", TrailRun: "トレイルラン", VirtualRun: "バーチャルラン", Walk: "ウォーキング", Hike: "ハイキング", WeightTraining: "筋トレ" }[sportType] ?? sportType);
 export const runningPace = (distanceMeters: number, movingSeconds: number): string => {
