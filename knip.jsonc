@@ -16,6 +16,10 @@
       ]
     },
     "apps/web": {
+      "ignore": [
+        // shadcn から取り込んだ部品を一式で保持するため、利用箇所の有無で削除しない。
+        "src/components/ui/**"
+      ],
       "ignoreDependencies": [
         // components.json を使って共通 UI を追加する開発用 CLI。
         "shadcn"

@@ -56,7 +56,7 @@ flowchart TB
 
 `pnpm check` で lint・型検査・テスト・build をまとめて実行します。未使用ファイル・依存関係・export の検査だけなら `pnpm knip`。全 workspace を対象にし、PR の CI でも実行します。
 
-[knip.jsonc](knip.jsonc) は `minken` と `enerops` のルート設定を参考にしています。[Knip の workspace 自動検出](https://knip.dev/features/monorepos-and-workspaces) を使い、Claude hook と Terraform の fixture は entry を明示しています。Gradle の生成物と ESLint の fixture、共通 UI の追加に使う `shadcn` CLI は理由を付けて除外しています。同一ファイル内で使う export は未使用扱いにしません。
+[knip.jsonc](knip.jsonc) は `minken` と `enerops` のルート設定を参考にしています。[Knip の workspace 自動検出](https://knip.dev/features/monorepos-and-workspaces) を使い、Claude hook と Terraform の fixture は entry を明示しています。shadcn 由来の `apps/web/src/components/ui/` は部品を一式で保持するため、報告対象から除外しています。Gradle の生成物と ESLint の fixture、共通 UI の追加に使う `shadcn` CLI も理由を付けて除外しています。同一ファイル内で使う export は未使用扱いにしません。
 
 ## ライセンス
 
