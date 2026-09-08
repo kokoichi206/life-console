@@ -301,16 +301,18 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(insertedCount);
   }
 
-  async listMeals(): Promise<Result<ReadonlyArray<Meal>, AppError>> {
+  async listMeals(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<Meal>, AppError>> {
     type MealRow = Omit<Meal, "tags"> & { readonly tagsJson: string };
-    const result = await safeTry(() => this.#database.prepare(`
+    const statement = this.#database.prepare(`
       SELECT id, photo_id AS photoId, memo, meal_kind AS mealKind,
              occurred_at AS occurredAt, recorded_at AS recordedAt, tags_json AS tagsJson
       FROM meals
       WHERE deleted_at IS NULL
+      ${period === undefined ? "" : "AND julianday(occurred_at) >= julianday(?) AND julianday(occurred_at) < julianday(?, '+1 day')"}
       ORDER BY occurred_at DESC
-      LIMIT 100
-    `).all<MealRow>());
+      ${period === undefined ? "LIMIT 100" : ""}
+    `);
+    const result = await safeTry(() => (period === undefined ? statement : statement.bind(`${period.from}T00:00:00+09:00`, `${period.to}T00:00:00+09:00`)).all<MealRow>());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(result.value.results.map((row) => ({
       ...row,
@@ -318,8 +320,8 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     })));
   }
 
-  async createMeal(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>> {
-    const inserted = await safeTry(() => this.#database.prepare(`
+  async createMealAndQueueNutrition(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>> {
+    const inserted = await safeTry(() => this.#database.batch([this.#database.prepare(`
       INSERT OR IGNORE INTO meals (
         id, client_id, photo_id, memo, meal_kind, occurred_at, recorded_at, tags_json, deleted_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
@@ -332,7 +334,13 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
       input.occurredAt,
       now,
       JSON.stringify(input.tags),
-    ).run());
+    ), this.#database.prepare(`
+      INSERT OR IGNORE INTO jobs (
+        id, kind, status, idempotency_key, payload_json, attempt, created_at, updated_at
+      ) SELECT 'nutrition-initial:' || id, 'nutrition_analysis', 'queued',
+          'nutrition-initial:' || id, json_object('mealId', id), 0, ?, ?
+        FROM meals WHERE client_id = ? AND photo_id IS NOT NULL AND deleted_at IS NULL
+    `).bind(now, now, input.clientId)]));
     if (!inserted.ok) return err(appError.storage(inserted.error));
     const selected = await safeTry(() => this.#database.prepare(`
       SELECT id, photo_id AS photoId, memo, meal_kind AS mealKind,
@@ -774,11 +782,16 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
         progress_updated_at, cancel_requested_at, deadline_at, attempt, provider,
         summary, error_code, started_at, finished_at, created_at, updated_at
       ) SELECT ?, ?, ?, ?, ?, 'queued', ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, ?, 0, ?, NULL, NULL, NULL, NULL, ?, ?
-      WHERE ? != 'conversation_reply' OR NOT EXISTS (
+      WHERE (? != 'conversation_reply' OR NOT EXISTS (
         SELECT 1 FROM jobs
         WHERE kind = 'conversation_reply' AND status IN ('queued', 'claimed', 'running', 'waiting_for_user')
           AND json_extract(payload_json, '$.conversationId') = json_extract(?, '$.conversationId')
-      )
+      )) AND (? != 'nutrition_analysis' OR NOT EXISTS (
+        SELECT 1 FROM jobs WHERE kind = 'nutrition_analysis'
+          AND status IN ('queued', 'claimed', 'running', 'waiting_for_user')
+          AND (json_extract(payload_json, '$.mealId') IS NULL OR json_extract(?, '$.mealId') IS NULL
+            OR json_extract(payload_json, '$.mealId') = json_extract(?, '$.mealId'))
+      ))
     `).bind(
       input.id,
       input.scheduleId ?? null,
@@ -793,10 +806,16 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
       input.now,
       input.kind,
       input.payloadJson,
+      input.kind,
+      input.payloadJson,
+      input.payloadJson,
     ).run());
     if (!result.ok) return err(appError.storage(result.error));
     if (input.kind === "conversation_reply" && result.value.meta.changes === 0) {
       return err(appError.conflict("この会話への返信は既に実行待ち、または送信中です。"));
+    }
+    if (input.kind === "nutrition_analysis" && result.value.meta.changes === 0) {
+      return err(appError.conflict("対象の食事は既に解析待ち、または解析中です。"));
     }
     const selected = await this.getJobByIdempotencyKey(input.idempotencyKey);
     return selected;

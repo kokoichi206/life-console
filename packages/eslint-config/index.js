@@ -12,7 +12,7 @@ import customRules from "./rules/index.js";
 
 export default [
   {
-    ignores: ["**/dist/**", "**/storybook-static/**", "**/.wrangler/**", "**/node_modules/**", "**/fixtures/**", "clients/android/**/build/**", "clients/android/.gradle/**", "private/**", "backups/**", "pnpm-lock.yaml"],
+    ignores: ["**/dist/**", "**/storybook-static/**", "**/test-results/**", "**/.wrangler/**", "**/node_modules/**", "**/fixtures/**", "clients/android/**/build/**", "clients/android/.gradle/**", "private/**", "backups/**", "pnpm-lock.yaml"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

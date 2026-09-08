@@ -1,11 +1,15 @@
 import { Dialog } from "@base-ui/react/dialog";
 import type { Meal } from "@life-console/contracts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Utensils, X } from "lucide-react";
 import { useState } from "react";
 
-import { EmptyState, Panel, SectionHeading } from "../../../components/DesignSystem";
+import { api } from "../../../api";
+import { FormError, EmptyState, Panel, SectionHeading } from "../../../components/DesignSystem";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/Button";
+import { nutritionIsPending, summarizeDailyNutrition } from "../nutrition-summary";
+import { nutritionQuery } from "../queries";
 
 const mealKindLabel = (kind: string): string => ({ breakfast: "朝食", lunch: "昼食", dinner: "夕食", snack: "間食" }[kind] ?? kind);
 const mealDateTime = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP", {
@@ -19,17 +23,62 @@ const MealPhoto = ({ photoId, alt, className }: { readonly photoId: string; read
     : <img src={`/api/v1/meal-photos/${encodeURIComponent(photoId)}/content`} alt={alt} loading="lazy" className={className} onError={() => setFailed(true)} />;
 };
 
-export const MealGallery = ({ meals, selectedMealId, onSelectMeal }: {
+export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel = "新しい順・直近 100 件まで" }: {
+  readonly periodLabel?: string;
   readonly meals: ReadonlyArray<Meal>;
   readonly selectedMealId: string | undefined;
   readonly onSelectMeal: (id: string | undefined) => void;
 }) => {
+  const queryClient = useQueryClient();
+  const nutrition = useQuery(nutritionQuery);
+  const analyze = useMutation({
+    mutationFn: api.analyzeNutrition,
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: nutritionQuery.queryKey }); },
+  });
+  const visibleMealIds = new Set(meals.map((meal) => meal.id));
+  const visibleNutrition = nutrition.data?.filter((entry) => visibleMealIds.has(entry.mealId));
+  const nutritionByMeal = new Map(nutrition.data?.map((entry) => [entry.mealId, entry]));
+  const selectedNutrition = selectedMealId === undefined ? undefined : nutritionByMeal.get(selectedMealId);
+  const pending = nutritionIsPending(selectedNutrition?.analysisStatus ?? null);
   const selectedMeal = meals.find((meal) => meal.id === selectedMealId);
   return (
     <Panel className="mb-6" id="meals">
       <SectionHeading eyebrow="MEALS" title="食事の記録" />
       <div className="px-5">
-        <p className="mb-4 text-xs text-muted-foreground">新しい順・直近 100 件まで</p>
+        <p className="mb-4 text-xs text-muted-foreground">{periodLabel}</p>
+        <div className="mb-4 space-y-3">
+          <p className="text-xs text-muted-foreground">写真付きの食事は保存後に自動で解析します。写真とメモは設定した AI サービスへ送られ、Mac の runner が起動している間に概算します。</p>
+          <Button variant="outline" size="sm" disabled={analyze.isPending || nutrition.data === undefined || nutrition.data.some((entry) => nutritionIsPending(entry.analysisStatus)) || !nutrition.data.some((entry) => entry.photoId !== null && entry.estimate === null)} onClick={() => analyze.mutate({})}>未解析の食事をまとめて解析</Button>
+          {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}
+          {nutrition.isPending && <p role="status" className="text-sm text-muted-foreground">推定結果を読み込み中…</p>}
+          {nutrition.error !== null && <FormError>{nutrition.error.message}</FormError>}
+          {visibleNutrition !== undefined && visibleNutrition.length > 0 && (
+            <div className="max-h-48 overflow-auto rounded-xl border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" role="region" aria-label="日別の推定カロリー" tabIndex={0}>
+              <table className="w-full text-sm tabular-nums">
+                <caption className="p-3 text-left font-medium">日別の推定カロリー（日本時間・記録した食事の合計）</caption>
+                <thead>
+                  <tr>
+                    <th className="px-3 py-2 text-left">日付</th>
+                    <th className="px-3 py-2 text-right">合計</th>
+                    <th className="px-3 py-2 text-right">解析済み</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summarizeDailyNutrition(visibleNutrition).map((day) => (
+                    <tr key={day.date}>
+                      <td className="px-3 py-2">{day.date}</td>
+                      <td className="px-3 py-2 text-right">{day.estimatedMeals === 0 ? "未解析" : `約 ${day.caloriesKcal} kcal`}</td>
+                      <td className="px-3 py-2 text-right">
+                        {`${day.estimatedMeals} / ${day.totalMeals} 件`}
+                        {day.estimatedMeals < day.totalMeals && "（未解析あり）"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
         {meals.length === 0
           ? <EmptyState>まだ食事記録がありません。『食事を記録』から写真やメモを残せます。</EmptyState>
           : (
@@ -49,6 +98,8 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal }: {
                     <div className="grid w-full gap-2 p-3">
                       <Badge variant="secondary">{mealKindLabel(meal.mealKind)}</Badge>
                       <time dateTime={meal.occurredAt} className="text-xs text-muted-foreground">{mealDateTime(meal.occurredAt)}</time>
+                      <p className="text-sm font-medium tabular-nums">{nutritionByMeal.get(meal.id)?.estimate != null ? `約 ${nutritionByMeal.get(meal.id)!.estimate!.caloriesKcal} kcal` : "カロリー未解析"}</p>
+                      {nutritionIsPending(nutritionByMeal.get(meal.id)?.analysisStatus ?? null) && <p className="text-xs text-muted-foreground">解析待ち・解析中</p>}
                       {meal.memo !== "" && <p className="line-clamp-2 text-sm break-words whitespace-pre-wrap">{meal.memo}</p>}
                     </div>
                   </button>
@@ -69,6 +120,18 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal }: {
               <div className="grid gap-4">
                 {selectedMeal.photoId !== null && <div className="overflow-hidden rounded-xl bg-muted"><MealPhoto key={selectedMeal.photoId} photoId={selectedMeal.photoId} alt={`${mealKindLabel(selectedMeal.mealKind)}の写真`} className="max-h-[60dvh] w-full object-contain" /></div>}
                 {selectedMeal.memo !== "" && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{selectedMeal.memo}</p>}
+                {selectedNutrition?.estimate != null && (
+                  <div className="space-y-2 rounded-xl bg-muted/50 p-4">
+                    <p className="text-xl font-semibold">{`推定 約 ${selectedNutrition.estimate.caloriesKcal} kcal`}</p>
+                    <p className="text-sm">{`たんぱく質 ${selectedNutrition.estimate.proteinGrams} g ・ 脂質 ${selectedNutrition.estimate.fatGrams} g ・ 炭水化物 ${selectedNutrition.estimate.carbohydrateGrams} g`}</p>
+                    <p className="text-xs text-muted-foreground">{`${selectedNutrition.estimate.model} ・ ${mealDateTime(selectedNutrition.estimate.analyzedAt)} に解析`}</p>
+                    <p className="text-xs text-muted-foreground">写真からの推定値です。実際の分量や調理方法で変わります。</p>
+                  </div>
+                )}
+                {selectedMeal.photoId !== null && <Button disabled={analyze.isPending || pending || nutrition.data === undefined} onClick={() => analyze.mutate({ mealId: selectedMeal.id })}>{pending ? "解析待ち・解析中" : selectedNutrition?.estimate == null ? "カロリーを解析" : "カロリーを再解析"}</Button>}
+                {pending && <p role="status" className="text-sm text-muted-foreground">Mac の runner で順番に解析します。結果は自動で更新されます。</p>}
+                {selectedNutrition?.analysisStatus === "failed" && <FormError>{selectedNutrition.analysisSummary ?? "解析に失敗しました。再解析できます。"}</FormError>}
+                {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}
               </div>
             )}
           </Dialog.Popup>

@@ -1,4 +1,4 @@
-import { createReplyDraftsSchema, weightObsidianExportPayloadSchema, type ReplyDraftDecision } from "@life-console/contracts";
+import { nutritionAnalysisPayloadSchema, createReplyDraftsSchema, weightObsidianExportPayloadSchema, type ReplyDraftDecision } from "@life-console/contracts";
 import { ok, safeTry, type Result } from "@life-console/core";
 import type { RunnerConfig } from "@runner/config";
 import { runnerError, type RunnerError } from "@runner/errors";
@@ -7,6 +7,7 @@ import type { BackupRepository } from "@runner/repositories/backup-repository";
 import type { CapabilityRepository } from "@runner/repositories/capability-repository";
 import type { Connector, ConversationReplyRepository } from "@runner/repositories/connectors";
 import type { ImportRepository } from "@runner/repositories/import-repository";
+import type { NutritionGenerator } from "@runner/repositories/nutrition-generator";
 import type { OrcaRepository } from "@runner/repositories/orca-repository";
 import type { ReplyCalendarRepository } from "@runner/repositories/reply-calendar-repository";
 import type { ReplyContextRepository } from "@runner/repositories/reply-context-repository";
@@ -46,6 +47,7 @@ export type JobExecution = {
 
 type Dependencies = {
   readonly api: ApiRepository;
+  readonly nutritionGenerator: NutritionGenerator;
   readonly weightExport: WeightObsidianExportUsecase;
   readonly backup: BackupRepository;
   readonly capabilities: CapabilityRepository;
@@ -283,8 +285,28 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
             executionMode: "main_checkout",
           }, signal, payload.value.target);
         }
-        case "nutrition_analysis":
-          return failed(runnerError("job_kind_not_implemented", "栄養推定の自動化は MVP 対象外です。"));
+        case "nutrition_analysis": {
+          const payload = await parsePayload(job, nutritionAnalysisPayloadSchema);
+          if (!payload.ok) return failed(payload.error);
+          if (job.leaseToken === null) return failed(runnerError("missing_lease_token", "栄養解析 job に lease token がありません。"));
+          const candidates = await dependencies.api.nutritionCandidates(payload.value, signal);
+          if (!candidates.ok) return failed(candidates.error);
+          let analyzedCount = 0;
+          const failures: RunnerError[] = [];
+          for (const meal of candidates.value) {
+            if (signal.aborted) return { outcome: "canceled", errorCode: null, reportedExternally: false, summary: "栄養解析を中止しました。" };
+            const estimate = await dependencies.nutritionGenerator.generate(meal, signal);
+            if (!estimate.ok) {
+              failures.push(estimate.error);
+              continue;
+            }
+            const saved = await dependencies.api.saveNutritionEstimate({ ...estimate.value, mealId: meal.id, jobId: job.id, leaseToken: job.leaseToken }, signal);
+            if (!saved.ok) return failed(saved.error);
+            analyzedCount += 1;
+          }
+          if (failures.length > 0) return failed(runnerError("nutrition_analysis_partial", `${String(analyzedCount)} 件を保存、${String(failures.length)} 件の解析に失敗しました。${failures[0]!.summary}`));
+          return succeeded(`${String(analyzedCount)} 件の食事に推定カロリーと栄養素を保存しました。`);
+        }
         default:
           return failed(runnerError("unknown_job_kind", `未対応の job kind: ${job.kind}`));
       }

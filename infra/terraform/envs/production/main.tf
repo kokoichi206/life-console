@@ -20,7 +20,7 @@ module "owner_policy" {
 module "owner_access" {
   source                     = "../../modules/services/owner-access"
   account_id                 = local.cloudflare_account_id
-  worker_id                  = var.access_worker_id
+  worker_id                  = module.worker.worker_id
   application_name           = "Life Console"
   owner_policy_id            = module.owner_policy.policy_id
   http_only_cookie_attribute = false
@@ -34,13 +34,7 @@ module "runner_access" {
 }
 
 module "worker" {
-  source            = "../../modules/services/worker"
-  account_id        = local.cloudflare_account_id
-  worker_name       = local.worker_name
-  environment       = "production"
-  database_id       = module.database.database_id
-  photo_bucket_name = module.meal_photos.bucket_name
-
-  # Worker の配置・公開より先に、本人と runner の Access 保護を確定する。
-  depends_on = [module.owner_access, module.runner_access]
+  source      = "../../modules/services/worker"
+  account_id  = local.cloudflare_account_id
+  worker_name = local.worker_name
 }

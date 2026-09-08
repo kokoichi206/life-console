@@ -13,6 +13,7 @@ describe("runner の環境変数", () => {
     const parsed = runnerEnvironmentSchema.parse({ APP_ENV: "local" });
     expect(parsed.LIFE_CONSOLE_API_URL).toBe("http://localhost:8788");
     expect(parsed.LIFE_CONSOLE_RUNNER_TOKEN).toBe("local-runner-token");
+    expect(parsed.LIFE_CONSOLE_NUTRITION_PROVIDER).toBe("codex");
   });
   it("環境名の未指定と本番接続先・token の未指定を拒否する", () => {
     expect(runnerEnvironmentSchema.safeParse({}).success).toBe(false);

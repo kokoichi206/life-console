@@ -1,4 +1,5 @@
 import type { MonitorObservation, MonitorTarget } from "@life-console/contracts";
+import { nutritionCandidateSchema, type NutritionAnalysisPayload, type NutritionCandidate, type SaveNutritionEstimateInput } from "@life-console/contracts";
 import { type WeightPoint, type Conversation, type CreateReplyDraftsInput, type SaveReplyDraftInput } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
 import { z } from "zod";
@@ -42,6 +43,9 @@ export type RunnerJob = z.infer<typeof jobSchema>;
 export type AgentJobContext = z.infer<typeof agentContextSchema>;
 
 export interface ApiRepository {
+  nutritionCandidates(input: NutritionAnalysisPayload, signal: AbortSignal): Promise<Result<NutritionCandidate[], RunnerError>>;
+  readMealPhoto(photoId: string, signal: AbortSignal): Promise<Result<{ readonly contentType: "image/jpeg" | "image/png" | "image/webp"; readonly base64: string }, RunnerError>>;
+  saveNutritionEstimate(input: SaveNutritionEstimateInput, signal: AbortSignal): Promise<Result<null, RunnerError>>;
   registerMonitors(targets: ReadonlyArray<MonitorTarget>): Promise<Result<null, RunnerError>>;
   reportObservation(observation: MonitorObservation, historical: boolean): Promise<Result<null, RunnerError>>;
   replyCandidates(input: CreateReplyDraftsInput): Promise<Result<Conversation[], RunnerError>>;
@@ -63,11 +67,7 @@ export interface ApiRepository {
 const responseEnvelope = <T extends z.ZodType>(schema: T) => z.object({ data: schema });
 
 export const createApiRepository = (configuration: RunnerConfig): ApiRepository => {
-  const request = async <T>(
-    path: string,
-    schema: z.ZodType<T>,
-    init?: RequestInit,
-  ): Promise<Result<T, RunnerError>> => {
+  const fetchResponse = async (path: string, init?: RequestInit): Promise<Result<Response, RunnerError>> => {
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Bearer ${configuration.runnerToken}`);
     if (configuration.cfAccessClientId !== undefined && configuration.cfAccessClientSecret !== undefined) {
@@ -84,6 +84,11 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
     if (fetched.value.status >= 300 && fetched.value.status < 400) {
       return err(runnerError("access_session_required", "Cloudflare Access がログイン redirect を返しました。"));
     }
+    return ok(fetched.value);
+  };
+  const request = async <T>(path: string, schema: z.ZodType<T>, init?: RequestInit): Promise<Result<T, RunnerError>> => {
+    const fetched = await fetchResponse(path, init);
+    if (!fetched.ok) return fetched;
     const contentType = fetched.value.headers.get("Content-Type");
     if (contentType === null || !contentType.includes("application/json")) {
       return err(runnerError("invalid_api_content_type", "Life Console API が JSON 以外を返しました。"));
@@ -107,6 +112,20 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
   });
 
   return {
+    nutritionCandidates: (input, signal) => request(`/api/v1/runner/nutrition/candidates?${new URLSearchParams(input.mealId === undefined ? {} : { mealId: input.mealId }).toString()}`, z.array(nutritionCandidateSchema), { signal }),
+    saveNutritionEstimate: (input, signal) => request("/api/v1/runner/nutrition/estimates", z.null(), {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal,
+    }),
+    async readMealPhoto(photoId, signal) {
+      const fetched = await fetchResponse(`/api/v1/runner/meal-photos/${encodeURIComponent(photoId)}/content`, { signal });
+      if (!fetched.ok) return fetched;
+      if (!fetched.value.ok) return err(runnerError("meal_photo_unavailable", `食事写真の取得に失敗しました（HTTP ${String(fetched.value.status)}）。`));
+      const mediaType = z.enum(["image/jpeg", "image/png", "image/webp"]).safeParse(fetched.value.headers.get("Content-Type"));
+      if (!mediaType.success) return err(runnerError("invalid_meal_photo_type", "食事写真の形式に対応していません。"));
+      const bytes = await safeTry(() => fetched.value.arrayBuffer());
+      if (!bytes.ok) return err(runnerError("meal_photo_read_failed", "食事写真を読み込めませんでした。", bytes.error));
+      return ok({ contentType: mediaType.data, base64: Buffer.from(bytes.value).toString("base64") });
+    },
     registerMonitors: (targets) => jsonRequest("/api/v1/runner/monitoring/register", z.null(), { runnerId: configuration.runnerId, targets }),
     reportObservation: (observation, historical) => jsonRequest("/api/v1/runner/monitoring/observations", z.null(), { observation, historical }),
     replyCandidates: (input) => request(`/api/v1/runner/reply-candidates?${new URLSearchParams({ connector: input.connector, period: input.period,

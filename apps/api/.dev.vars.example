@@ -13,3 +13,9 @@ R2_SECRET_ACCESS_KEY=
 
 # 初回の runner 登録前から監視する ID。対象環境の runner と一致させる。
 # MONITORED_RUNNER_IDS=mac-local
+
+# Strava を使う場合は 4 項目すべて設定する。秘密情報は実際の .dev.vars に置く。
+# STRAVA_CLIENT_ID=<client-id>
+# STRAVA_CLIENT_SECRET=<client-secret>
+# STRAVA_TOKEN_KEY=<openssl-rand-hex-32>
+# STRAVA_REDIRECT_URI=http://localhost:5173/api/v1/strava/callback

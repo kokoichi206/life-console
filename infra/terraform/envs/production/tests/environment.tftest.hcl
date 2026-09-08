@@ -3,10 +3,9 @@ mock_provider "cloudflare" {}
 variables {
   owner_email             = "owner@example.com"
   runner_service_token_id = "00000000-0000-0000-0000-000000000002"
-  access_worker_id        = "11111111111111111111111111111111"
 }
 
-run "environment_storage_names" {
+run "bootstrap_without_existing_worker_or_build" {
   command = plan
 
   assert {

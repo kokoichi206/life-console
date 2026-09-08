@@ -1,0 +1,35 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // ファイル内で使う helper や型は、外部からの参照だけで未使用と判定しない。
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    ".": {
+      "entry": [
+        // Claude Code の settings.json から起動するため、npm scripts に現れない。
+        ".claude/hooks/lint-after-edit.mjs",
+        // Terraform の check.sh が Worker の配信物としてコピーする。
+        "infra/terraform/tests/fixtures/index.js"
+      ],
+      "ignore": [
+        // Gradle が生成するテストレポートは解析しない。
+        "clients/android/**/build/**"
+      ]
+    },
+    "apps/web": {
+      "ignore": [
+        // shadcn から取り込んだ部品を一式で保持するため、利用箇所の有無で削除しない。
+        "src/components/ui/**"
+      ],
+      "ignoreDependencies": [
+        // components.json を使って共通 UI を追加する開発用 CLI。
+        "shadcn"
+      ]
+    },
+    "packages/eslint-config": {
+      "ignore": [
+        // RuleTester がファイルとして読み込む、意図的な違反を含むテスト入力。
+        "rules/**/fixtures/**"
+      ]
+    }
+  }
+}

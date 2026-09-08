@@ -282,3 +282,10 @@ export const weightGoal = sqliteTable("weight_goal", {
   targetWeightGrams: integer("target_weight_grams").notNull(),
   targetDate: text("target_date"),
 });
+
+export const stravaConnection = sqliteTable("strava_connection", {
+  id: integer("id").primaryKey(),
+  credentials: text("credentials"),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: integer("lease_expires_at"),
+});
