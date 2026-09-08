@@ -2,8 +2,6 @@
 
 Vite + React、TanStack Router / Query、Tailwind CSS、shadcn 形式の共通 UI を使用します。UI primitive は現在 Base UI です。
 
-`src/components/ui/` は shadcn から取り込んだ部品を一式で保持し、未使用であることだけを理由に削除しません。このディレクトリは knip の報告対象から除外します。ESLint・型検査・Storybook による検証は引き続き実行します。
-
 ## 配置
 
 ```text
