@@ -3,6 +3,7 @@ dist/
 .wrangler/
 .dev.vars
 wrangler.production.jsonc
+wrangler.development.jsonc
 .env
 .env.local
 coverage/
