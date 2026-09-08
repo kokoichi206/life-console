@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#090807" media="(prefers-color-scheme: dark)" />
+    <!-- Android の PWA で外枠と時計の配色がずれないよう、manifest と同じ固定色にする。 -->
+    <meta name="theme-color" content="#090807" />
     <meta name="apple-mobile-web-app-title" content="Life Console" />
     <!-- Access の認証 Cookie を manifest の取得にも送る。 -->
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
