@@ -152,7 +152,7 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
             tone="gold"
           />
         </div>
-        <Panel className="overflow-hidden py-0">
+        <Panel className="overflow-visible py-0">
           <WeightTrendChart points={visibleWeightTrend} />
           <div className="flex justify-end px-5 pb-3">
             <Button type="button" variant="outline" size="sm" aria-expanded={showWeightTable} onClick={() => setShowWeightTable((current) => !current)}>
@@ -193,7 +193,7 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
               </table>
             </div>
           )}
-          <p className="border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
+          <p className="rounded-b-xl border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
         </Panel>
       </section>
       <MealGallery meals={meals} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} />
