@@ -1,0 +1,4 @@
+import {
+  to = module.state_storage.cloudflare_r2_bucket.state
+  id = "${local.cloudflare_account_id}/life-console-tfstate/default"
+}

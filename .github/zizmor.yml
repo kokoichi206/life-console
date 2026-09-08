@@ -1,0 +1,7 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # 共通 workflow の更新を各リポジトリへ反映するため、ブランチに追従する。
+        kokoichi206/gh-actions/.github/workflows/workflow-ci.yml: ref-pin
+        "*": hash-pin

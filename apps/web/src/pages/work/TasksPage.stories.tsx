@@ -30,7 +30,7 @@ const meta = {
         routeTree: root.addChildren([tasks]),
         history: createMemoryHistory({ initialEntries: [context.parameters.initialEntry ?? "/tasks"] }),
       });
-    }, [context.parameters.initialEntry]);
+    }, [context.parameters.initialEntry, Story]);
     return <div className="flex h-[900px] flex-col"><RouterProvider router={router} /></div>;
   }],
 } satisfies Meta<typeof TasksPage>;
