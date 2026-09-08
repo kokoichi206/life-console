@@ -1,0 +1,23 @@
+import {
+  to = module.database.cloudflare_d1_database.database
+  id = "${var.cloudflare_account_id}/replace-with-existing-database-id"
+}
+
+import {
+  to = module.meal_photos.cloudflare_r2_bucket.meal_photos
+  id = "${var.cloudflare_account_id}/life-console-meal-photos/default"
+}
+
+import {
+  to = module.owner_access.cloudflare_zero_trust_access_application.worker
+  id = "accounts/${var.cloudflare_account_id}/replace-with-existing-access-application-id"
+}
+
+import {
+ to = module.runner_access.cloudflare_zero_trust_access_application.runner
+ id = "accounts/${var.cloudflare_account_id}/replace-with-existing-runner-application-id"
+}
+import {
+ to = module.runner_access.cloudflare_zero_trust_access_policy.runner
+ id = "${var.cloudflare_account_id}/replace-with-existing-runner-policy-id"
+}

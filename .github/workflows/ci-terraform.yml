@@ -1,0 +1,49 @@
+name: ci-terraform
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/ci-terraform.yml"
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/ci-terraform.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-terraform-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Terraform checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Read Terraform version
+        id: terraform-version
+        run: echo "version=$(awk '/^terraform /{print $2}' infra/terraform/.tool-versions)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.terraform-version.outputs.version }}
+          terraform_wrapper: false
+
+      - name: Check Terraform configuration
+        run: bash infra/terraform/check.sh

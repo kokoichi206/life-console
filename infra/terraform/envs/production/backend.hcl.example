@@ -1,0 +1,2 @@
+bucket = "life-console-tfstate"
+endpoints = {s3 = "https://replace-with-account-id.r2.cloudflarestorage.com"}

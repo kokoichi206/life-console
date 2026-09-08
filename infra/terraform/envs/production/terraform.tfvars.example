@@ -1,0 +1,7 @@
+cloudflare_account_id = "00000000000000000000000000000000"
+access_worker_id = "00000000000000000000000000000000"
+access_owner_policy_id = "00000000-0000-0000-0000-000000000001"
+access_application_name = "Life Console"
+access_session_duration = "24h"
+workers_subdomain = "test-account"
+runner_service_token_id = "00000000-0000-0000-0000-000000000001"

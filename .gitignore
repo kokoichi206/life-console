@@ -17,3 +17,11 @@ backups/
 .claude/settings.local.json
 CLAUDE.local.md
 AGENTS.override.md
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+infra/terraform/envs/*/backend.hcl
+infra/terraform/envs/*/imports.tf
