@@ -1,28 +1,11 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
-import { URL } from "node:url";
-
 import { describe, expect, it } from "vitest";
 
-import { D1LifeConsoleRepository } from "../apps/api/src/repositories/d1-life-console-repository";
 import { createReplyDraftUsecase } from "../apps/api/src/usecases/reply-draft-usecase";
 
+import { createJobStorage } from "./support/d1-storage";
+
 const createStorage = () => {
-  const database = new DatabaseSync(":memory:");
-  const migrations = new URL("../packages/db/migrations/", import.meta.url);
-  for (const migration of readdirSync(migrations).filter((name) => name.endsWith(".sql")).sort()) {
-    database.exec(readFileSync(new URL(migration, migrations), "utf8"));
-  }
-  const adaptStatement = (sql: string, parameters: (string | number | null)[] = []) => ({
-    bind: (...bound: (string | number | null)[]) => adaptStatement(sql, bound),
-    run: async () => ({ meta: { changes: Number(database.prepare(sql).run(...parameters).changes) } }),
-    all: async () => ({ results: database.prepare(sql).all(...parameters) }),
-    first: async () => database.prepare(sql).get(...parameters) ?? null,
-  });
-  const repository = new D1LifeConsoleRepository({
-    prepare: adaptStatement,
-    batch: (statements: ReturnType<typeof adaptStatement>[]) => Promise.all(statements.map((statement) => statement.run())),
-  } as unknown as ConstructorParameters<typeof D1LifeConsoleRepository>[0]);
+  const { database, repository } = createJobStorage();
   database.prepare(`INSERT INTO conversations VALUES ('c1', 'slack', 'default/C1', '100', '依頼者', '質問', NULL, 'unprocessed', ?, ?)`).run("2026-09-06T00:00:00Z", "2026-09-06T00:00:00Z");
   database.prepare(`INSERT INTO jobs (id, kind, status, idempotency_key, payload_json, lease_token, lease_expires_at, attempt, created_at, updated_at)
     VALUES ('j1', 'reply_drafts', 'running', 'j1', '{}', 'lease1', '2026-09-06T02:00:00Z', 1, ?, ?)`).run("2026-09-06T00:00:00Z", "2026-09-06T00:00:00Z");

@@ -1,7 +1,7 @@
 import type { MealNutrition, NutritionAnalysisPayload, NutritionCandidate, SaveNutritionEstimateInput } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
 import { jobs, meals, nutritionEstimates } from "@life-console/db";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { alias } from "drizzle-orm/sqlite-core";
 
@@ -74,19 +74,21 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
     },
     async save(id, input, now) {
       // 確認と保存の間の lease 更新や重複保存を防ぐため、同じ SQL 文で評価する。
-      const result = await safeTry(() => database.prepare(`
-        INSERT INTO nutrition_estimates (id, meal_id, source_job_id, model, analyzed_at, input_hash,
-          calories_kcal, protein_grams, fat_grams, carbohydrate_grams, created_at)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-        WHERE EXISTS (
-          SELECT 1 FROM jobs WHERE id = ? AND lease_token = ? AND kind = 'nutrition_analysis'
-            AND status = 'running' AND lease_expires_at > ? AND cancel_requested_at IS NULL
-            AND (json_extract(payload_json, '$.mealId') IS NULL OR json_extract(payload_json, '$.mealId') = ?)
-        ) AND EXISTS (SELECT 1 FROM meals WHERE id = ? AND deleted_at IS NULL AND photo_id IS NOT NULL)
-          AND NOT EXISTS (SELECT 1 FROM nutrition_estimates WHERE source_job_id = ? AND meal_id = ?)
-      `).bind(id, input.mealId, input.jobId, input.model, input.analyzedAt, input.inputHash,
-        input.caloriesKcal, input.proteinGrams, input.fatGrams, input.carbohydrateGrams, now,
-        input.jobId, input.leaseToken, now, input.mealId, input.mealId, input.jobId, input.mealId).run());
+      const selection = db.select({
+        id: sql`${id}`.as("id"), mealId: sql`${input.mealId}`.as("mealId"), sourceJobId: sql`${input.jobId}`.as("sourceJobId"), model: sql`${input.model}`.as("model"),
+        analyzedAt: sql`${input.analyzedAt}`.as("analyzedAt"), inputHash: sql`${input.inputHash}`.as("inputHash"), caloriesKcal: sql`${input.caloriesKcal}`.as("caloriesKcal"),
+        proteinGrams: sql`${input.proteinGrams}`.as("proteinGrams"), fatGrams: sql`${input.fatGrams}`.as("fatGrams"), carbohydrateGrams: sql`${input.carbohydrateGrams}`.as("carbohydrateGrams"), createdAt: sql`${now}`.as("createdAt"),
+      }).from(meals).where(and(eq(meals.id, input.mealId), isNull(meals.deletedAt), isNotNull(meals.photoId),
+        exists(db.select({ id: jobs.id }).from(jobs).where(and(
+          eq(jobs.id, input.jobId), eq(jobs.leaseToken, input.leaseToken), eq(jobs.kind, "nutrition_analysis"),
+          eq(jobs.status, "running"), gt(jobs.leaseExpiresAt, now), isNull(jobs.cancelRequestedAt),
+          or(isNull(sql`json_extract(${jobs.payloadJson}, '$.mealId')`), eq(sql`json_extract(${jobs.payloadJson}, '$.mealId')`, input.mealId)),
+        ))),
+        notExists(db.select({ id: nutritionEstimates.id }).from(nutritionEstimates).where(and(
+          eq(nutritionEstimates.sourceJobId, input.jobId), eq(nutritionEstimates.mealId, input.mealId),
+        ))),
+      ));
+      const result = await safeTry(() => db.insert(nutritionEstimates).select(selection).run());
       if (!result.ok) return err(appError.storage(result.error));
       return result.value.meta.changes > 0 ? ok(undefined) : err(appError.conflict("解析結果は保存されませんでした。実行権限・対象の食事・保存済みの結果を確認してください。"));
     },

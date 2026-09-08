@@ -37,6 +37,18 @@ describe("ジョブの時刻と実行権限", () => {
     database.close();
   });
 
+  it("別の定期ジョブが実行待ちでも skip_if_pending の対象を予約する", async () => {
+    const { database, repository } = createJobStorage();
+    try {
+      expect(await repository.createSchedule("due", { name: "検証用同期", jobKind: "slack_sync", interval: "hourly",
+        timezone: "Asia/Tokyo", nextRunAt: "2026-09-07T12:00:00.000Z", coalescing: "skip_if_pending", deadlineSeconds: 7200 }, now)).toMatchObject({ ok: true });
+      expect(await repository.createJob({ id: "other", kind: "backup", scheduleId: "other-schedule", idempotencyKey: "other", payloadJson: "{}", now })).toMatchObject({ ok: true });
+      expect(await repository.enqueueDueSchedules(now)).toEqual({ ok: true, value: 1 });
+      expect(await repository.enqueueDueSchedules("2026-09-07T13:30:00.000Z")).toEqual({ ok: true, value: 0 });
+      expect(database.prepare("SELECT count(*) AS count FROM jobs WHERE schedule_id = 'due'").get()?.count).toBe(1);
+    } finally { database.close(); }
+  });
+
   it("定期実行は到来分だけを作り、同日中の次回時刻と deadline を正しく扱う", async () => {
     const { database, repository } = createJobStorage();
     await repository.createSchedule("s1", { name: "同期", jobKind: "slack_sync", interval: "hourly",

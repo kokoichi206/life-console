@@ -2,6 +2,11 @@ import type { WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinan
 import { calculate7DayMovingAverage } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import { err, ok, safeTry } from "@life-console/core";
+import { assetBalances, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
+import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lte, notExists, notInArray, or, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
+import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
+import { alias, type SQLiteInsertValue } from "drizzle-orm/sqlite-core";
 
 import type { AppError } from "../shared/app-error";
 import { appError } from "../shared/app-error";
@@ -24,120 +29,110 @@ import type {
   WeightPoint,
 } from "./life-console-repository";
 
-const taskColumns = `
-  t.id,
-  t.title,
-  t.description,
-  t.status,
-  t.due_at AS dueAt,
-  t.completed_at AS completedAt,
-  t.conversation_id AS conversationId,
-  r.id AS repositoryId,
-  r.name AS repositoryName,
-  t.created_at AS createdAt,
-  t.updated_at AS updatedAt
-`;
-
-const jobColumns = `
-  id,
-  task_id AS taskId,
-  repository_id AS repositoryId,
-  kind,
-  status,
-  payload_json AS payloadJson,
-  lease_token AS leaseToken,
-  cancel_requested_at AS cancelRequestedAt,
-  provider,
-  summary,
-  error_code AS errorCode,
-  created_at AS createdAt,
-  updated_at AS updatedAt
-`;
-
-const toStorageError = <T>(result: Result<T, unknown>): Result<T, AppError> => {
-  if (!result.ok) return err(appError.storage(result.error));
-  return ok(result.value);
+const taskColumns = {
+  id: tasks.id, title: tasks.title, description: tasks.description, status: tasks.status,
+  dueAt: tasks.dueAt, completedAt: tasks.completedAt, conversationId: tasks.conversationId,
+  repositoryId: repositories.id, repositoryName: repositories.name, createdAt: tasks.createdAt, updatedAt: tasks.updatedAt,
 };
+const jobColumns = {
+  id: jobs.id, taskId: jobs.taskId, repositoryId: jobs.repositoryId, kind: jobs.kind, status: jobs.status,
+  payloadJson: jobs.payloadJson, leaseToken: jobs.leaseToken, cancelRequestedAt: jobs.cancelRequestedAt,
+  provider: jobs.provider, summary: jobs.summary, errorCode: jobs.errorCode, createdAt: jobs.createdAt, updatedAt: jobs.updatedAt,
+};
+const conversationColumns = {
+  id: conversations.id, connector: conversations.connector, sourceId: conversations.sourceId,
+  externalMessageId: conversations.externalMessageId, authorLabel: conversations.authorLabel,
+  excerpt: conversations.excerpt, sourceUrl: conversations.sourceUrl, classification: conversations.classification, occurredAt: conversations.occurredAt,
+};
+const mealColumns = {
+  id: meals.id, photoId: meals.photoId, memo: meals.memo, mealKind: meals.mealKind,
+  occurredAt: meals.occurredAt, recordedAt: meals.recordedAt, tagsJson: meals.tagsJson,
+};
+const sourceMappingColumns = {
+  connector: sourceRepositoryMappings.connector, sourceScope: sourceRepositoryMappings.sourceScope,
+  sourceId: sourceRepositoryMappings.sourceId,
+  sourceLabel: sql<string>`coalesce(${connectorStates.sourceLabel}, ${sourceRepositoryMappings.sourceId})`,
+  repositoryId: repositories.id, repositoryName: repositories.name,
+};
+const activeJobStatuses = ["claimed", "running", "waiting_for_user"];
+const pendingJobStatuses = ["queued", ...activeJobStatuses];
+
+type QueuedJobInput = Pick<SQLiteInsertValue<typeof jobs>, "id" | "kind" | "idempotencyKey" | "payloadJson" | "createdAt" | "updatedAt" | "scheduleId" | "taskId" | "repositoryId" | "provider" | "deadlineAt">;
+const queuedJobSelection = (input: QueuedJobInput) => ({
+  id: sql`${input.id}`.as("id"), scheduleId: sql`${input.scheduleId ?? null}`.as("scheduleId"), taskId: sql`${input.taskId ?? null}`.as("taskId"),
+  repositoryId: sql`${input.repositoryId ?? null}`.as("repositoryId"), kind: sql`${input.kind}`.as("kind"), status: sql`'queued'`.as("status"),
+  idempotencyKey: sql`${input.idempotencyKey}`.as("idempotencyKey"), payloadJson: sql`${input.payloadJson}`.as("payloadJson"),
+  runnerId: sql`null`.as("runnerId"), leaseToken: sql`null`.as("leaseToken"), leaseExpiresAt: sql`null`.as("leaseExpiresAt"), lastHeartbeatAt: sql`null`.as("lastHeartbeatAt"),
+  progressUpdatedAt: sql`null`.as("progressUpdatedAt"), cancelRequestedAt: sql`null`.as("cancelRequestedAt"), deadlineAt: sql`${input.deadlineAt ?? null}`.as("deadlineAt"),
+  attempt: sql`0`.as("attempt"), provider: sql`${input.provider ?? null}`.as("provider"), summary: sql`null`.as("summary"), errorCode: sql`null`.as("errorCode"),
+  startedAt: sql`null`.as("startedAt"), finishedAt: sql`null`.as("finishedAt"), createdAt: sql`${input.createdAt}`.as("createdAt"), updatedAt: sql`${input.updatedAt}`.as("updatedAt"),
+});
 
 export class D1LifeConsoleRepository implements LifeConsoleRepository {
-  readonly #database: D1Database;
+  readonly #database: DrizzleD1Database;
 
   constructor(database: D1Database) {
-    this.#database = database;
+    this.#database = drizzle(database);
   }
 
   async listReplyDrafts(): Promise<Result<ReadonlyArray<ReplyDraft>, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT d.conversation_id AS conversationId, c.connector, c.author_label AS authorLabel,
-        c.excerpt, c.source_url AS sourceUrl, c.occurred_at AS occurredAt,
-        d.status, d.body, d.reason, d.reply_evidence_id AS replyEvidenceId,
-        d.checked_at AS checkedAt, d.edited_at AS editedAt, d.updated_at AS updatedAt
-      FROM reply_drafts d JOIN conversations c ON c.id = d.conversation_id
-      ORDER BY c.occurred_at DESC
-    `).all<ReplyDraft>());
-    return result.ok ? ok(result.value.results) : err(appError.storage(result.error));
+    const result = await safeTry(() => this.#database.select({
+      conversationId: replyDrafts.conversationId, connector: conversations.connector, authorLabel: conversations.authorLabel,
+      excerpt: conversations.excerpt, sourceUrl: conversations.sourceUrl, occurredAt: conversations.occurredAt,
+      status: replyDrafts.status, body: replyDrafts.body, reason: replyDrafts.reason, replyEvidenceId: replyDrafts.replyEvidenceId,
+      checkedAt: replyDrafts.checkedAt, editedAt: replyDrafts.editedAt, updatedAt: replyDrafts.updatedAt,
+    }).from(replyDrafts).innerJoin(conversations, eq(conversations.id, replyDrafts.conversationId))
+      .orderBy(desc(conversations.occurredAt)).all());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value);
   }
 
   async listReplyCandidates(input: CreateReplyDraftsInput, since: string): Promise<Result<ReadonlyArray<Conversation>, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT id, connector, source_id AS sourceId, external_message_id AS externalMessageId,
-        author_label AS authorLabel, excerpt, source_url AS sourceUrl, classification, occurred_at AS occurredAt
-      FROM conversations WHERE connector = ? AND occurred_at >= ? ORDER BY occurred_at DESC
-    `).bind(input.connector, since).all<Conversation>());
-    return result.ok ? ok(result.value.results) : err(appError.storage(result.error));
+    const result = await safeTry(() => this.#database.select(conversationColumns).from(conversations)
+      .where(and(eq(conversations.connector, input.connector), gte(conversations.occurredAt, since)))
+      .orderBy(desc(conversations.occurredAt)).all());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value);
   }
 
   async saveReplyDraft(input: SaveReplyDraftInput, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT INTO reply_drafts (conversation_id, status, body, reason, reply_evidence_id, checked_at, edited_at, updated_at)
-      SELECT ?, ?, ?, ?, ?, ?, NULL, ? WHERE EXISTS (
-        SELECT 1 FROM jobs WHERE id = ? AND lease_token = ? AND kind = 'reply_drafts'
-          AND status IN ('claimed', 'running') AND lease_expires_at > ? AND cancel_requested_at IS NULL
-      )
-      ON CONFLICT(conversation_id) DO UPDATE SET
-        status = excluded.status,
-        body = CASE WHEN reply_drafts.edited_at IS NOT NULL THEN reply_drafts.body ELSE excluded.body END,
-        reason = excluded.reason, reply_evidence_id = excluded.reply_evidence_id,
-        checked_at = excluded.checked_at, updated_at = excluded.updated_at
-      WHERE excluded.checked_at >= reply_drafts.checked_at
-    `).bind(input.conversationId, input.decision.status, input.decision.body, input.decision.reason,
-      input.decision.replyEvidenceId, input.checkedAt, now, input.jobId, input.leaseToken, now).run());
+    const selection = this.#database.select({
+      conversationId: sql`${input.conversationId}`.as("conversationId"), status: sql`${input.decision.status}`.as("status"), body: sql`${input.decision.body}`.as("body"),
+      reason: sql`${input.decision.reason}`.as("reason"), replyEvidenceId: sql`${input.decision.replyEvidenceId}`.as("replyEvidenceId"),
+      checkedAt: sql`${input.checkedAt}`.as("checkedAt"), editedAt: sql`null`.as("editedAt"), updatedAt: sql`${now}`.as("updatedAt"),
+    }).from(jobs).where(and(eq(jobs.id, input.jobId), eq(jobs.leaseToken, input.leaseToken), eq(jobs.kind, "reply_drafts"),
+      inArray(jobs.status, ["claimed", "running"]), gt(jobs.leaseExpiresAt, now), isNull(jobs.cancelRequestedAt)));
+    const result = await safeTry(() => this.#database.insert(replyDrafts).select(selection).onConflictDoUpdate({
+      target: replyDrafts.conversationId, set: {
+        status: input.decision.status, body: sql`case when ${replyDrafts.editedAt} is not null then ${replyDrafts.body} else ${input.decision.body} end`,
+        reason: input.decision.reason, replyEvidenceId: input.decision.replyEvidenceId, checkedAt: input.checkedAt, updatedAt: now,
+      }, setWhere: lte(replyDrafts.checkedAt, input.checkedAt),
+    }).run());
     if (!result.ok) return err(appError.storage(result.error));
     return result.value.meta.changes > 0 ? ok(undefined) : err(appError.conflict("下書きの保存権限が失効したか、新しい確認結果があります。"));
   }
 
   async editReplyDraft(id: string, input: EditReplyDraftInput, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      UPDATE reply_drafts SET body = ?, edited_at = ?, updated_at = ?
-      WHERE conversation_id = ? AND updated_at = ? AND status IN ('ready', 'needs_review')
-    `).bind(input.body, now, now, id, input.updatedAt).run());
+    const result = await safeTry(() => this.#database.update(replyDrafts).set({ body: input.body, editedAt: now, updatedAt: now })
+      .where(and(eq(replyDrafts.conversationId, id), eq(replyDrafts.updatedAt, input.updatedAt), inArray(replyDrafts.status, ["ready", "needs_review"]))).run());
     if (!result.ok) return err(appError.storage(result.error));
     return result.value.meta.changes > 0 ? ok(undefined) : err(appError.conflict("下書きが更新されています。再読み込みして確認してください。"));
   }
 
   async listTasks(): Promise<Result<ReadonlyArray<Task>, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT ${taskColumns}
-      FROM tasks t
-      LEFT JOIN task_repositories tr ON tr.task_id = t.id AND tr.role = 'work'
-      LEFT JOIN repositories r ON r.id = tr.repository_id AND r.archived_at IS NULL
-      ORDER BY CASE t.status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 WHEN 'inbox' THEN 2 ELSE 3 END,
-               t.due_at IS NULL,
-               t.due_at,
-               t.created_at DESC
-    `).all<Task>());
+    const result = await safeTry(() => this.#database.select(taskColumns).from(tasks)
+      .leftJoin(taskRepositories, and(eq(taskRepositories.taskId, tasks.id), eq(taskRepositories.role, "work")))
+      .leftJoin(repositories, and(eq(repositories.id, taskRepositories.repositoryId), isNull(repositories.archivedAt))).orderBy(sql`case ${tasks.status} when 'doing' then 0 when 'todo' then 1 when 'inbox' then 2 else 3 end`,
+        isNull(tasks.dueAt), asc(tasks.dueAt), desc(tasks.createdAt)).all());
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.results);
+    return ok(result.value);
   }
 
   async createTask(id: string, input: CreateTaskInput, now: string): Promise<Result<Task, AppError>> {
-    const inserted = await safeTry(() => this.#database.prepare(`
-      INSERT INTO tasks (
-        id, title, description, status, due_at, completed_at, conversation_id, created_at, updated_at
-      ) VALUES (?, ?, ?, 'todo', ?, NULL, ?, ?, ?)
-    `).bind(id, input.title, input.description, input.dueAt, input.conversationId, now, now).run());
+    const inserted = await safeTry(() => this.#database.insert(tasks).values({ id, title: input.title,
+      description: input.description, status: "todo", dueAt: input.dueAt, completedAt: null, conversationId: input.conversationId, createdAt: now, updatedAt: now,
+    }).run());
     if (!inserted.ok) return err(appError.storage(inserted.error));
-
     if (input.repositoryId !== null) {
       const assigned = await this.assignTaskRepository(id, input.repositoryId, "work", now);
       if (!assigned.ok) return assigned;
@@ -151,27 +146,14 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     const task = current.value;
     const status = input.status ?? task.status;
     const completedAt = status === "done" ? task.completedAt ?? now : null;
-    const updated = await safeTry(() => this.#database.prepare(`
-      UPDATE tasks
-      SET title = ?, description = ?, status = ?, due_at = ?, completed_at = ?,
-          conversation_id = ?, updated_at = ?
-      WHERE id = ?
-    `).bind(
-      input.title ?? task.title,
-      input.description ?? task.description,
-      status,
-      input.dueAt === undefined ? task.dueAt : input.dueAt,
-      completedAt,
-      input.conversationId === undefined ? task.conversationId : input.conversationId,
-      now,
-      id,
-    ).run());
+    const updated = await safeTry(() => this.#database.update(tasks).set({
+      title: input.title ?? task.title, description: input.description ?? task.description, status,
+      dueAt: input.dueAt === undefined ? task.dueAt : input.dueAt, completedAt,
+      conversationId: input.conversationId === undefined ? task.conversationId : input.conversationId, updatedAt: now,
+    }).where(eq(tasks.id, id)).run());
     if (!updated.ok) return err(appError.storage(updated.error));
-
     if (input.repositoryId !== undefined && input.repositoryId !== task.repositoryId) {
-      const cleared = await safeTry(() => this.#database.prepare(
-        "DELETE FROM task_repositories WHERE task_id = ? AND role = 'work'",
-      ).bind(id).run());
+      const cleared = await safeTry(() => this.#database.delete(taskRepositories).where(and(eq(taskRepositories.taskId, id), eq(taskRepositories.role, "work"))).run());
       if (!cleared.ok) return err(appError.storage(cleared.error));
       if (input.repositoryId !== null) {
         const assigned = await this.assignTaskRepository(id, input.repositoryId, "work", now);
@@ -182,232 +164,134 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   async listConversations(filter: ConversationListFilter): Promise<Result<ReadonlyArray<Conversation>, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT id, connector, source_id AS sourceId, external_message_id AS externalMessageId,
-             author_label AS authorLabel, excerpt,
-             source_url AS sourceUrl, classification, occurred_at AS occurredAt
-      FROM conversations
-      WHERE (? IS NULL OR connector = ?)
-        AND (? IS NULL OR classification = ?)
-        AND (? IS NULL OR occurred_at >= ?)
-      ORDER BY occurred_at DESC
-    `).bind(
-      filter.connector,
-      filter.connector,
-      filter.classification,
-      filter.classification,
-      filter.since,
-      filter.since,
-    ).all<Conversation>());
+    const result = await safeTry(() => this.#database.select(conversationColumns).from(conversations).where(and(
+      filter.connector === null ? undefined : eq(conversations.connector, filter.connector),
+      filter.classification === null ? undefined : eq(conversations.classification, filter.classification),
+      filter.since === null ? undefined : gte(conversations.occurredAt, filter.since),
+    )).orderBy(desc(conversations.occurredAt)).all());
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.results);
+    return ok(result.value);
   }
 
   async getConversation(id: string): Promise<Result<Conversation, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT id, connector, source_id AS sourceId, external_message_id AS externalMessageId,
-             author_label AS authorLabel, excerpt,
-             source_url AS sourceUrl, classification, occurred_at AS occurredAt
-      FROM conversations
-      WHERE id = ?
-    `).bind(id).first<Conversation>());
+    const result = await safeTry(() => this.#database.select(conversationColumns).from(conversations).where(eq(conversations.id, id)).get());
     if (!result.ok) return err(appError.storage(result.error));
-    if (result.value === null) return err(appError.notFound("会話が見つかりません。"));
+    if (result.value === undefined) return err(appError.notFound("会話が見つかりません。"));
     return ok(result.value);
   }
 
   async getSourceRepositoryMapping(connector: string, sourceId: string): Promise<Result<SourceRepositoryMapping | null, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT m.connector, m.source_scope AS sourceScope, m.source_id AS sourceId,
-             COALESCE(cs.source_label, m.source_id) AS sourceLabel,
-             r.id AS repositoryId, r.name AS repositoryName
-      FROM source_repository_mappings m
-      JOIN repositories r ON r.id = m.repository_id AND r.archived_at IS NULL
-      LEFT JOIN connector_states cs ON cs.connector = m.connector AND cs.source_id = m.source_id
-      WHERE m.connector = ? AND m.source_id = ? AND m.role = 'work'
-      LIMIT 1
-    `).bind(connector, sourceId).first<SourceRepositoryMapping>());
+    const result = await safeTry(() => this.#database.select(sourceMappingColumns).from(sourceRepositoryMappings)
+      .innerJoin(repositories, and(eq(repositories.id, sourceRepositoryMappings.repositoryId), isNull(repositories.archivedAt)))
+      .leftJoin(connectorStates, and(eq(connectorStates.connector, sourceRepositoryMappings.connector), eq(connectorStates.sourceId, sourceRepositoryMappings.sourceId))).where(and(eq(sourceRepositoryMappings.connector, sql`${connector}`), eq(sourceRepositoryMappings.sourceId, sourceId), eq(sourceRepositoryMappings.role, "work"))).limit(1).get());
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value);
+    return ok(result.value ?? null);
   }
 
   async classifyConversation(id: string, classification: string, _now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(
-      "UPDATE conversations SET classification = ? WHERE id = ?",
-    ).bind(classification, id).run());
+    const result = await safeTry(() => this.#database.update(conversations).set({ classification }).where(eq(conversations.id, id)).run());
     if (!result.ok) return err(appError.storage(result.error));
     if (result.value.meta.changes === 0) return err(appError.notFound("会話が見つかりません。"));
     return ok(undefined);
   }
 
   async createTaskFromConversation(id: string, input: CreateTaskInput, conversationId: string, now: string): Promise<Result<Task, AppError>> {
-    const statements = [this.#database.prepare(`
-      INSERT INTO tasks (
-        id, title, description, status, due_at, completed_at, conversation_id, created_at, updated_at
-      ) VALUES (?, ?, ?, 'todo', ?, NULL, ?, ?, ?)
-    `).bind(id, input.title, input.description, input.dueAt, conversationId, now, now)];
-    if (input.repositoryId !== null) {
-      statements.push(this.#database.prepare(`
-        INSERT INTO task_repositories (task_id, repository_id, role, created_at)
-        VALUES (?, ?, 'work', ?)
-      `).bind(id, input.repositoryId, now));
-    }
-    statements.push(this.#database.prepare(
-      "UPDATE conversations SET classification = 'task_candidate' WHERE id = ?",
-    ).bind(conversationId));
+    const statements: [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]] = [this.#database.insert(tasks).values({ id, title: input.title,
+      description: input.description, status: "todo", dueAt: input.dueAt, completedAt: null, conversationId, createdAt: now, updatedAt: now,
+    })];
+    if (input.repositoryId !== null) statements.push(this.#database.insert(taskRepositories).values({ taskId: id, repositoryId: input.repositoryId, role: "work", createdAt: now }));
+    statements.push(this.#database.update(conversations).set({ classification: "task_candidate" }).where(eq(conversations.id, conversationId)));
     const result = await safeTry(() => this.#database.batch(statements));
     if (!result.ok) return err(appError.storage(result.error));
     return this.getTask(id);
   }
 
-  async saveConversations(conversations: ReadonlyArray<NewConversation>, sourceLabel: string, watermark: string, now: string): Promise<Result<number, AppError>> {
-    const statements = conversations.map((conversation) => this.#database.prepare(`
-      INSERT INTO conversations (
-        id, connector, source_id, external_message_id, author_label, excerpt,
-        source_url, classification, occurred_at, recorded_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(connector, source_id, external_message_id) DO UPDATE SET
-        author_label = excluded.author_label, excerpt = excluded.excerpt,
-        source_url = excluded.source_url, occurred_at = excluded.occurred_at
-    `).bind(
-      conversation.id,
-      conversation.connector,
-      conversation.sourceId,
-      conversation.externalMessageId,
-      conversation.authorLabel,
-      conversation.excerpt,
-      conversation.sourceUrl,
-      conversation.classification,
-      conversation.occurredAt,
-      now,
-    ));
-    const state = conversations[0];
+  async saveConversations(incomingConversations: ReadonlyArray<NewConversation>, sourceLabel: string, watermark: string, now: string): Promise<Result<number, AppError>> {
+    const state = incomingConversations[0];
     if (state === undefined) return ok(0);
-    statements.push(this.#database.prepare(`
-      INSERT INTO connector_states (
-        connector, source_id, source_label, watermark, last_success_at, next_run_at, last_error_code, updated_at
-      ) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', ?, '+1 hour'), NULL, ?)
-      ON CONFLICT (connector, source_id) DO UPDATE SET
-        source_label = excluded.source_label,
-        watermark = excluded.watermark,
-        last_success_at = excluded.last_success_at,
-        next_run_at = excluded.next_run_at,
-        last_error_code = NULL,
-        updated_at = excluded.updated_at
-    `).bind(state.connector, state.sourceId, sourceLabel, watermark, now, now, now));
-    const result = await safeTry(() => this.#database.batch(statements));
+    const statements = incomingConversations.map((conversation) => this.#database.insert(conversations).values({ ...conversation, recordedAt: now })
+      .onConflictDoUpdate({ target: [conversations.connector, conversations.sourceId, conversations.externalMessageId], set: {
+        authorLabel: conversation.authorLabel, excerpt: conversation.excerpt, sourceUrl: conversation.sourceUrl, occurredAt: conversation.occurredAt,
+      } }));
+    const nextRunAt = sql`strftime('%Y-%m-%dT%H:%M:%fZ', ${now}, '+1 hour')`;
+    const connectorState = { sourceLabel, watermark, lastSuccessAt: now, nextRunAt, lastErrorCode: null, updatedAt: now };
+    const result = await safeTry(() => this.#database.batch([
+      statements[0]!, ...statements.slice(1),
+      this.#database.insert(connectorStates).values({ connector: state.connector, sourceId: state.sourceId, ...connectorState })
+        .onConflictDoUpdate({ target: [connectorStates.connector, connectorStates.sourceId], set: connectorState }),
+    ]));
     if (!result.ok) return err(appError.storage(result.error));
-    const insertedCount = result.value.slice(0, -1).reduce((count, entry) => count + entry.meta.changes, 0);
-    return ok(insertedCount);
+    return ok(result.value.slice(0, -1).reduce((total, entry) => total + entry.meta.changes, 0));
   }
 
   async listMeals(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<Meal>, AppError>> {
-    type MealRow = Omit<Meal, "tags"> & { readonly tagsJson: string };
-    const statement = this.#database.prepare(`
-      SELECT id, photo_id AS photoId, memo, meal_kind AS mealKind,
-             occurred_at AS occurredAt, recorded_at AS recordedAt, tags_json AS tagsJson
-      FROM meals
-      WHERE deleted_at IS NULL
-      ${period === undefined ? "" : "AND julianday(occurred_at) >= julianday(?) AND julianday(occurred_at) < julianday(?, '+1 day')"}
-      ORDER BY occurred_at DESC
-      ${period === undefined ? "LIMIT 100" : ""}
-    `);
-    const result = await safeTry(() => (period === undefined ? statement : statement.bind(`${period.from}T00:00:00+09:00`, `${period.to}T00:00:00+09:00`)).all<MealRow>());
+    const query = this.#database.select(mealColumns).from(meals).where(and(isNull(meals.deletedAt),
+      period === undefined
+        ? undefined
+        : and(
+            gte(sql`julianday(${meals.occurredAt})`, sql`julianday(${`${period.from}T00:00:00+09:00`})`),
+            sql`julianday(${meals.occurredAt}) < julianday(${`${period.to}T00:00:00+09:00`}, '+1 day')`,
+          ),
+    )).orderBy(desc(meals.occurredAt));
+    const result = await safeTry(() => (period === undefined ? query.limit(100) : query).all());
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.results.map((row) => ({
-      ...row,
-      tags: JSON.parse(row.tagsJson) as ReadonlyArray<string>,
-    })));
+    return ok(result.value.map((row) => ({ ...row, tags: JSON.parse(row.tagsJson) as ReadonlyArray<string> })));
   }
 
   async createMealAndQueueNutrition(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>> {
-    const inserted = await safeTry(() => this.#database.batch([this.#database.prepare(`
-      INSERT OR IGNORE INTO meals (
-        id, client_id, photo_id, memo, meal_kind, occurred_at, recorded_at, tags_json, deleted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
-    `).bind(
-      id,
-      input.clientId,
-      input.photoId,
-      input.memo,
-      input.mealKind,
-      input.occurredAt,
-      now,
-      JSON.stringify(input.tags),
-    ), this.#database.prepare(`
-      INSERT OR IGNORE INTO jobs (
-        id, kind, status, idempotency_key, payload_json, attempt, created_at, updated_at
-      ) SELECT 'nutrition-initial:' || id, 'nutrition_analysis', 'queued',
-          'nutrition-initial:' || id, json_object('mealId', id), 0, ?, ?
-        FROM meals WHERE client_id = ? AND photo_id IS NOT NULL AND deleted_at IS NULL
-    `).bind(now, now, input.clientId)]));
+    const initialJobId = sql`'nutrition-initial:' || ${meals.id}`;
+    const initialJob = this.#database.insert(jobs).select(this.#database.select(queuedJobSelection({
+      id: initialJobId, kind: "nutrition_analysis", idempotencyKey: initialJobId,
+      payloadJson: sql`json_object('mealId', ${meals.id})`, createdAt: now, updatedAt: now,
+    })).from(meals).where(and(eq(meals.clientId, input.clientId), isNotNull(meals.photoId), isNull(meals.deletedAt)))).onConflictDoNothing();
+    const inserted = await safeTry(() => this.#database.batch([
+      this.#database.insert(meals).values({ id, clientId: input.clientId, photoId: input.photoId, memo: input.memo,
+        mealKind: input.mealKind, occurredAt: input.occurredAt, recordedAt: now, tagsJson: JSON.stringify(input.tags), deletedAt: null,
+      }).onConflictDoNothing(), initialJob,
+    ]));
     if (!inserted.ok) return err(appError.storage(inserted.error));
-    const selected = await safeTry(() => this.#database.prepare(`
-      SELECT id, photo_id AS photoId, memo, meal_kind AS mealKind,
-             occurred_at AS occurredAt, recorded_at AS recordedAt, tags_json AS tagsJson
-      FROM meals WHERE client_id = ?
-    `).bind(input.clientId).first<Omit<Meal, "tags"> & { readonly tagsJson: string }>());
+    const selected = await safeTry(() => this.#database.select(mealColumns).from(meals).where(eq(meals.clientId, input.clientId)).get());
     if (!selected.ok) return err(appError.storage(selected.error));
-    if (selected.value === null) return err(appError.storage("meal insert returned no row"));
+    if (selected.value === undefined) return err(appError.storage("meal insert returned no row"));
     return ok({ ...selected.value, tags: JSON.parse(selected.value.tagsJson) as ReadonlyArray<string> });
   }
 
   async createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT OR IGNORE INTO meal_photos (
-        id, client_id, object_key, content_type, upload_token_hash,
-        upload_expires_at, uploaded_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
-    `).bind(
-      input.id,
-      input.clientId,
-      input.objectKey,
-      input.contentType,
-      input.tokenHash,
-      input.expiresAt,
-      input.now,
-    ).run());
+    const result = await safeTry(() => this.#database.insert(mealPhotos).values({ id: input.id, clientId: input.clientId, objectKey: input.objectKey,
+      contentType: input.contentType, uploadTokenHash: input.tokenHash, uploadExpiresAt: input.expiresAt, uploadedAt: null, createdAt: input.now,
+    }).onConflictDoNothing().run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async getMealPhoto(id: string): Promise<Result<{ readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT content_type AS contentType, object_key AS objectKey,
-             upload_token_hash AS tokenHash, upload_expires_at AS expiresAt,
-             uploaded_at AS uploadedAt
-      FROM meal_photos WHERE id = ?
-    `).bind(id).first<{ readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }>());
+    const result = await safeTry(() => this.#database.select({ contentType: mealPhotos.contentType, objectKey: mealPhotos.objectKey,
+      tokenHash: mealPhotos.uploadTokenHash, expiresAt: mealPhotos.uploadExpiresAt, uploadedAt: mealPhotos.uploadedAt,
+    }).from(mealPhotos).where(eq(mealPhotos.id, id)).get());
     if (!result.ok) return err(appError.storage(result.error));
-    if (result.value === null) return err(appError.notFound("写真アップロードが見つかりません。"));
+    if (result.value === undefined) return err(appError.notFound("写真アップロードが見つかりません。"));
     return ok(result.value);
   }
 
   async markMealPhotoUploaded(id: string, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(
-      "UPDATE meal_photos SET uploaded_at = ? WHERE id = ?",
-    ).bind(now, id).run());
+    const result = await safeTry(() => this.#database.update(mealPhotos).set({ uploadedAt: now }).where(eq(mealPhotos.id, id)).run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async getWeightGoal(): Promise<Result<WeightGoal | null, AppError>> {
-    return toStorageError(await safeTry(() => this.#database.prepare(`
-      SELECT start_weight_grams / 1000.0 AS startWeightKg,
-        target_weight_grams / 1000.0 AS targetWeightKg, target_date AS targetDate
-      FROM weight_goal WHERE id = 1
-    `).first<WeightGoal>()));
+    const result = await safeTry(() => this.#database.select({ startWeightKg: sql<number>`${weightGoal.startWeightGrams} / 1000.0`.as("startWeightKg"),
+      targetWeightKg: sql<number>`${weightGoal.targetWeightGrams} / 1000.0`.as("targetWeightKg"), targetDate: weightGoal.targetDate,
+    }).from(weightGoal).where(eq(weightGoal.id, 1)).get());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value ?? null);
   }
 
   async saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => input === null
-      ? this.#database.prepare("DELETE FROM weight_goal WHERE id = 1").run()
-      : this.#database.prepare(`
-        INSERT INTO weight_goal (id, start_weight_grams, target_weight_grams, target_date)
-        VALUES (1, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET start_weight_grams = excluded.start_weight_grams,
-          target_weight_grams = excluded.target_weight_grams, target_date = excluded.target_date
-      `).bind(Math.round(input.startWeightKg * 1000), Math.round(input.targetWeightKg * 1000), input.targetDate).run());
+    const changes = input === null ? null : { startWeightGrams: Math.round(input.startWeightKg * 1000), targetWeightGrams: Math.round(input.targetWeightKg * 1000), targetDate: input.targetDate };
+    const result = await safeTry(() => changes === null
+      ? this.#database.delete(weightGoal).where(eq(weightGoal.id, 1)).run()
+      : this.#database.insert(weightGoal).values({ id: 1, ...changes }).onConflictDoUpdate({ target: weightGoal.id, set: changes }).run());
     return result.ok ? ok(undefined) : err(appError.storage(result.error));
   }
 
@@ -420,128 +304,57 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   async #readWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
-    type WeightRow = Omit<WeightPoint, "weightKg"> & { readonly weightGrams: number };
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT id, source, weight_grams AS weightGrams,
-             occurred_at AS occurredAt, recorded_at AS recordedAt
-      FROM weights
-      WHERE deleted_at IS NULL
-      ORDER BY julianday(occurred_at) ASC, id ASC
-    `).all<WeightRow>());
+    const result = await safeTry(() => this.#database.select({ id: weights.id, source: weights.source, weightGrams: weights.weightGrams,
+      occurredAt: weights.occurredAt, recordedAt: weights.recordedAt,
+    }).from(weights).where(isNull(weights.deletedAt)).orderBy(sql`julianday(${weights.occurredAt})`, asc(weights.id)).all());
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.results.map((row) => ({
-      id: row.id,
-      occurredAt: row.occurredAt,
-      recordedAt: row.recordedAt,
-      source: row.source,
-      weightKg: row.weightGrams / 1_000,
-    })));
+    return ok(result.value.map(({ weightGrams, ...row }) => ({ ...row, weightKg: weightGrams / 1000 })));
   }
 
   async createWeight(id: string, input: CreateWeightInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT OR IGNORE INTO weights (
-        id, source, source_key, weight_grams, occurred_at, recorded_at, source_job_id, deleted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
-    `).bind(
-      id,
-      input.source,
-      input.sourceKey,
-      Math.round(input.weightKg * 1_000),
-      input.occurredAt,
-      now,
-      sourceJobId ?? null,
-    ).run());
+    const result = await safeTry(() => this.#database.insert(weights).values({ id, source: input.source, sourceKey: input.sourceKey,
+      weightGrams: Math.round(input.weightKg * 1000), occurredAt: input.occurredAt, recordedAt: now, sourceJobId: sourceJobId ?? null,
+    }).onConflictDoNothing().run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async getFinanceSummary(): Promise<Result<FinanceSummary, AppError>> {
-    type TotalsRow = { readonly incomeYen: number; readonly expenseYen: number };
-    type CategoryRow = { readonly category: string; readonly amountYen: number };
-    type PaymentRow = { readonly paymentMethod: string; readonly amountYen: number };
-    type AssetRow = { readonly assetKind: string; readonly amountYen: number };
-    type TransactionRow = FinanceSummary["transactions"][number];
-    type AdjustmentRow = FinanceSummary["adjustments"][number];
-    type BalanceHistoryRow = { readonly accountName: string; readonly assetKind: string; readonly amountYen: number; readonly occurredAt: string };
+    const adjustmentsByTransaction = this.#database.select({ transactionId: financeAdjustments.transactionId,
+      delta: sql<number>`sum(${financeAdjustments.amountDeltaYen})`.as("delta"),
+    }).from(financeAdjustments).groupBy(financeAdjustments.transactionId).as("adjustments_by_transaction");
+    const adjustedAmount = sql<number>`${financeTransactions.amountYen} + coalesce(${adjustmentsByTransaction.delta}, 0)`;
+    const latestBalance = alias(assetBalances, "latest_balance");
     const result = await safeTry(() => this.#database.batch([
-      this.#database.prepare(`
-        SELECT
-          COALESCE(SUM(CASE WHEN ft.kind = 'income' THEN ft.amount_yen + COALESCE(a.delta, 0) ELSE 0 END), 0) AS incomeYen,
-          COALESCE(SUM(CASE WHEN ft.kind = 'expense' THEN ft.amount_yen + COALESCE(a.delta, 0) ELSE 0 END), 0) AS expenseYen
-        FROM finance_transactions ft
-        LEFT JOIN (
-          SELECT transaction_id, SUM(amount_delta_yen) AS delta
-          FROM finance_adjustments GROUP BY transaction_id
-        ) a ON a.transaction_id = ft.id
-        WHERE ft.deleted_at IS NULL
-      `),
-      this.#database.prepare(`
-        SELECT ft.category, SUM(ft.amount_yen + COALESCE(a.delta, 0)) AS amountYen
-        FROM finance_transactions ft
-        LEFT JOIN (
-          SELECT transaction_id, SUM(amount_delta_yen) AS delta
-          FROM finance_adjustments GROUP BY transaction_id
-        ) a ON a.transaction_id = ft.id
-        WHERE ft.deleted_at IS NULL AND ft.kind = 'expense'
-        GROUP BY ft.category ORDER BY amountYen DESC
-      `),
-      this.#database.prepare(`
-        SELECT ft.payment_method AS paymentMethod,
-               SUM(ft.amount_yen + COALESCE(a.delta, 0)) AS amountYen
-        FROM finance_transactions ft
-        LEFT JOIN (
-          SELECT transaction_id, SUM(amount_delta_yen) AS delta
-          FROM finance_adjustments GROUP BY transaction_id
-        ) a ON a.transaction_id = ft.id
-        WHERE ft.deleted_at IS NULL AND ft.kind = 'expense'
-        GROUP BY ft.payment_method ORDER BY amountYen DESC
-      `),
-      this.#database.prepare(`
-        SELECT asset_kind AS assetKind, SUM(amount_yen) AS amountYen
-        FROM asset_balances current
-        WHERE occurred_at = (
-          SELECT MAX(latest.occurred_at) FROM asset_balances latest
-          WHERE latest.account_name = current.account_name
-        )
-        GROUP BY asset_kind ORDER BY amountYen DESC
-      `),
-      this.#database.prepare(`
-        SELECT ft.id, ft.kind, ft.amount_yen AS amountYen,
-               ft.amount_yen + COALESCE(a.delta, 0) AS adjustedAmountYen,
-               ft.category, ft.payment_method AS paymentMethod, ft.payee,
-               ft.occurred_at AS occurredAt
-        FROM finance_transactions ft
-        LEFT JOIN (
-          SELECT transaction_id, SUM(amount_delta_yen) AS delta
-          FROM finance_adjustments GROUP BY transaction_id
-        ) a ON a.transaction_id = ft.id
-        WHERE ft.deleted_at IS NULL
-        ORDER BY ft.occurred_at DESC
-        LIMIT 1000
-      `),
-      this.#database.prepare(`
-        SELECT id, transaction_id AS transactionId, amount_delta_yen AS amountDeltaYen,
-               reason, created_at AS createdAt
-        FROM finance_adjustments ORDER BY created_at DESC LIMIT 500
-      `),
-      this.#database.prepare(`
-        SELECT account_name AS accountName, asset_kind AS assetKind,
-               amount_yen AS amountYen, occurred_at AS occurredAt
-        FROM asset_balances ORDER BY occurred_at ASC, recorded_at ASC
-      `),
+      this.#database.select({
+        incomeYen: sql<number>`coalesce(sum(case when ${financeTransactions.kind} = 'income' then ${adjustedAmount} else 0 end), 0)`.as("incomeYen"),
+        expenseYen: sql<number>`coalesce(sum(case when ${financeTransactions.kind} = 'expense' then ${adjustedAmount} else 0 end), 0)`.as("expenseYen"),
+      }).from(financeTransactions).leftJoin(adjustmentsByTransaction, eq(adjustmentsByTransaction.transactionId, financeTransactions.id)).where(isNull(financeTransactions.deletedAt)),
+      this.#database.select({ category: financeTransactions.category, amountYen: sql<number>`sum(${adjustedAmount})`.as("amountYen") })
+        .from(financeTransactions).leftJoin(adjustmentsByTransaction, eq(adjustmentsByTransaction.transactionId, financeTransactions.id))
+        .where(and(isNull(financeTransactions.deletedAt), eq(financeTransactions.kind, "expense")))
+        .groupBy(financeTransactions.category).orderBy(desc(sql`"amountYen"`)),
+      this.#database.select({ paymentMethod: financeTransactions.paymentMethod, amountYen: sql<number>`sum(${adjustedAmount})`.as("amountYen") })
+        .from(financeTransactions).leftJoin(adjustmentsByTransaction, eq(adjustmentsByTransaction.transactionId, financeTransactions.id))
+        .where(and(isNull(financeTransactions.deletedAt), eq(financeTransactions.kind, "expense")))
+        .groupBy(financeTransactions.paymentMethod).orderBy(desc(sql`"amountYen"`)),
+      this.#database.select({ assetKind: assetBalances.assetKind, amountYen: sql<number>`sum(${assetBalances.amountYen})`.as("amountYen") })
+        .from(assetBalances).where(eq(assetBalances.occurredAt,
+          this.#database.select({ latest: sql`max(${latestBalance.occurredAt})`.as("latest") }).from(latestBalance).where(eq(latestBalance.accountName, assetBalances.accountName)),
+        )).groupBy(assetBalances.assetKind).orderBy(desc(sql`"amountYen"`)),
+      this.#database.select({ id: financeTransactions.id, kind: financeTransactions.kind, amountYen: financeTransactions.amountYen,
+        adjustedAmountYen: adjustedAmount.as("adjustedAmountYen"), category: financeTransactions.category, paymentMethod: financeTransactions.paymentMethod,
+        payee: financeTransactions.payee, occurredAt: financeTransactions.occurredAt,
+      }).from(financeTransactions).leftJoin(adjustmentsByTransaction, eq(adjustmentsByTransaction.transactionId, financeTransactions.id))
+        .where(isNull(financeTransactions.deletedAt)).orderBy(desc(financeTransactions.occurredAt)).limit(1000),
+      this.#database.select().from(financeAdjustments).orderBy(desc(financeAdjustments.createdAt)).limit(500),
+      this.#database.select({ accountName: assetBalances.accountName, assetKind: assetBalances.assetKind, amountYen: assetBalances.amountYen, occurredAt: assetBalances.occurredAt })
+        .from(assetBalances).orderBy(asc(assetBalances.occurredAt), asc(assetBalances.recordedAt)),
     ]));
     if (!result.ok) return err(appError.storage(result.error));
-    const totals = result.value[0]?.results[0] as TotalsRow | undefined;
-    const byCategory = result.value[1]?.results as ReadonlyArray<CategoryRow> | undefined;
-    const byPaymentMethod = result.value[2]?.results as ReadonlyArray<PaymentRow> | undefined;
-    const assetAllocation = result.value[3]?.results as ReadonlyArray<AssetRow> | undefined;
-    const transactions = result.value[4]?.results as ReadonlyArray<TransactionRow> | undefined;
-    const adjustments = result.value[5]?.results as ReadonlyArray<AdjustmentRow> | undefined;
-    const balanceHistoryRows = result.value[6]?.results as ReadonlyArray<BalanceHistoryRow> | undefined;
-    if (totals === undefined || byCategory === undefined || byPaymentMethod === undefined || assetAllocation === undefined || transactions === undefined || adjustments === undefined || balanceHistoryRows === undefined) {
-      return err(appError.storage("finance aggregate returned incomplete result"));
-    }
+    const [totalRows, byCategory, byPaymentMethod, assetAllocation, transactions, adjustments, balanceHistoryRows] = result.value;
+    const totals = totalRows[0]!;
+    type BalanceHistoryRow = typeof balanceHistoryRows[number];
     const netWorthYen = assetAllocation.reduce((sum, entry) => {
       return sum + (entry.assetKind === "debt" ? -entry.amountYen : entry.amountYen);
     }, 0);
@@ -577,485 +390,315 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   async createFinanceTransaction(id: string, input: CreateFinanceTransactionInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT OR IGNORE INTO finance_transactions (
-        id, source, source_transaction_id, kind, amount_yen, category, payment_method,
-        payee, occurred_at, recorded_at, source_job_id, deleted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-    `).bind(
-      id,
-      input.source,
-      input.sourceTransactionId,
-      input.kind,
-      input.amountYen,
-      input.category,
-      input.paymentMethod,
-      input.payee,
-      input.occurredAt,
-      now,
-      sourceJobId ?? null,
-    ).run());
-    const normalized = toStorageError(result);
-    if (!normalized.ok) return normalized;
+    const result = await safeTry(() => this.#database.insert(financeTransactions).values({ id, source: input.source,
+      sourceTransactionId: input.sourceTransactionId, kind: input.kind, amountYen: input.amountYen, category: input.category,
+      paymentMethod: input.paymentMethod, payee: input.payee, occurredAt: input.occurredAt, recordedAt: now, sourceJobId: sourceJobId ?? null,
+    }).onConflictDoNothing().run());
+    if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async createFinanceAdjustment(id: string, input: CreateFinanceAdjustmentInput, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT INTO finance_adjustments (id, transaction_id, amount_delta_yen, reason, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(id, input.transactionId, input.amountDeltaYen, input.reason, now).run());
+    const result = await safeTry(() => this.#database.insert(financeAdjustments).values({ id, transactionId: input.transactionId, amountDeltaYen: input.amountDeltaYen, reason: input.reason, createdAt: now }).run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async createAssetBalance(id: string, input: CreateAssetBalanceInput, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT INTO asset_balances (
-        id, account_name, asset_kind, amount_yen, occurred_at, recorded_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(id, input.accountName, input.assetKind, input.amountYen, input.occurredAt, now).run());
+    const result = await safeTry(() => this.#database.insert(assetBalances).values({ id, accountName: input.accountName, assetKind: input.assetKind, amountYen: input.amountYen, occurredAt: input.occurredAt, recordedAt: now }).run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async createNote(id: string, body: string, occurredAt: string, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT INTO notes (id, body, occurred_at, recorded_at) VALUES (?, ?, ?, ?)
-    `).bind(id, body, occurredAt, now).run());
+    const result = await safeTry(() => this.#database.insert(notes).values({ id, body, occurredAt, recordedAt: now }).run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async listRepositories(): Promise<Result<ReadonlyArray<Repository>, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT id, name FROM repositories WHERE archived_at IS NULL ORDER BY name
-    `).all<Repository>());
+    const result = await safeTry(() => this.#database.select({ id: repositories.id, name: repositories.name }).from(repositories).where(isNull(repositories.archivedAt)).orderBy(asc(repositories.name)).all());
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.results);
+    return ok(result.value);
   }
 
   async listSourceRepositoryMappings(): Promise<Result<ReadonlyArray<SourceRepositoryMapping>, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT m.connector, m.source_scope AS sourceScope, m.source_id AS sourceId,
-             COALESCE(cs.source_label, m.source_id) AS sourceLabel,
-             r.id AS repositoryId, r.name AS repositoryName
-      FROM source_repository_mappings m
-      JOIN repositories r ON r.id = m.repository_id AND r.archived_at IS NULL
-      LEFT JOIN connector_states cs ON cs.connector = m.connector AND cs.source_id = m.source_id
-      WHERE m.role = 'work'
-      ORDER BY m.connector, sourceLabel
-    `).all<SourceRepositoryMapping>());
+    const result = await safeTry(() => this.#database.select(sourceMappingColumns).from(sourceRepositoryMappings)
+      .innerJoin(repositories, and(eq(repositories.id, sourceRepositoryMappings.repositoryId), isNull(repositories.archivedAt)))
+      .leftJoin(connectorStates, and(eq(connectorStates.connector, sourceRepositoryMappings.connector), eq(connectorStates.sourceId, sourceRepositoryMappings.sourceId))).where(eq(sourceRepositoryMappings.role, "work")).orderBy(asc(sourceRepositoryMappings.connector), sourceMappingColumns.sourceLabel).all());
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.results);
+    return ok(result.value);
   }
 
   async getAgentJobContext(taskId: string, repositoryId: string): Promise<Result<AgentJobContext, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT t.id AS taskId, t.title AS taskTitle, t.description AS taskDescription,
-             r.id AS repositoryId, r.name AS repositoryName, r.local_path AS repositoryPath
-      FROM tasks t CROSS JOIN repositories r
-      WHERE t.id = ? AND r.id = ? AND r.archived_at IS NULL
-    `).bind(taskId, repositoryId).first<AgentJobContext>());
+    const result = await safeTry(() => this.#database.select({ taskId: tasks.id, taskTitle: tasks.title, taskDescription: tasks.description,
+      repositoryId: repositories.id, repositoryName: repositories.name, repositoryPath: repositories.localPath,
+    }).from(tasks).innerJoin(repositories, eq(repositories.id, repositoryId))
+      .where(and(eq(tasks.id, taskId), isNull(repositories.archivedAt))).get());
     if (!result.ok) return err(appError.storage(result.error));
-    if (result.value === null) return err(appError.notFound("agent job のタスクまたはリポジトリが見つかりません。"));
+    if (result.value === undefined) return err(appError.notFound("agent job のタスクまたはリポジトリが見つかりません。"));
     return ok(result.value);
   }
 
   async createRepository(id: string, name: string, localPath: string, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT OR IGNORE INTO repositories (id, name, local_path, archived_at, created_at, updated_at)
-      VALUES (?, ?, ?, NULL, ?, ?)
-    `).bind(id, name, localPath, now, now).run());
+    const result = await safeTry(() => this.#database.insert(repositories).values({ id, name, localPath, archivedAt: null, createdAt: now, updatedAt: now }).onConflictDoNothing().run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async syncRepositories(input: SyncRepositoriesInput, ids: ReadonlyArray<string>, now: string): Promise<Result<number, AppError>> {
-    const statements = [this.#database.prepare(`
-      UPDATE repositories SET archived_at = ?, updated_at = ? WHERE archived_at IS NULL
-    `).bind(now, now)];
+    const statements: [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]] = [this.#database.update(repositories).set({ archivedAt: now, updatedAt: now }).where(isNull(repositories.archivedAt))];
     for (const [index, repository] of input.repositories.entries()) {
-      statements.push(this.#database.prepare(`
-        INSERT INTO repositories (id, name, local_path, archived_at, created_at, updated_at)
-        VALUES (?, ?, ?, NULL, ?, ?)
-        ON CONFLICT(local_path) DO UPDATE SET
-          name = excluded.name,
-          archived_at = NULL,
-          updated_at = excluded.updated_at
-      `).bind(ids[index], repository.name, repository.localPath, now, now));
+      statements.push(this.#database.insert(repositories).values({ id: ids[index]!, name: repository.name, localPath: repository.localPath, archivedAt: null, createdAt: now, updatedAt: now })
+        .onConflictDoUpdate({ target: repositories.localPath, set: { name: repository.name, archivedAt: null, updatedAt: now } }));
     }
     const result = await safeTry(() => this.#database.batch(statements));
-    if (!result.ok) return err(appError.storage(result.error));
-    return ok(input.repositories.length);
+    return result.ok ? ok(input.repositories.length) : err(appError.storage(result.error));
   }
 
   async upsertSourceRepositoryMapping(input: UpsertSourceRepositoryMappingInput, now: string): Promise<Result<void, AppError>> {
+    const mapping = this.#database.select({ connector: sql`${input.connector}`.as("connector"), sourceScope: sql`${input.sourceScope}`.as("sourceScope"),
+      sourceId: sql`${input.sourceId}`.as("sourceId"), repositoryId: repositories.id, role: sql`'work'`.as("role"), createdAt: sql`${now}`.as("createdAt"), updatedAt: sql`${now}`.as("updatedAt"),
+    }).from(repositories).where(and(eq(repositories.id, input.repositoryId), isNull(repositories.archivedAt)));
     const result = await safeTry(() => this.#database.batch([
-      this.#database.prepare(`
-        DELETE FROM source_repository_mappings
-        WHERE connector = ? AND source_scope = ? AND source_id = ? AND role = 'work'
-      `).bind(input.connector, input.sourceScope, input.sourceId),
-      this.#database.prepare(`
-        INSERT INTO source_repository_mappings (
-          connector, source_scope, source_id, repository_id, role, created_at, updated_at
-        )
-        SELECT ?, ?, ?, id, 'work', ?, ?
-        FROM repositories WHERE id = ? AND archived_at IS NULL
-      `).bind(input.connector, input.sourceScope, input.sourceId, now, now, input.repositoryId),
+      this.#database.delete(sourceRepositoryMappings).where(and(eq(sourceRepositoryMappings.connector, input.connector),
+        eq(sourceRepositoryMappings.sourceScope, input.sourceScope), eq(sourceRepositoryMappings.sourceId, input.sourceId), eq(sourceRepositoryMappings.role, "work"))),
+      this.#database.insert(sourceRepositoryMappings).select(mapping),
     ]));
     if (!result.ok) return err(appError.storage(result.error));
-    if ((result.value[1]?.meta.changes ?? 0) === 0) return err(appError.notFound("リポジトリが見つかりません。"));
+    if (result.value[1].meta.changes === 0) return err(appError.notFound("リポジトリが見つかりません。"));
     return ok(undefined);
   }
 
   async assignTaskRepository(taskId: string, repositoryId: string, role: string, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT OR REPLACE INTO task_repositories (task_id, repository_id, role, created_at)
-      VALUES (?, ?, ?, ?)
-    `).bind(taskId, repositoryId, role, now).run());
+    const result = await safeTry(() => this.#database.insert(taskRepositories).values({ taskId, repositoryId, role, createdAt: now })
+      .onConflictDoUpdate({ target: [taskRepositories.taskId, taskRepositories.repositoryId, taskRepositories.role], set: { createdAt: now } }).run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async registerRunner(input: RegisterRunnerInput, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT INTO runners (
-        id, name, last_heartbeat_at, token_expires_at, orca_status,
-        last_error_code, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
-      ON CONFLICT (id) DO UPDATE SET
-        name = excluded.name,
-        last_heartbeat_at = excluded.last_heartbeat_at,
-        token_expires_at = excluded.token_expires_at,
-        orca_status = excluded.orca_status,
-        updated_at = excluded.updated_at
-    `).bind(input.runnerId, input.name, now, input.tokenExpiresAt, input.orcaStatus, now, now).run());
+    const result = await safeTry(() => this.#database.insert(runners).values({ id: input.runnerId, name: input.name, lastHeartbeatAt: now,
+      tokenExpiresAt: input.tokenExpiresAt, orcaStatus: input.orcaStatus, lastErrorCode: null, createdAt: now, updatedAt: now,
+    }).onConflictDoUpdate({ target: runners.id, set: { name: input.name, lastHeartbeatAt: now, tokenExpiresAt: input.tokenExpiresAt, orcaStatus: input.orcaStatus, updatedAt: now } }).run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async heartbeatRunner(runnerId: string, orcaStatus: string, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      UPDATE runners SET last_heartbeat_at = ?, orca_status = ?, updated_at = ? WHERE id = ?
-    `).bind(now, orcaStatus, now, runnerId).run());
+    const result = await safeTry(() => this.#database.update(runners).set({ lastHeartbeatAt: now, orcaStatus, updatedAt: now }).where(eq(runners.id, runnerId)).run());
     if (!result.ok) return err(appError.storage(result.error));
     if (result.value.meta.changes === 0) return err(appError.notFound("runner が登録されていません。"));
     return ok(undefined);
   }
 
   async listRunners(): Promise<Result<ReadonlyArray<RunnerHealth>, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT id, name, last_heartbeat_at AS lastHeartbeatAt,
-             token_expires_at AS tokenExpiresAt, orca_status AS orcaStatus,
-             last_error_code AS lastErrorCode
-      FROM runners ORDER BY name
-    `).all<RunnerHealth>());
-    if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.results);
-  }
-
-  async listConnectorHealth(): Promise<Result<ReadonlyArray<ConnectorHealth>, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT connector, source_id AS sourceId, COALESCE(source_label, source_id) AS sourceLabel, watermark,
-             last_success_at AS lastSuccessAt, next_run_at AS nextRunAt,
-             last_error_code AS lastErrorCode
-      FROM connector_states ORDER BY connector, source_id
-    `).all<ConnectorHealth>());
-    if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.results);
-  }
-
-  async listJobs(): Promise<Result<ReadonlyArray<Job>, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT ${jobColumns} FROM jobs ORDER BY created_at DESC LIMIT 100
-    `).all<Job>());
-    if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.results);
-  }
-
-  async createJob(input: { readonly id: string; readonly kind: string; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: string }): Promise<Result<Job, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT OR IGNORE INTO jobs (
-        id, schedule_id, task_id, repository_id, kind, status, idempotency_key,
-        payload_json, runner_id, lease_token, lease_expires_at, last_heartbeat_at,
-        progress_updated_at, cancel_requested_at, deadline_at, attempt, provider,
-        summary, error_code, started_at, finished_at, created_at, updated_at
-      ) SELECT ?, ?, ?, ?, ?, 'queued', ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, ?, 0, ?, NULL, NULL, NULL, NULL, ?, ?
-      WHERE (? != 'conversation_reply' OR NOT EXISTS (
-        SELECT 1 FROM jobs
-        WHERE kind = 'conversation_reply' AND status IN ('queued', 'claimed', 'running', 'waiting_for_user')
-          AND json_extract(payload_json, '$.conversationId') = json_extract(?, '$.conversationId')
-      )) AND (? != 'nutrition_analysis' OR NOT EXISTS (
-        SELECT 1 FROM jobs WHERE kind = 'nutrition_analysis'
-          AND status IN ('queued', 'claimed', 'running', 'waiting_for_user')
-          AND (json_extract(payload_json, '$.mealId') IS NULL OR json_extract(?, '$.mealId') IS NULL
-            OR json_extract(payload_json, '$.mealId') = json_extract(?, '$.mealId'))
-      ))
-    `).bind(
-      input.id,
-      input.scheduleId ?? null,
-      input.taskId ?? null,
-      input.repositoryId ?? null,
-      input.kind,
-      input.idempotencyKey,
-      input.payloadJson,
-      input.deadlineAt ?? null,
-      input.provider ?? null,
-      input.now,
-      input.now,
-      input.kind,
-      input.payloadJson,
-      input.kind,
-      input.payloadJson,
-      input.payloadJson,
-    ).run());
-    if (!result.ok) return err(appError.storage(result.error));
-    if (input.kind === "conversation_reply" && result.value.meta.changes === 0) {
-      return err(appError.conflict("この会話への返信は既に実行待ち、または送信中です。"));
-    }
-    if (input.kind === "nutrition_analysis" && result.value.meta.changes === 0) {
-      return err(appError.conflict("対象の食事は既に解析待ち、または解析中です。"));
-    }
-    const selected = await this.getJobByIdempotencyKey(input.idempotencyKey);
-    return selected;
-  }
-
-  async claimJob(runnerId: string, leaseToken: string, leaseExpiresAt: string, now: string): Promise<Result<Job | null, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      UPDATE jobs
-      SET status = 'claimed', runner_id = ?, lease_token = ?, lease_expires_at = ?,
-          last_heartbeat_at = ?, started_at = COALESCE(started_at, ?),
-          attempt = attempt + 1, updated_at = ?
-      WHERE id = (
-        SELECT id FROM jobs
-        WHERE status = 'queued' AND cancel_requested_at IS NULL
-          AND (deadline_at IS NULL OR julianday(deadline_at) > julianday(?))
-        ORDER BY created_at ASC LIMIT 1
-      ) AND status = 'queued'
-      RETURNING ${jobColumns}
-    `).bind(runnerId, leaseToken, leaseExpiresAt, now, now, now, now).first<Job>());
+    const result = await safeTry(() => this.#database.select({ id: runners.id, name: runners.name, lastHeartbeatAt: runners.lastHeartbeatAt,
+      tokenExpiresAt: runners.tokenExpiresAt, orcaStatus: runners.orcaStatus, lastErrorCode: runners.lastErrorCode,
+    }).from(runners).orderBy(asc(runners.name)).all());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(result.value);
   }
 
-  async heartbeatJob(jobId: string, input: JobHeartbeatInput, leaseExpiresAt: string, now: string): Promise<Result<{ readonly cancelRequested: boolean }, AppError>> {
-    const status = input.waitingForUser ? "waiting_for_user" : "running";
-    const result = await safeTry(() => this.#database.batch<{ readonly cancelRequestedAt: string | null }>([
-      this.#database.prepare(`INSERT INTO job_heartbeat_observations (job_id, runner_id, received_at, accepted)
-        VALUES (?, ?, ?, EXISTS (SELECT 1 FROM jobs WHERE id = ? AND runner_id = ? AND lease_token = ?
-          AND status IN ('claimed', 'running', 'waiting_for_user') AND julianday(lease_expires_at) > julianday(?)))`)
-        .bind(jobId, input.runnerId, now, jobId, input.runnerId, input.leaseToken, now),
-      this.#database.prepare(`
-      UPDATE jobs
-      SET status = ?, lease_expires_at = ?, last_heartbeat_at = ?,
-          progress_updated_at = CASE WHEN ? IS NULL THEN progress_updated_at ELSE ? END,
-          summary = CASE WHEN ? IS NULL THEN summary ELSE ? END,
-          updated_at = ?
-      WHERE id = ? AND runner_id = ? AND lease_token = ?
-        AND status IN ('claimed', 'running', 'waiting_for_user')
-        AND julianday(lease_expires_at) > julianday(?)
-      RETURNING cancel_requested_at AS cancelRequestedAt
-    `).bind(
-        status,
-        leaseExpiresAt,
-        now,
-        input.progressSummary,
-        now,
-        input.progressSummary,
-        input.progressSummary,
-        now,
-        jobId,
-        input.runnerId,
-        input.leaseToken,
-        now,
-      )]));
+  async listConnectorHealth(): Promise<Result<ReadonlyArray<ConnectorHealth>, AppError>> {
+    const result = await safeTry(() => this.#database.select({ connector: connectorStates.connector, sourceId: connectorStates.sourceId,
+      sourceLabel: sql<string>`coalesce(${connectorStates.sourceLabel}, ${connectorStates.sourceId})`.as("sourceLabel"), watermark: connectorStates.watermark,
+      lastSuccessAt: connectorStates.lastSuccessAt, nextRunAt: connectorStates.nextRunAt, lastErrorCode: connectorStates.lastErrorCode,
+    }).from(connectorStates).orderBy(asc(connectorStates.connector), asc(connectorStates.sourceId)).all());
     if (!result.ok) return err(appError.storage(result.error));
-    const updated = result.value[1]!.results[0];
+    return ok(result.value);
+  }
+
+  async listJobs(): Promise<Result<ReadonlyArray<Job>, AppError>> {
+    const result = await safeTry(() => this.#database.select(jobColumns).from(jobs).orderBy(desc(jobs.createdAt)).limit(100).all());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value);
+  }
+
+  async createJob(input: { readonly id: string; readonly kind: string; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: string }): Promise<Result<Job, AppError>> {
+    const pendingReply = this.#database.select({ id: jobs.id }).from(jobs).where(and(
+      eq(jobs.kind, "conversation_reply"), inArray(jobs.status, pendingJobStatuses),
+      eq(sql`json_extract(${jobs.payloadJson}, '$.conversationId')`, sql`json_extract(${input.payloadJson}, '$.conversationId')`),
+    ));
+    const existingMealId = sql`json_extract(${jobs.payloadJson}, '$.mealId')`;
+    const requestedMealId = sql`json_extract(${input.payloadJson}, '$.mealId')`;
+    const pendingNutrition = this.#database.select({ id: jobs.id }).from(jobs).where(and(
+      eq(jobs.kind, "nutrition_analysis"), inArray(jobs.status, pendingJobStatuses),
+      or(isNull(existingMealId), isNull(requestedMealId), eq(existingMealId, requestedMealId)),
+    ));
+    const selection = this.#database.select(queuedJobSelection({ ...input, createdAt: input.now, updatedAt: input.now }))
+      .from(sql`(select 1)`).where(and(
+        input.kind === "conversation_reply" ? notExists(pendingReply) : sql`1`,
+        input.kind === "nutrition_analysis" ? notExists(pendingNutrition) : sql`1`,
+      ));
+    const result = await safeTry(() => this.#database.insert(jobs).select(selection).onConflictDoNothing().run());
+    if (!result.ok) return err(appError.storage(result.error));
+    if (input.kind === "conversation_reply" && result.value.meta.changes === 0) return err(appError.conflict("この会話への返信は既に実行待ち、または送信中です。"));
+    if (input.kind === "nutrition_analysis" && result.value.meta.changes === 0) return err(appError.conflict("対象の食事は既に解析待ち、または解析中です。"));
+    return this.getJobByIdempotencyKey(input.idempotencyKey);
+  }
+
+  async claimJob(runnerId: string, leaseToken: string, leaseExpiresAt: string, now: string): Promise<Result<Job | null, AppError>> {
+    const candidate = this.#database.select({ id: jobs.id }).from(jobs).where(and(
+      eq(jobs.status, "queued"), isNull(jobs.cancelRequestedAt),
+      or(isNull(jobs.deadlineAt), gt(sql`julianday(${jobs.deadlineAt})`, sql`julianday(${now})`)),
+    )).orderBy(asc(jobs.createdAt)).limit(1);
+    const result = await safeTry(() => this.#database.update(jobs).set({ status: "claimed", runnerId, leaseToken, leaseExpiresAt,
+      lastHeartbeatAt: now, startedAt: sql`coalesce(${jobs.startedAt}, ${now})`, attempt: sql`${jobs.attempt} + 1`, updatedAt: now,
+    }).where(and(eq(jobs.id, candidate), eq(jobs.status, "queued"))).returning(jobColumns).get());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value ?? null);
+  }
+
+  async heartbeatJob(jobId: string, input: JobHeartbeatInput, leaseExpiresAt: string, now: string): Promise<Result<{ readonly cancelRequested: boolean }, AppError>> {
+    const validLease = and(eq(jobs.id, jobId), eq(jobs.runnerId, input.runnerId), eq(jobs.leaseToken, input.leaseToken),
+      inArray(jobs.status, activeJobStatuses), gt(sql`julianday(${jobs.leaseExpiresAt})`, sql`julianday(${now})`));
+    const result = await safeTry(() => this.#database.batch([
+      this.#database.insert(jobHeartbeatObservations).values({ jobId, runnerId: input.runnerId, receivedAt: now,
+        accepted: exists(this.#database.select({ id: jobs.id }).from(jobs).where(validLease)),
+      }),
+      this.#database.update(jobs).set({ status: input.waitingForUser ? "waiting_for_user" : "running", leaseExpiresAt, lastHeartbeatAt: now,
+        progressUpdatedAt: input.progressSummary === null ? jobs.progressUpdatedAt : now,
+        summary: input.progressSummary === null ? jobs.summary : input.progressSummary, updatedAt: now,
+      }).where(validLease).returning({ cancelRequestedAt: jobs.cancelRequestedAt }),
+    ]));
+    if (!result.ok) return err(appError.storage(result.error));
+    const updated = result.value[1][0];
     if (updated === undefined) return err(appError.invalidLease());
     return ok({ cancelRequested: updated.cancelRequestedAt !== null });
   }
 
   async completeJob(jobId: string, input: CompleteJobInput, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      UPDATE jobs
-      SET status = ?, summary = ?, error_code = ?, finished_at = ?,
-          lease_expires_at = NULL, updated_at = ?
-      WHERE id = ? AND runner_id = ? AND lease_token = ?
-        AND status IN ('claimed', 'running', 'waiting_for_user')
-        AND julianday(lease_expires_at) > julianday(?)
-    `).bind(
-      input.outcome,
-      input.summary,
-      input.errorCode,
-      now,
-      now,
-      jobId,
-      input.runnerId,
-      input.leaseToken,
-      now,
-    ).run());
+    const result = await safeTry(() => this.#database.update(jobs).set({ status: input.outcome, summary: input.summary, errorCode: input.errorCode, finishedAt: now, leaseExpiresAt: null, updatedAt: now }).where(and(eq(jobs.runnerId, input.runnerId), and(eq(jobs.id, jobId), eq(jobs.leaseToken, input.leaseToken), inArray(jobs.status, activeJobStatuses),
+      gt(sql`julianday(${jobs.leaseExpiresAt})`, sql`julianday(${now})`)))).run());
     if (!result.ok) return err(appError.storage(result.error));
     if (result.value.meta.changes === 0) return err(appError.invalidLease());
     return ok(undefined);
   }
 
   async completeJobByCapability(jobId: string, leaseToken: string, outcome: string, errorCode: string | null, summary: string, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      UPDATE jobs
-      SET status = ?, summary = ?, error_code = ?, finished_at = ?,
-          lease_expires_at = NULL, updated_at = ?
-      WHERE id = ? AND lease_token = ?
-        AND status IN ('claimed', 'running', 'waiting_for_user')
-        AND julianday(lease_expires_at) > julianday(?)
-    `).bind(outcome, summary, errorCode, now, now, jobId, leaseToken, now).run());
+    const result = await safeTry(() => this.#database.update(jobs).set({ status: outcome, summary, errorCode, finishedAt: now, leaseExpiresAt: null, updatedAt: now }).where(and(eq(jobs.id, jobId), eq(jobs.leaseToken, leaseToken), inArray(jobs.status, activeJobStatuses),
+      gt(sql`julianday(${jobs.leaseExpiresAt})`, sql`julianday(${now})`))).run());
     if (!result.ok) return err(appError.storage(result.error));
     if (result.value.meta.changes === 0) return err(appError.invalidLease());
     return ok(undefined);
   }
 
   async requestJobCancel(jobId: string, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      UPDATE jobs SET cancel_requested_at = ?, updated_at = ?,
-        status = CASE WHEN status = 'queued' THEN 'canceled' ELSE status END,
-        finished_at = CASE WHEN status = 'queued' THEN ? ELSE finished_at END
-      WHERE id = ? AND status IN ('queued', 'claimed', 'running', 'waiting_for_user')
-    `).bind(now, now, now, jobId).run());
+    const result = await safeTry(() => this.#database.update(jobs).set({ cancelRequestedAt: now, updatedAt: now,
+      status: sql`case when ${jobs.status} = 'queued' then 'canceled' else ${jobs.status} end`,
+      finishedAt: sql`case when ${jobs.status} = 'queued' then ${now} else ${jobs.finishedAt} end`,
+    }).where(and(eq(jobs.id, jobId), inArray(jobs.status, pendingJobStatuses))).run());
     if (!result.ok) return err(appError.storage(result.error));
     if (result.value.meta.changes === 0) return err(appError.notFound("中止できる job が見つかりません。"));
     return ok(undefined);
   }
 
   async validateLease(jobId: string, leaseToken: string): Promise<Result<boolean, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT COUNT(*) AS count FROM jobs
-      WHERE id = ? AND lease_token = ? AND status IN ('claimed', 'running', 'waiting_for_user')
-        AND julianday(lease_expires_at) > julianday('now')
-    `).bind(jobId, leaseToken).first<{ readonly count: number }>());
+    const result = await safeTry(() => this.#database.select({ count: count() }).from(jobs).where(and(eq(jobs.id, jobId), eq(jobs.leaseToken, leaseToken),
+      inArray(jobs.status, activeJobStatuses), gt(sql`julianday(${jobs.leaseExpiresAt})`, sql`julianday('now')`),
+    )).get());
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value?.count === 1);
+    return ok(result.value!.count === 1);
   }
 
   async createSchedule(id: string, input: CreateScheduleInput, now: string): Promise<Result<void, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      INSERT INTO schedules (
-        id, name, job_kind, payload_json, interval, timezone, next_run_at, coalescing,
-        deadline_seconds, enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-    `).bind(
-      id,
-      input.name,
-      input.jobKind,
-      JSON.stringify(input.payload ?? {}),
-      input.interval,
-      input.timezone,
-      input.nextRunAt,
-      input.coalescing,
-      input.deadlineSeconds,
-      now,
-      now,
-    ).run());
+    const result = await safeTry(() => this.#database.insert(schedules).values({ id, name: input.name, jobKind: input.jobKind,
+      payloadJson: JSON.stringify(input.payload ?? {}), interval: input.interval, timezone: input.timezone, nextRunAt: input.nextRunAt,
+      coalescing: input.coalescing, deadlineSeconds: input.deadlineSeconds, enabled: true, createdAt: now, updatedAt: now,
+    }).run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }
 
   async enqueueDueSchedules(now: string): Promise<Result<number, AppError>> {
+    // 自己参照する CTE の列は、再帰する SELECT からも同じ名前で参照する。
+    const periodColumns = {
+      scheduleId: sql<string>`schedule_id`.as("schedule_id"),
+      jobKind: sql<string>`job_kind`.as("job_kind"),
+      payloadJson: sql<string>`payload_json`.as("payload_json"),
+      periodStart: sql<string>`period_start`.as("period_start"),
+      interval: sql<string>`interval`.as("interval"),
+      coalescing: sql<string>`coalescing`.as("coalescing"),
+      deadlineSeconds: sql<number>`deadline_seconds`.as("deadline_seconds"),
+    };
+    const nextPeriod = sql<string>`case interval
+      when 'hourly' then strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+1 hour')
+      when 'daily' then strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+1 day')
+      else strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+7 days') end`;
+    const duePeriods = this.#database.$with("due_periods").as(
+      this.#database.select({
+        scheduleId: sql<string>`${schedules.id}`.as("schedule_id"),
+        jobKind: sql<string>`${schedules.jobKind}`.as("job_kind"),
+        payloadJson: sql<string>`${schedules.payloadJson}`.as("payload_json"),
+        periodStart: sql<string>`${schedules.nextRunAt}`.as("period_start"),
+        interval: sql<string>`${schedules.interval}`.as("interval"),
+        coalescing: sql<string>`${schedules.coalescing}`.as("coalescing"),
+        deadlineSeconds: sql<number>`${schedules.deadlineSeconds}`.as("deadline_seconds"),
+      }).from(schedules).where(and(eq(schedules.enabled, true), lte(sql`julianday(${schedules.nextRunAt})`, sql`julianday(${now})`)))
+        .unionAll(this.#database.select({ ...periodColumns, periodStart: nextPeriod.as("period_start") })
+          .from(sql`due_periods`).where(lte(sql`julianday(${nextPeriod})`, sql`julianday(${now})`))),
+    );
+    const rankedPeriods = this.#database.$with("ranked_periods").as(this.#database.select({
+      scheduleId: duePeriods.scheduleId, jobKind: duePeriods.jobKind, payloadJson: duePeriods.payloadJson,
+      periodStart: duePeriods.periodStart, coalescing: duePeriods.coalescing, deadlineSeconds: duePeriods.deadlineSeconds,
+      periodRank: sql<number>`row_number() over (partition by ${duePeriods.scheduleId} order by julianday(${duePeriods.periodStart}) desc)`.as("period_rank"),
+    }).from(duePeriods));
+    const pending = alias(jobs, "pending");
+    // CTE の SQL 別名は自動で修飾されないため、内側の jobs.schedule_id との取り違えを防ぐ。
+    const dueScheduleId = sql`${rankedPeriods}.${rankedPeriods.scheduleId}`;
+    const dueJobs = this.#database.with(duePeriods, rankedPeriods).select(queuedJobSelection({
+      id: sql`lower(hex(randomblob(16)))`, scheduleId: sql`${rankedPeriods.scheduleId}`, kind: sql`${rankedPeriods.jobKind}`,
+      idempotencyKey: sql`${rankedPeriods.scheduleId} || ':' || ${rankedPeriods.periodStart}`, payloadJson: sql`${rankedPeriods.payloadJson}`,
+      deadlineAt: sql`strftime('%Y-%m-%dT%H:%M:%fZ', ${rankedPeriods.periodStart}, '+' || ${rankedPeriods.deadlineSeconds} || ' seconds')`,
+      createdAt: now, updatedAt: now,
+    })).from(rankedPeriods).where(or(eq(rankedPeriods.coalescing, "queue_all"), and(eq(rankedPeriods.periodRank, 1),
+      notExists(this.#database.select({ id: pending.id }).from(pending).where(and(eq(pending.scheduleId, dueScheduleId), inArray(pending.status, pendingJobStatuses)))),
+    )));
+    const futureRuns = this.#database.$with("future_runs").as(
+      this.#database.select({
+        id: sql<string>`${schedules.id}`.as("id"), interval: sql<string>`${schedules.interval}`.as("interval"),
+        nextRunAt: sql<string>`${schedules.nextRunAt}`.as("next_run_at"),
+      }).from(schedules).where(and(eq(schedules.enabled, true), lte(sql`julianday(${schedules.nextRunAt})`, sql`julianday(${now})`)))
+        .unionAll(this.#database.select({
+          id: sql<string>`id`.as("id"), interval: sql<string>`interval`.as("interval"),
+          nextRunAt: sql<string>`case interval
+            when 'hourly' then strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+1 hour')
+            when 'daily' then strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+1 day')
+            else strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+7 days') end`.as("next_run_at"),
+        }).from(sql`future_runs`).where(lte(sql`julianday(next_run_at)`, sql`julianday(${now})`))),
+    );
+    const nextValues = this.#database.$with("next_values").as(this.#database.select({
+      id: futureRuns.id, nextRunAt: sql<string>`min(${futureRuns.nextRunAt})`.as("next_run_at"),
+    }).from(futureRuns).where(gt(sql`julianday(${futureRuns.nextRunAt})`, sql`julianday(${now})`)).groupBy(sql`${futureRuns.id}`));
+    const updateSchedules = this.#database.with(futureRuns, nextValues).update(schedules).set({
+      nextRunAt: sql`${this.#database.select({ nextRunAt: nextValues.nextRunAt }).from(nextValues).where(eq(nextValues.id, schedules.id))}`, updatedAt: now,
+    }).where(inArray(schedules.id, this.#database.select({ id: nextValues.id }).from(nextValues)));
     const result = await safeTry(() => this.#database.batch([
-      this.#database.prepare(`
-        INSERT OR IGNORE INTO jobs (
-          id, schedule_id, task_id, repository_id, kind, status, idempotency_key,
-          payload_json, runner_id, lease_token, lease_expires_at, last_heartbeat_at,
-          progress_updated_at, cancel_requested_at, deadline_at, attempt, provider,
-          summary, error_code, started_at, finished_at, created_at, updated_at
-        )
-        WITH RECURSIVE due_periods AS (
-          SELECT id AS schedule_id, job_kind, payload_json, next_run_at AS period_start,
-                 interval, coalescing, deadline_seconds
-          FROM schedules WHERE enabled = 1 AND julianday(next_run_at) <= julianday(?)
-          UNION ALL
-          SELECT schedule_id, job_kind, payload_json,
-                 CASE interval
-                   WHEN 'hourly' THEN strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+1 hour')
-                   WHEN 'daily' THEN strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+1 day')
-                   ELSE strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+7 days')
-                 END,
-                 interval, coalescing, deadline_seconds
-          FROM due_periods
-          WHERE CASE interval
-            WHEN 'hourly' THEN julianday(period_start, '+1 hour')
-            WHEN 'daily' THEN julianday(period_start, '+1 day')
-            ELSE julianday(period_start, '+7 days')
-          END <= julianday(?)
-        ), ranked_periods AS (
-          SELECT *, ROW_NUMBER() OVER (
-            PARTITION BY schedule_id ORDER BY julianday(period_start) DESC
-          ) AS period_rank FROM due_periods
-        )
-        SELECT lower(hex(randomblob(16))), due.schedule_id, NULL, NULL, due.job_kind,
-               'queued', due.schedule_id || ':' || due.period_start, due.payload_json,
-               NULL, NULL, NULL, NULL, NULL, NULL,
-               strftime('%Y-%m-%dT%H:%M:%fZ', due.period_start, '+' || due.deadline_seconds || ' seconds'),
-               0, NULL, NULL, NULL, NULL, NULL, ?, ?
-        FROM ranked_periods due
-        WHERE due.coalescing = 'queue_all' OR (due.period_rank = 1 AND NOT EXISTS (
-          SELECT 1 FROM jobs pending
-          WHERE pending.schedule_id = due.schedule_id
-            AND pending.status IN ('queued', 'claimed', 'running', 'waiting_for_user')
-        ))
-      `).bind(now, now, now, now),
-      this.#database.prepare(`
-        WITH RECURSIVE future_runs AS (
-          SELECT id, interval, next_run_at
-          FROM schedules WHERE enabled = 1 AND julianday(next_run_at) <= julianday(?)
-          UNION ALL
-          SELECT id, interval,
-                 CASE interval
-                   WHEN 'hourly' THEN strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+1 hour')
-                   WHEN 'daily' THEN strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+1 day')
-                   ELSE strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+7 days')
-                 END
-          FROM future_runs WHERE julianday(next_run_at) <= julianday(?)
-        ), next_values AS (
-          SELECT id, MIN(next_run_at) AS next_run_at
-          FROM future_runs WHERE julianday(next_run_at) > julianday(?) GROUP BY id
-        )
-        UPDATE schedules
-        SET next_run_at = (SELECT next_run_at FROM next_values WHERE next_values.id = schedules.id),
-            updated_at = ?
-        WHERE id IN (SELECT id FROM next_values)
-      `).bind(now, now, now, now),
-      this.#database.prepare(`
-        INSERT INTO system_state (key, value, updated_at) VALUES ('last_cron_success_at', ?, ?)
-        ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-      `).bind(now, now),
+      this.#database.insert(jobs).select(dueJobs).onConflictDoNothing(),
+      updateSchedules,
+      this.#database.insert(systemState).values({ key: "last_cron_success_at", value: now, updatedAt: now })
+        .onConflictDoUpdate({ target: systemState.key, set: { value: now, updatedAt: now } }),
     ]));
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value[0]?.meta.changes ?? 0);
+    return ok(result.value[0].meta.changes);
   }
 
   async markExpiredAndLostJobs(now: string): Promise<Result<void, AppError>> {
+    const expiredLease = and(inArray(jobs.status, activeJobStatuses), lte(sql`julianday(${jobs.leaseExpiresAt})`, sql`julianday(${now})`));
+    const externalJobKinds = ["agent", "github_promotion", "conversation_reply"];
     const result = await safeTry(() => this.#database.batch([
-      this.#database.prepare(`
-        UPDATE jobs SET status = 'expired', finished_at = ?, updated_at = ?
-        WHERE status = 'queued' AND deadline_at IS NOT NULL AND julianday(deadline_at) <= julianday(?)
-      `).bind(now, now, now),
-      this.#database.prepare(`
-        UPDATE jobs SET status = 'lost', finished_at = ?, error_code = 'lease_expired', updated_at = ?
-        WHERE kind IN ('agent', 'github_promotion', 'conversation_reply') AND status IN ('claimed', 'running', 'waiting_for_user')
-          AND julianday(lease_expires_at) <= julianday(?)
-      `).bind(now, now, now),
-      this.#database.prepare(`
-        UPDATE jobs
-        SET status = CASE WHEN cancel_requested_at IS NULL THEN 'queued' ELSE 'canceled' END,
-            finished_at = CASE WHEN cancel_requested_at IS NULL THEN NULL ELSE ? END,
-            runner_id = NULL, lease_token = NULL,
-            lease_expires_at = NULL, error_code = 'previous_lease_expired', updated_at = ?
-        WHERE kind NOT IN ('agent', 'github_promotion', 'conversation_reply') AND status IN ('claimed', 'running', 'waiting_for_user')
-          AND julianday(lease_expires_at) <= julianday(?)
-      `).bind(now, now, now),
+      this.#database.update(jobs).set({ status: "expired", finishedAt: now, updatedAt: now })
+        .where(and(eq(jobs.status, "queued"), isNotNull(jobs.deadlineAt), lte(sql`julianday(${jobs.deadlineAt})`, sql`julianday(${now})`))),
+      this.#database.update(jobs).set({ status: "lost", finishedAt: now, errorCode: "lease_expired", updatedAt: now })
+        .where(and(inArray(jobs.kind, externalJobKinds), expiredLease)),
+      this.#database.update(jobs).set({
+        status: sql`case when ${jobs.cancelRequestedAt} is null then 'queued' else 'canceled' end`,
+        finishedAt: sql`case when ${jobs.cancelRequestedAt} is null then null else ${now} end`,
+        runnerId: null, leaseToken: null, leaseExpiresAt: null, errorCode: "previous_lease_expired", updatedAt: now,
+      }).where(and(notInArray(jobs.kind, externalJobKinds), expiredLease)),
     ]));
-    if (!result.ok) return err(appError.storage(result.error));
-    return ok(undefined);
+    return result.ok ? ok(undefined) : err(appError.storage(result.error));
   }
 
   async getDashboard(): Promise<Result<Dashboard, AppError>> {
@@ -1091,24 +734,18 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   private async getTask(id: string): Promise<Result<Task, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT ${taskColumns}
-      FROM tasks t
-      LEFT JOIN task_repositories tr ON tr.task_id = t.id AND tr.role = 'work'
-      LEFT JOIN repositories r ON r.id = tr.repository_id AND r.archived_at IS NULL
-      WHERE t.id = ?
-    `).bind(id).first<Task>());
+    const result = await safeTry(() => this.#database.select(taskColumns).from(tasks)
+      .leftJoin(taskRepositories, and(eq(taskRepositories.taskId, tasks.id), eq(taskRepositories.role, "work")))
+      .leftJoin(repositories, and(eq(repositories.id, taskRepositories.repositoryId), isNull(repositories.archivedAt))).where(eq(tasks.id, id)).get());
     if (!result.ok) return err(appError.storage(result.error));
-    if (result.value === null) return err(appError.notFound("タスクが見つかりません。"));
+    if (result.value === undefined) return err(appError.notFound("タスクが見つかりません。"));
     return ok(result.value);
   }
 
   private async getJobByIdempotencyKey(idempotencyKey: string): Promise<Result<Job, AppError>> {
-    const result = await safeTry(() => this.#database.prepare(`
-      SELECT ${jobColumns} FROM jobs WHERE idempotency_key = ?
-    `).bind(idempotencyKey).first<Job>());
+    const result = await safeTry(() => this.#database.select(jobColumns).from(jobs).where(eq(jobs.idempotencyKey, idempotencyKey)).get());
     if (!result.ok) return err(appError.storage(result.error));
-    if (result.value === null) return err(appError.storage("job insert returned no row"));
+    if (result.value === undefined) return err(appError.storage("job insert returned no row"));
     return ok(result.value);
   }
 }

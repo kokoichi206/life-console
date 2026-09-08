@@ -96,6 +96,9 @@ importers:
       csv-parse:
         specifier: ^7.0.2
         version: 7.0.2
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@cloudflare/workers-types@5.20260901.1)
       zod:
         specifier: ^4.5.4
         version: 4.5.4
@@ -234,6 +237,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@life-console/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260901.1)
