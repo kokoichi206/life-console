@@ -8,6 +8,9 @@ export default defineConfig({
     exclude: ["**/node_modules/**", "**/dist/**", "**/fixtures/**", "**/storybook-static/**"],
   },
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./apps/web/src", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL("./apps/web/src", import.meta.url)),
+      "@runner": fileURLToPath(new URL("./apps/runner/src", import.meta.url)),
+    },
   },
 });

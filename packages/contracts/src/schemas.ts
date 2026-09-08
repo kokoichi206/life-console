@@ -33,6 +33,7 @@ export const jobKindSchema = z.enum([
   "reply_drafts",
   "conversation_reply",
   "weight_import",
+  "weight_obsidian_export",
   "finance_import",
   "nutrition_analysis",
   "agent",
@@ -270,15 +271,34 @@ export const promoteTaskSchema = z.object({
   repositoryId: identifierSchema,
 });
 
-export const createScheduleSchema = z.object({
+export const weightObsidianExportPayloadSchema = z.object({
+  dataDirectory: z.string().trim().min(1).max(512).refine((path) =>
+    !path.includes("\\") && !/\p{Cc}/u.test(path)
+    && path.split("/").every((segment) => !["", ".", "..", ".obsidian"].includes(segment)),
+  "vault 内の体重ディレクトリの相対パスを指定してください。"),
+}).strict();
+
+const scheduleFields = {
   name: z.string().trim().min(1).max(120),
-  jobKind: jobKindSchema.exclude(["reply_drafts"]),
   interval: scheduleIntervalSchema,
   timezone: z.string().trim().min(1).max(80),
   nextRunAt: isoDateTimeSchema,
   coalescing: scheduleCoalescingSchema,
   deadlineSeconds: z.number().int().positive().max(604_800),
-});
+};
+
+export const createScheduleSchema = z.discriminatedUnion("jobKind", [
+  z.object({
+    ...scheduleFields,
+    jobKind: jobKindSchema.exclude(["reply_drafts", "weight_obsidian_export"]),
+    payload: z.object({}).strict().optional(),
+  }),
+  z.object({
+    ...scheduleFields,
+    jobKind: z.literal("weight_obsidian_export"),
+    payload: weightObsidianExportPayloadSchema,
+  }),
+]);
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;

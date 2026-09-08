@@ -76,6 +76,8 @@ pnpm dev:runner
 
 返信送信中に runner が停止して結果を確認できなくなった job は `lost` とし、自動再送しません。元のサービスで投稿の有無を確認してください。実行待ちの job は中止するとその場で `canceled` になり、runner は実行開始前にも lease と中止要求を確認します。
 
+D1 の体重を Obsidian の既存 CSV とグラフに定期的に反映する場合は、[体重書き出しの設定](docs/weight-obsidian-export.md)を参照してください。実行設定は DB、vault の実パスは Mac の環境変数に保存します。
+
 金融 CSV の形式は [架空サンプル](apps/runner/examples/finance.csv)を参照してください。体重 CSV は `date,weight_kg,ma7_kg,window_samples` header を受け付けます。
 
 ## 実装されている主な機能
@@ -86,7 +88,7 @@ pnpm dev:runner
 - Slack `sl search`、Chatwork `cw sync` / open task connector、watermark と冪等取込、手動同期
 - 取得会話からのタスク作成と、明示確認後の Slack / Chatwork 返信 job
 - 食事写真の client resize / 再 encode による EXIF 除去、R2 upload、食事メモ
-- 体重の手入力・CSV 取込、暦日ベースの 7 日移動平均
+- 体重の手入力・CSV 取込、暦日ベースの 7 日移動平均、Obsidian への定期書き出し
 - 収支の月別・カテゴリ別・支払手段別集計、残高・純資産推移、追記型の補正履歴
 - D1 schedule と単一 Cron による catch-up、coalescing、deadline、lost batch の再 queue
 - D1 dump と R2 object 本体の Mac 側 backup job

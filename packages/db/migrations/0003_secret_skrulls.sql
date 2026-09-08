@@ -1,0 +1,1 @@
+ALTER TABLE `schedules` ADD `payload_json` text DEFAULT '{}' NOT NULL;

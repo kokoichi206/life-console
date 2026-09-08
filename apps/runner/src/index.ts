@@ -13,8 +13,10 @@ import { createReplyContextRepository } from "./repositories/reply-context-repos
 import { createReplyDraftGenerator } from "./repositories/reply-draft-generator";
 import { createOrcaRepositoryScanner } from "./repositories/repository-scanner";
 import { createTalknoteConnector } from "./repositories/talknote-connector";
+import { fileWeightHistoryRepository } from "./repositories/weight-history-repository";
 import { createJobExecutorUsecase } from "./usecases/job-executor-usecase";
 import { createRunnerUsecase } from "./usecases/runner-usecase";
+import { createWeightObsidianExportUsecase } from "./usecases/weight-obsidian-export-usecase";
 
 const wait = (milliseconds: number): Promise<void> => new Promise((resolve) => {
   setTimeout(resolve, milliseconds);
@@ -24,6 +26,7 @@ const api = createApiRepository(runnerConfig);
 const orca = createOrcaRepository(processCommandRepository);
 const executor = createJobExecutorUsecase({
   api,
+  weightExport: createWeightObsidianExportUsecase({ api, history: fileWeightHistoryRepository, vaultPath: runnerConfig.obsidianVaultPath }),
   backup: createCloudflareBackupRepository(processCommandRepository, runnerConfig),
   capabilities: fileCapabilityRepository,
   chatwork: createChatworkConnector(processCommandRepository, runnerConfig),

@@ -19,6 +19,7 @@ export const runnerEnvironmentSchema = baseEnvSchema.extend({
   GMAIL_ACCOUNT: z.email().optional(),
   GMAIL_SEARCH_QUERY: z.string().min(1).default("in:inbox category:primary newer_than:7d -in:sent -in:drafts"),
   TALKNOTE_ACCOUNT: z.string().min(1).optional(),
+  OBSIDIAN_VAULT_PATH: z.string().min(1).optional(),
   WEIGHT_CSV_PATH: z.string().min(1).optional(),
   FINANCE_CSV_PATH: z.string().min(1).optional(),
   BACKUP_DIRECTORY: z.string().min(1).optional(),

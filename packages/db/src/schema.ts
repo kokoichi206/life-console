@@ -181,6 +181,7 @@ export const schedules = sqliteTable("schedules", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   jobKind: text("job_kind").notNull(),
+  payloadJson: text("payload_json").notNull().default("{}"),
   interval: text("interval").notNull(),
   timezone: text("timezone").notNull(),
   nextRunAt: text("next_run_at").notNull(),
