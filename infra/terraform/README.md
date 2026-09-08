@@ -1,8 +1,8 @@
 # Cloudflare の Terraform 管理
 
-D1、写真用 R2、Access アプリケーション・ポリシー、state 用 R2 を管理する。Worker コード、Workers Static Assets、bindings、Cron、SQL migration は既存の Wrangler と GitHub Actions が担当する。
+D1、写真用 R2、Access、Worker コード・Static Assets・bindings・Cron・公開 URL、state 用 R2 を管理する。GHA の `deploy.yml` が build・SQL migration の後に保存済み Terraform plan を apply する。Wrangler はローカル開発、Worker の bundle 作成、D1 の SQL migration に使い、アプリ配置には使わない。
 
-2026-09-08 に既存の 9 件と新設の state bucket を import 済み。開発用の本人ポリシーを分離し、開発は 4 件、本番は 6 件、state 保存先は 1 件を管理する。2026-09-09 に 3 つの root で plan 差分ゼロ、開発・本番の HTTP 認証を確認した。本番の Access アプリ・認証条件は分離前から変更していない。詳細な検証記録は非公開の運用ディレクトリに保存する。
+既存資源は import 済み。開発は 7 件、本番は 9 件、state 保存先は 1 件を管理する。本番の Worker・Cron・公開 URL は読み取り専用 token で import し、この移行作業で本番へ apply はしない。詳細な検証記録は非公開の運用ディレクトリに保存する。
 
 ## ディレクトリと責務
 
@@ -13,7 +13,7 @@ infra/terraform/
 ├── bootstrap/
 │   └── state-storage/ # Terraform 自身の state bucket
 ├── envs/
-│   ├── development/  # 開発の D1、写真 bucket、Worker の Access と本人ポリシー
+│   ├── development/  # 開発の保存先・Access・Worker 配置
 │   └── production/   # 本番の同資源と runner API の Access
 └── modules/
     ├── platform/
@@ -23,14 +23,16 @@ infra/terraform/
         ├── d1-database/
         ├── meal-photo-storage/
         ├── owner-access/
-        └── runner-access/
+        ├── runner-access/
+        └── worker/
 ```
 
 | 項目 | 管理元 |
 | --- | --- |
 | D1 本体、写真用 R2、Access のアプリ・ポリシー | Terraform |
 | 非公開の state 用 R2 bucket | 初回だけ先に作成し、`bootstrap/state-storage` へ import |
-| Worker 名、bindings、Cron、静的ファイルと API の配置 | Wrangler と既存 deploy workflow |
+| Worker・Static Assets・bindings・Cron・公開 URL | Terraform の `modules/services/worker` |
+| Web の build と Worker の bundle 作成 | Vite と Wrangler の dry-run |
 | DB テーブルと SQL | `packages/db/migrations` と Wrangler |
 | アプリ用 token、runner の Service Token の発行・秘密値 | 既存の非公開設定 |
 | Terraform provider と S3 backend の資格情報 | リポジトリ外の非公開ファイル |
@@ -53,7 +55,7 @@ infra/terraform/
 
 ローカルの資格情報は `~/.config/life-console/terraform/credentials.env` に保存する。ディレクトリは `0700`、ファイルは `0600`。provider 用 `CLOUDFLARE_API_TOKEN` と、state bucket のみに読み書きを許可した `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` をプロセスの環境変数へ渡す。資格情報を `backend.hcl` や tfvars に書かない。
 
-今回の provider token は D1 / R2 / Access Apps / Access Policies の読み取り専用で、import・refresh・plan に使える。リソースの変更を apply する際には、対象サービスの編集権限を持つ別の token が必要。既存のアプリ配置用 token は変更しない。
+ローカルの provider token は D1 / R2 / Access Apps / Access Policies / Workers Scripts の読み取り専用で、import・refresh・plan に使える。GHA には同じ 5 サービスの編集権限を持つ token を環境別に用意する。Cloudflare 側の権限範囲は対象アカウントで、GHA 側の Environment と許可ブランチで開発・本番の利用経路を分ける。
 
 `terraform.tfvars`、`backend.hcl`、`imports.tf` は各 root 内の Git 管理外ファイル。新しい checkout では、`~/.config/life-console/terraform/` 以下の、リポジトリと同じ root 相対パスから同名ファイルを復元する（例: `envs/development/`、`bootstrap/state-storage/`）。入力はアカウント・Worker・Service Token の ID、本人メール、アカウントの workers.dev サブドメインに絞る。既知のアプリ名やセッション期間は定義に固定する。
 
@@ -81,21 +83,23 @@ backend が存在しない段階では、その backend を使う Terraform 自�
 
 ```bash
 source ~/.config/life-console/terraform/credentials.env
+VITE_APP_ENV=development pnpm --filter @life-console/web build
+pnpm --filter @life-console/api build
 cd infra/terraform/envs/development
 terraform init -input=false -lockfile=readonly -backend-config=backend.hcl
 terraform plan -input=false -detailed-exitcode
 ```
 
-本番は `envs/production`、state 保存先は `bootstrap/state-storage` を使う。最後の exit code は `0` が差分なし、`2` が差分あり、`1` が失敗。`-lock=false` で競合を回避しない。
+本番は `VITE_APP_ENV=production` で build してから `envs/production`、state 保存先は build 不要で `bootstrap/state-storage` を使う。最後の exit code は `0` が差分なし、`2` が差分あり、`1` が失敗。`-lock=false` で競合を回避しない。
 
-D1 / R2 / Access は `prevent_destroy` を持つ。定義が残っている間の削除・置き換えを止めるもので、モジュール自体の削除や管理外の操作は防がない。state bucket は両環境の管理に必要なため、アプリ環境とは別の root に置き、通常の環境変更では操作しない。
+D1 / R2 / Access / Worker / Cron / 公開 URL は `prevent_destroy` を持つ。定義が残っている間の削除・置き換えを止めるもので、モジュール自体の削除や管理外の操作は防がない。state bucket は両環境の管理に必要なため、アプリ環境とは別の root に置き、通常の環境変更では操作しない。
 
 ## 既存環境の import
 
 1. 実際の配置アカウント、D1 ID、bucket 名・jurisdiction、Access の対象・条件・ポリシー共有先を API と配置設定で照合する。
 2. `backend.hcl.example`、`terraform.tfvars.example`、`imports.tf.example` から Git 管理外の設定を作る。既存値に合わせ、本人メールや実環境の ID を example に書かない。
 3. state 保存先を準備してから、開発・本番それぞれの backend を初期化して取り込む。各 `imports.tf` の `to` と `id` は CLI import のアドレス・ID にも対応する。
-4. 実環境を変更しない `terraform import` で state に登録し、`terraform plan -detailed-exitcode` が `0` になるまで定義と実設定を照合する。DB データや写真はコピーしない。
+4. 実環境を変更しない `terraform import` で state に登録し、plan の各差分を実設定と照合する。D1 / R2 / Access は差分なしに合わせる。Worker は build 成果物を初めて Terraform から配置する更新が残るため、import と初回配置を分けて確認する。DB データや写真はコピーしない。
 
 ```bash
 terraform import -input=false \
@@ -106,25 +110,36 @@ terraform plan -input=false -detailed-exitcode
 
 import block を使う場合は `terraform plan -out=import.tfplan` で計画を保存し、追加・更新・削除・置き換えがないことを確認してから `terraform apply import.tfplan` を実行する。既存値の省略や provider の既定値が原因で変更が出る場合は、取得した実設定を定義へ反映する。`ignore_changes` で隠さない。秘密扱いの属性マークだけの差分も import plan では更新と表示されることがあるため、値と state のメタデータを分けて確認する。
 
+Cloudflare provider `5.24.0` の Cron resource は import・refresh で schedule を state に読み戻さない。初回 plan の schedule 更新は実 API の式と照合し、apply 後も Cron の確認には API を使う。plan の差分なしだけで、管理外の Cron 変更がないとは判断しない。
+
 R2 の公開ドメイン設定はこの定義では作成しない。import 前後に managed domain が無効で custom domain が空であることを別途確認する。既存の公開ドメインを自動削除する定義ではない。
 
-## 既存デプロイとの接続
+## GHA からの配置
 
-| Terraform output | GitHub Environment Secret |
+`deploy.yml` は `develop` で開発、`main` で本番を扱う。`workflow_dispatch` でも対象ブランチを選んで同じ処理を実行できる。GitHub Environment の許可ブランチは開発が `develop`、本番が `main` のみとする。
+
+1. アプリの検査・build と Terraform の mock 検証を行う。
+2. 対象 Environment の入力と資格情報で R2 backend を初期化し、plan を保存する。
+3. plan に削除・置き換えがあれば停止する。module の定義を消した場合も対象にする。
+4. Terraform output から D1 の接続先を生成し、既存の SQL migration を適用する。
+5. 同じ build 成果物のまま、保存済み plan を `terraform apply` する。Worker と Static Assets もこの apply で配置する。
+
+Terraform は既存の Worker の secret bindings を保持する。runner token や Web Push の秘密値を tfvars に複製しない。plan / state / 資格情報を CI artifact にアップロードしない。
+
+各 GitHub Environment に次の Secrets を登録する。
+
+| Secret | 内容 |
 | --- | --- |
-| `cloudflare_account_id` | `CLOUDFLARE_ACCOUNT_ID` |
-| `cloudflare_d1_database_id` | `CLOUDFLARE_D1_DATABASE_ID` |
-| `cloudflare_r2_bucket_name` | `CLOUDFLARE_R2_BUCKET_NAME` |
+| `TERRAFORM_TFVARS_JSON` | その環境の `terraform.tfvars` と同じ入力を JSON で保存 |
+| `TERRAFORM_CLOUDFLARE_API_TOKEN` | 対象アカウントの D1・R2・Access Apps・Access Policies・Workers Scripts 編集 token |
+| `TERRAFORM_STATE_ACCESS_KEY_ID` | state 用 R2 bucket 専用の S3 access key |
+| `TERRAFORM_STATE_SECRET_ACCESS_KEY` | 同じ S3 secret key |
 
-import では既存 ID が変わらないため、Secrets の再登録やアプリの再デプロイは不要。資源の追加・変更で値が変わる場合に、同じ GitHub Environment へ反映する。既存の deploy workflow へ state 全体や Terraform 用 token を渡さない。
+D1 ID を GitHub Secret と二重管理せず、migration は `cloudflare_d1_database_id` output を参照する。旧 `CLOUDFLARE_*` Secrets は新しい workflow では参照しないが、旧 workflow が残るブランチで必要な間は削除しない。
 
-## 新規環境を作る場合
+R2 の state lock と GHA の環境別 concurrency を使う。plan と apply の間に別の操作が state を更新した場合は、保存済み plan が stale と判定され、apply が停止する。migration はすでに適用されている可能性があるため、稼働中の Worker と互換性のある SQL にする。
 
-1. backend を準備し、D1 と写真用 R2 を作成する。
-2. output を非公開の Wrangler 設定へ渡し、`workers_dev: false`、`preview_urls: false`、`routes: []` のまま初回配置と migration を実行する。
-3. 作成された Worker の ID を確認し、その環境専用の本人ポリシーと Access を作成する。新規環境の cookie 設定などは、その環境の要件で決める。
-4. Access の保護対象と本人の Allow 条件を確認してから Worker を公開する。未ログインの画面・API が Access に転送されることを確認する。
-5. GitHub Environment へ配置用の値を登録し、自動デプロイを開始する。
+既存の D1 と Worker がある環境を対象にしている。新しいアカウント・環境の初回構築では、state 保存先、D1、非公開 Worker、Worker ID に紐づく Access の順に準備し、実在する ID を入力して import してからこの workflow を有効にする。state bucket 自体の初回準備は通常のアプリ配置 workflow では行わない。
 
 ## ローカルと CI の検証
 
@@ -137,9 +152,9 @@ bash infra/terraform/check.sh
 pnpm check
 ```
 
-`check.sh` は fmt を確認し、公開用の定義とテストだけを一時ディレクトリへコピーして、backend 接続なしの init / validate・mock test を実行する。実運用の backend 初期化情報は書き換えない。子 module のテストは環境 root から実行し、その lock file を使う。環境ごとの保存先、Worker ID の保護、環境内の本人条件、runner のパスと Service Auth を確認する。
+`check.sh` は fmt を確認し、公開用の定義とテストだけを一時ディレクトリへコピーして、backend 接続なしの init / validate・mock test を実行する。実運用の backend 初期化情報は書き換えない。子 module のテストは環境 root から実行し、その lock file を使う。環境ごとの保存先、Worker ID の保護、環境内の本人条件、runner のパスと Service Auth、Worker の secret 保持と API / SPA の配信設定を確認する。
 
-[ci-terraform.yml](../../.github/workflows/ci-terraform.yml) は同じ検証を行う。PR に資格情報を渡さず、実環境の plan / apply は実行しない。mock test と実際の R2 ロック・import・認証の確認は区別する。
+[ci-terraform.yml](../../.github/workflows/ci-terraform.yml) は同じ検証を行う。PR の検証には資格情報を渡さない。実環境の plan / apply は、許可ブランチの `deploy.yml` が担当する。mock test と実際の R2 ロック・import・認証の確認は区別する。
 
 ## 公式資料
 
@@ -149,5 +164,5 @@ pnpm check
 - [Access ポリシー](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.24.0/docs/resources/zero_trust_access_policy.md)
 - [Terraform S3 backend と lockfile](https://developer.hashicorp.com/terraform/language/backend/s3)
 - [R2 の認証と bucket 単位の権限](https://developers.cloudflare.com/r2/api/tokens/)
-
+- [Worker 配置・Static Assets と import](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.24.0/docs/resources/workers_script.md)
 - [子 module の provider 宣言と継承](https://developer.hashicorp.com/terraform/language/modules/develop/providers)

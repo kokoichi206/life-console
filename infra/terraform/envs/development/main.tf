@@ -25,3 +25,15 @@ module "owner_access" {
   owner_policy_id            = module.owner_policy.policy_id
   http_only_cookie_attribute = true
 }
+
+module "worker" {
+  source            = "../../modules/services/worker"
+  account_id        = var.cloudflare_account_id
+  worker_name       = local.worker_name
+  environment       = "development"
+  database_id       = module.database.database_id
+  photo_bucket_name = module.meal_photos.bucket_name
+
+  # Worker の配置・公開より先に、本人の Access 保護を確定する。
+  depends_on = [module.owner_access]
+}

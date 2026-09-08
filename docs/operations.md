@@ -6,18 +6,13 @@
 
 `develop` は開発環境、`main` は本番環境に対応します。Worker・D1・R2・Access・Secrets を環境ごとに分け、本番データを開発環境へコピーしません。ローカル用の架空 seed は実データ用 D1 に適用しないでください。
 
-[Terraform の定義と手順](../infra/terraform/README.md)で D1・写真用 R2・Access を管理します。`envs/development` と `envs/production` が module を組み合わせ、本人用 Access ポリシーも環境ごとに管理します。state は専用の非公開 R2 bucket `life-console-tfstate` 内の別キーに保存し、bucket 自体は `bootstrap/state-storage` が管理します。
+[Terraform の定義と手順](../infra/terraform/README.md)で D1・写真用 R2・Access・Worker・Static Assets・Cron・公開 URL を管理します。`envs/development` と `envs/production` が module を組み合わせ、本人用 Access ポリシーも環境ごとに管理します。state は専用の非公開 R2 bucket `life-console-tfstate` 内の別キーに保存し、bucket 自体は `bootstrap/state-storage` が管理します。
 
-Worker と静的ファイルの配置、bindings、Cron、SQL migration は Wrangler が管理します。Terraform output は同じ GitHub Environment の Secrets に渡し、既存の deploy workflow を使います。既存資源は import 済みなので、取り込みのための再作成・再デプロイは不要です。
+`deploy.yml` が build・Terraform plan・SQL migration・Terraform apply を順に実行します。Worker と静的ファイルの配置も Terraform が担当し、Wrangler は bundle 作成と SQL migration に使います。D1 の接続先は Terraform output から取得します。GHA 用の入力と資格情報は [Terraform の手順](../infra/terraform/README.md#gha-からの配置)に従い、Environment ごとに登録します。
 
-初回配置では [開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例を使い、次の順序で公開範囲を確認します。
+[開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例は SQL migration 用です。通常のアプリ配置には使いません。既存資源は import 済みで、GHA では削除・置き換えを含む plan を停止します。新規環境の初回準備は [Terraform の手順](../infra/terraform/README.md#gha-からの配置)を参照します。
 
-1. 配置先アカウントを確認し、Terraform で対象環境の D1 と非公開 R2 bucket を作成する。
-2. 非公開の Wrangler 設定に接続先を記入し、`workers_dev: false`、`preview_urls: false`、`routes: []` のまま migration と初回配置を実行する。
-3. 作成された Worker ID を Terraform に渡し、Access とその環境専用の本人メール完全一致 Allow ポリシーを作成する。
-4. Access の対象とポリシーを確認してから `workers_dev` を `true` にする。未ログインの画面・API が Access に転送され、本人のログイン後に開けることを確認する。
-
-GitHub Environment の配置許可ブランチは `development` が `develop`、`production` が `main` のみとします。デプロイ用 API token は対象アカウントに絞り、Workers・D1・R2 の編集権限を付けて環境別に発行します。Secrets はリポジトリ共通ではなく、各 Environment に登録します。
+GitHub Environment の配置許可ブランチは `development` が `develop`、`production` が `main` のみとします。デプロイ用 API token は対象アカウントに絞り、Workers Scripts・D1・R2・Access Apps・Access Policies の編集権限を付けて環境別に発行します。Secrets はリポジトリ共通ではなく、各 Environment に登録します。
 
 migration 後に配置が失敗すると、適用済みの migration は残ります。稼働中の Worker との互換性を保ってください。通常の変更は feature ブランチから `develop` へ取り込み、開発環境で確認後、`develop` → `main` の PR を merge commit でマージします。
 
