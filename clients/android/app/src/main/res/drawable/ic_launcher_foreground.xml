@@ -1,8 +1,10 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
-    android:viewportWidth="512" android:viewportHeight="512">
-    <path android:fillColor="#086B6D" android:pathData="M0,0H512V512H0Z" />
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF"
-        android:strokeWidth="28" android:strokeLineCap="round" android:strokeLineJoin="round"
-        android:pathData="M164,188V324H228M348,202C334,188 321,184 307,188C280,195 273,222 273,256S280,317 307,324C321,328 334,324 348,311" />
+    android:viewportWidth="64" android:viewportHeight="64">
+    <!-- ランチャーの切り抜きで L の角が欠けないよう、安全領域へ収める。 -->
+    <group android:pivotX="32" android:pivotY="32" android:scaleX="0.9" android:scaleY="0.9">
+        <path android:fillColor="#F4F2E9" android:pathData="M19,18h9v21h17v9H19Z" />
+        <path android:fillColor="#F97316"
+            android:pathData="M40,18h5a2,2 0,0 1,2 2v5a2,2 0,0 1,-2 2h-5a2,2 0,0 1,-2 -2v-5a2,2 0,0 1,2 -2Z" />
+    </group>
 </vector>
