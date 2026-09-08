@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 
+import { MonitoringAlert } from "../features/monitoring/MonitoringAlert";
 import { cn } from "../lib/class-names";
 import { applyTheme, storedTheme, type Theme } from "../theme";
 
@@ -146,6 +147,7 @@ export const AppShell = () => {
       )}
       >
         <Suspense fallback={<div className="grid min-h-[50vh] place-items-center text-sm text-muted-foreground">画面を読み込んでいます。</div>}>
+          <MonitoringAlert />
           <Outlet />
         </Suspense>
       </main>

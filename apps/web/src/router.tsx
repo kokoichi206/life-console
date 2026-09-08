@@ -1,3 +1,4 @@
+import { monitoringSearchSchema } from "@life-console/contracts";
 import { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, createRoute, createRouter, redirect } from "@tanstack/react-router";
 import { lazy } from "react";
@@ -71,6 +72,7 @@ const financeRoute = createRoute({
 const operationsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/operations",
+  validateSearch: (search) => monitoringSearchSchema.parse(search),
   loader: async ({ context }) => Promise.all([
     context.queryClient.ensureQueryData(dashboardQuery),
     context.queryClient.ensureQueryData(repositoriesQuery),

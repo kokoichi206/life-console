@@ -1,5 +1,8 @@
 import type { AppType } from "@life-console/api";
+import type { MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
+  PushConfiguration,
+  PushSubscriptionInput,
   Conversation,
   CreateConnectorSyncInput,
   CreateReplyDraftsInput,
@@ -52,6 +55,15 @@ const unwrap = async <T>(response: HttpResponse): Promise<T> => {
 };
 
 export const api = {
+  monitoring: async () => unwrap<MonitoringSummary>(await client.api.v1.monitoring.$get()),
+  monitoringHistory: async (targetId?: string, before?: number) => unwrap<MonitorHistory[]>(await client.api.v1.monitoring.history.$get({ query: {
+    ...(targetId === undefined ? {} : { targetId }), ...(before === undefined ? {} : { before: String(before) }),
+  } })),
+  pushConfiguration: async () => unwrap<PushConfiguration>(await client.api.v1.push.configuration.$get()),
+  pushSubscriptionStatus: async (endpoint: string) => unwrap<{ readonly registered: boolean }>(await client.api.v1.push.subscription.status.$post({ json: { endpoint } })),
+  subscribePush: async (input: PushSubscriptionInput) => unwrap<null>(await client.api.v1.push.subscription.$put({ json: input })),
+  unsubscribePush: async (endpoint: string) => unwrap<null>(await client.api.v1.push.subscription.$delete({ json: { endpoint } })),
+  testPush: async (endpoint: string) => unwrap<null>(await client.api.v1.push.test.$post({ json: { endpoint } })),
   replyDrafts: async () => unwrap<ReadonlyArray<ReplyDraft>>(await client.api.v1["reply-drafts"].$get()),
   generateReplyDrafts: async (input: CreateReplyDraftsInput) => unwrap<Job>(await client.api.v1["reply-drafts"].generate.$post({ json: input })),
   editReplyDraft: async (id: string, input: EditReplyDraftInput) => unwrap<null>(await client.api.v1["reply-drafts"][":id"].$patch({ param: { id }, json: input })),

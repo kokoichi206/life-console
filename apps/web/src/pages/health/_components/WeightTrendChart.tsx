@@ -2,7 +2,6 @@ import type { WeightPointWithMovingAverage } from "@life-console/contracts";
 import { useState, type PointerEvent } from "react";
 
 import { EmptyState } from "../../../components/DesignSystem";
-import { cn } from "../../../lib/class-names";
 
 const CHART_WIDTH = 900;
 const CHART_HEIGHT = 340;
@@ -80,7 +79,7 @@ export const WeightTrendChart = ({ points }: WeightTrendChartProps) => {
           className="block h-auto w-full touch-none"
           viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
           role="img"
-          aria-label="体重の実測値と7日移動平均の推移"
+          aria-label="体重の実測値と 7 日移動平均の推移"
           onPointerMove={trackPointer}
           onPointerLeave={() => setHoveredIndex(null)}
         >
@@ -121,27 +120,28 @@ export const WeightTrendChart = ({ points }: WeightTrendChartProps) => {
         </svg>
         {hoveredPoint !== undefined && (
           <div
-            className={cn(
-              "pointer-events-none absolute z-10 grid min-w-36 translate-x-2.5 -translate-y-[calc(100%+10px)] gap-1 rounded-lg border bg-popover p-2.5 text-[0.65rem] text-popover-foreground shadow-xl",
-              hoveredPoint.x > CHART_WIDTH * 0.7 && "-translate-x-[calc(100%+10px)]",
-            )}
-            style={{ left: `${(hoveredPoint.x / CHART_WIDTH) * 100}%`, top: `${(Math.min(hoveredPoint.actualY, hoveredPoint.averageY) / CHART_HEIGHT) * 100}%` }}
+            role="tooltip"
+            className="pointer-events-none absolute z-10 grid w-36 max-w-full -translate-y-[calc(100%+10px)] gap-1 rounded-lg border bg-popover p-2.5 text-[0.65rem] text-popover-foreground shadow-xl"
+            style={{ left: `clamp(0px, calc(${(hoveredPoint.x / CHART_WIDTH) * 100}% + 10px), calc(100% - 9rem))`, top: `${(Math.min(hoveredPoint.actualY, hoveredPoint.averageY) / CHART_HEIGHT) * 100}%` }}
           >
             <strong className="text-xs">{new Date(hoveredPoint.occurredAt).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" })}</strong>
             <span>
               実測
+              {" "}
               {hoveredPoint.weightKg.toFixed(1)}
               {" "}
               kg
             </span>
             <span>
-              7日平均
+              7 日平均
+              {" "}
               {hoveredPoint.movingAverage7DaysKg.toFixed(2)}
               {" "}
               kg
             </span>
             <small className="text-muted-foreground">
               窓内
+              {" "}
               {hoveredPoint.movingAverageWindowSamples}
               {" "}
               件
@@ -156,7 +156,7 @@ export const WeightTrendChart = ({ points }: WeightTrendChartProps) => {
         </span>
         <span className="inline-flex items-center gap-1.5">
           <i className="block h-0.5 w-4 bg-chart-2" />
-          7日移動平均
+          7 日移動平均
         </span>
       </figcaption>
     </figure>

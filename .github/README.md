@@ -1,4 +1,17 @@
-# GitHub Actions の検査
+# GitHub のテンプレートと CI
+
+## PR・Issue テンプレート
+
+- [PR](PULL_REQUEST_TEMPLATE.md): 目的、変更内容、検証結果を記載します。関連 Issue、画面の変更、レビュー時の補足は任意です。
+- [機能追加・改善](ISSUE_TEMPLATE/01_feature.md): 困っていること、実現したいこと、完了条件を整理します。
+- [技術的課題](ISSUE_TEMPLATE/02_technical_problem.md): 現状の課題、対応する理由、完了条件を整理します。
+- [不具合報告](ISSUE_TEMPLATE/03_bug.md): 発生環境、再現手順、期待する挙動を記録します。
+
+Markdown 形式なので、不要な任意の節は削除できます。ラベルや担当者は自動設定しません。
+
+GitHub の作成画面で使うには、テンプレートをデフォルトブランチへ反映する必要があります（[GitHub の仕様](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/about-issue-and-pull-request-templates)）。
+
+## GitHub Actions の検査
 
 [ci-github-workflows](workflows/ci-github-workflows.yml) は `.github/workflows/` と `.github/scripts/` の変更を含む `develop` / `main` 向け PR・両ブランチへの push、手動実行で動きます。
 

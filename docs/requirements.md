@@ -351,6 +351,8 @@ job は次の状態を持つ。
 - lease には世代を表す fencing token を持たせる。
 - heartbeat、進捗、完了報告は現在の fencing token と一致する場合だけ受け付ける。
 - runner の heartbeat と job の heartbeat を分ける。
+- runner の heartbeat と CLI の接続確認は job の完了を待たず 2 分ごとに実行し、正常を含む全観測を保存する。通信断中は Mac に保持し、後送によって最新状態や lease を更新しない。
+- runner の 5 分未着、明確な認証失効、CLI の連続失敗を Web Push で通知する。障害と端末ごとの重複予約を DB で防ぎ、未復旧は 30 分ごと、復旧は異常通知の受付を確認できた端末に通知する。
 - job の heartbeat は実行ループと独立して送る。
 - `waiting_for_user` 中も heartbeat を継続する。
 - lease は Cloudflare 側の時刻で判定し、Mac の時計を信用しない。
