@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "paths": {
+      "@api/*": ["./apps/api/src/*"],
+      "@runner/*": ["./apps/runner/src/*"]
+    },
+    "types": ["node", "@cloudflare/workers-types"]
+  },
+  "include": ["tests", "vitest.config.ts"]
+}

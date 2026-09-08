@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import stylistic from "@stylistic/eslint-plugin";
 import importX from "eslint-plugin-import-x";
 import jsonc from "eslint-plugin-jsonc";
+import reactHooks from "eslint-plugin-react-hooks";
 import yml from "eslint-plugin-yml";
 import * as jsoncParser from "jsonc-eslint-parser";
 import tseslint from "typescript-eslint";
@@ -15,6 +16,24 @@ export default [
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    files: ["**/*.{ts,tsx,mts,cts}"],
+    languageOptions: { parserOptions: { projectService: true } },
+    rules: {
+      "@typescript-eslint/await-thenable": "error",
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+    },
+  },
+  {
+    files: ["apps/web/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "error",
+    },
+  },
   {
     files: ["**/*.{ts,tsx,js,mjs}"],
     plugins: {
@@ -55,13 +74,11 @@ export default [
   {
     files: ["apps/api/src/{handlers,usecases}/**/*.ts"],
     ignores: ["**/*.test.ts"],
-    languageOptions: { parserOptions: { projectService: true } },
     rules: { "custom/require-result-return-type": "error" },
   },
   {
     files: ["apps/{api,runner}/src/**/*.ts"],
     ignores: ["**/*.test.ts"],
-    languageOptions: { parserOptions: { projectService: true } },
     rules: { "custom/no-discarded-result": "error" },
   },
   {

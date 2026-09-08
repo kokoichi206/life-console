@@ -78,7 +78,7 @@ export const SaveMemo: Story = {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.type(await screen.findByLabelText("メモ"), "おにぎりと味噌汁");
     await userEvent.selectOptions(screen.getByLabelText("食事区分"), "breakfast");
-    fireEvent.change(screen.getByLabelText("食事の日時"), { target: { value: "2026-09-08T07:30" } });
+    await fireEvent.change(screen.getByLabelText("食事の日時"), { target: { value: "2026-09-08T07:30" } });
     await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
     await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
     await expect(savedMeal).toHaveBeenCalledWith(expect.objectContaining({ memo: "おにぎりと味噌汁", mealKind: "breakfast", photoId: null, occurredAt: new Date("2026-09-08T07:30").toISOString() }));

@@ -24,7 +24,7 @@ const meta = {
       const root = createRootRoute();
       const tasks = createRoute({ getParentRoute: () => root, path: "/tasks", validateSearch: parseWorkSearch, component: Story });
       return createRouter({ routeTree: root.addChildren([tasks]), history: createMemoryHistory({ initialEntries: ["/tasks"] }) });
-    }, []);
+    }, [Story]);
     return <div className="flex h-[900px] flex-col"><RouterProvider router={router} /></div>;
   }],
 } satisfies Meta<typeof TasksPage>;

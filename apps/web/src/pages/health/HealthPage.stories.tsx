@@ -31,7 +31,7 @@ const meta = {
       const root = createRootRoute();
       const health = createRoute({ getParentRoute: () => root, path: "/health", validateSearch: parseHealthSearch, component: Story });
       return createRouter({ routeTree: root.addChildren([health]), history: createMemoryHistory({ initialEntries: [context.parameters.entry === undefined ? "/health" : `/health?entry=${context.parameters.entry}`] }) });
-    }, [context.parameters.entry]);
+    }, [context.parameters.entry, Story]);
     return <RouterProvider router={router} />;
   }],
 } satisfies Meta<typeof HealthRoutePage>;
@@ -192,7 +192,7 @@ export const DragWeightPeriod: Story = {
     const restoredOrigin = { clientX: restoredBounds.left + restoredBounds.width * 0.3, clientY: restoredBounds.top + 150 };
     await userEvent.pointer({ target: chart, keys: "[MouseLeft>]", coords: restoredOrigin });
     await userEvent.pointer({ target: chart, coords: { ...restoredOrigin, clientX: restoredOrigin.clientX + 45 } });
-    fireEvent.pointerCancel(chart, { pointerId: 1 });
+    await fireEvent.pointerCancel(chart, { pointerId: 1 });
     await userEvent.pointer({ target: chart, keys: "[/MouseLeft]" });
     await expect(start).toHaveValue(initialStart);
     await expect(end).toHaveValue(initialEnd);

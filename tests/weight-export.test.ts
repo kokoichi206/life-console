@@ -49,7 +49,7 @@ describe("体重の定期書き出しの API と runner", () => {
       const weightExport = createWeightObsidianExportUsecase({ api, history: fileWeightHistoryRepository, vaultPath });
       const executor = createJobExecutorUsecase({ weightExport } as Parameters<typeof createJobExecutorUsecase>[0]);
       const runner = createRunnerUsecase({ api, executor, heartbeatMilliseconds: 60_000,
-        logger: { info: vi.fn(), error: vi.fn() }, orca: { health: vi.fn(async () => "healthy"), launchAgent: vi.fn() } });
+        logger: { info: vi.fn(), error: vi.fn() } });
       expect(await runner.register()).toBe(true);
       await runner.runOnce();
       expect(database.prepare("SELECT status, error_code FROM jobs").get()).toMatchObject({ status: "succeeded", error_code: null });
