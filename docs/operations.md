@@ -8,7 +8,7 @@
 
 [Terraform の定義と手順](../infra/terraform/README.md)で D1・写真用 R2・Access・Worker・Static Assets・Cron・公開 URL を管理します。`envs/development` と `envs/production` が module を組み合わせ、本人用 Access ポリシーも環境ごとに管理します。state は専用の非公開 R2 bucket `life-console-tfstate` 内の別キーに保存し、bucket 自体は `bootstrap/state-storage` が管理します。
 
-`deploy.yml` が build・Terraform plan・SQL migration・Terraform apply を順に実行します。Worker と静的ファイルの配置も Terraform が担当し、Wrangler は bundle 作成と SQL migration に使います。D1 の接続先は Terraform output から取得します。GHA 用の入力と資格情報は [Terraform の手順](../infra/terraform/README.md#gha-からの配置)に従い、Repository Secrets と配置用 Environment Secrets に分けて登録します。
+品質検査・Storybook・Terraform 検証は PR の CI が担当します。`deploy.yml` は配置用の Web / API を build する job と、成果物を受け取る配置 job に分けます。配置 job は Terraform plan・SQL migration・Terraform apply を順に実行します。Worker と静的ファイルの配置も Terraform が担当し、Wrangler は bundle 作成と SQL migration に使います。D1 の接続先は Terraform output から取得します。GHA 用の入力と資格情報は [Terraform の手順](../infra/terraform/README.md#gha-からの配置)に従い、Repository Secrets と配置用 Environment Secrets に分けて登録します。
 
 [開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例は SQL migration 用です。通常のアプリ配置には使いません。既存資源は import 済みで、GHA では削除・置き換えを含む plan を停止します。新規環境の初回準備は [Terraform の手順](../infra/terraform/README.md#gha-からの配置)を参照します。
 

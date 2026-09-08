@@ -118,11 +118,18 @@ R2 の公開ドメイン設定はこの定義では作成しない。import 前�
 
 `deploy.yml` は `develop` で開発、`main` で本番を扱う。`workflow_dispatch` でも対象ブランチを選んで同じ処理を実行できる。GitHub Environment の許可ブランチは開発が `develop`、本番が `main` のみとする。
 
-1. アプリの検査・build と Terraform の mock 検証を行う。
-2. Repository Secret から対象環境の入力を選び、Environment の配置用資格情報で R2 backend を初期化して plan を保存する。
-3. plan に削除・置き換えがあれば停止する。module の定義を消した場合も対象にする。
-4. Terraform output から D1 の接続先を生成し、既存の SQL migration を適用する。
-5. 同じ build 成果物のまま、保存済み plan を `terraform apply` する。Worker と Static Assets もこの apply で配置する。
+品質検査・単体／保存テスト・Storybook・Terraform 検証・runner の build は PR の CI が担当する。deploy では繰り返さず、配置対象の Web / API の build と配置だけを行う。Web は環境名を埋め込むため、対象環境向けに Vite で build する。
+
+1. `build` job で配置用の Web / API を build する。
+2. build の成功後、`deploy` job が同じ run の build 成果物を artifact ID で受け取る。artifact は API / Web の `dist` だけを含み、7 日間保存する。配置 job の再実行では成功済み build の成果物を使う。
+3. Repository Secret から対象環境の入力を選び、Environment の配置用資格情報で R2 backend を初期化して plan を保存する。
+4. plan に削除・置き換えがあれば停止する。module の定義を消した場合も対象にする。
+5. Terraform output から D1 の接続先を生成し、既存の SQL migration を適用する。
+6. 同じ build 成果物のまま、保存済み plan を `terraform apply` する。Worker と Static Assets もこの apply で配置する。
+
+plan・SQL migration・apply は同じ配置 job に置く。秘密値を含む plan を job 間で転送せず、削除検査を通った plan と配置対象の build を揃えるため。Environment と配置用資格情報もこの job だけで使う。
+
+Worker の `annotations.workers_tag` は API bundle と Web 全ファイルのパス・内容から計算したハッシュにする。Cloudflare provider `5.24.0` は Web だけの変更を plan modifier で検出した際、`startup_time_ms` を旧 state の値に固定したまま更新し、apply で不整合になる。バージョンタグを設定差分に含めることで、plan の初期段階から変更を認識させ、起動時間を apply 後に確定させる。provider 自体の修正ではなく、配置内容の変更を Terraform の設定に明示する対応。根拠は [provider の ModifyPlan](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.24.0/internal/services/workers_script/resource.go#L471) と [静的ファイルの差分検出](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.24.0/internal/services/workers_script/assets.go#L270)。
 
 Terraform は既存の Worker の secret bindings を保持する。runner token や Web Push の秘密値を tfvars に複製しない。plan / state / 資格情報を CI artifact にアップロードしない。
 
