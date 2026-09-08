@@ -104,7 +104,17 @@ D1 の体重を Obsidian の既存 CSV とグラフに定期的に反映する�
 
 追加した Life Console のアイコンから、ホーム画面をアドレスバーなしで開けます。利用にはネットワーク接続が必要です。Access のセッションが切れた場合は再ログインします。
 
-manifest は認証 Cookie を送って取得します。通知を有効にした端末では Push 受信用の Service Worker を登録します。オフラインキャッシュは使いません。アイコンの編集元は `apps/web/public/icons/app.svg`、配信用の PNG は同じディレクトリに置いています。
+manifest は認証 Cookie を送って取得します。通知を有効にした端末では Push 受信用の Service Worker を登録します。オフラインキャッシュは使いません。
+
+アイコンは Corner（濃い背景に白い L とオレンジの点）です。編集元は `apps/web/public/icons/app.svg`、配信用の PNG は同じディレクトリに置いています。SVG を変更したら、ImageMagick で PNG も再生成します。
+
+```bash
+magick -background none -density 576 apps/web/public/icons/app.svg -resize 192x192 -strip PNG24:apps/web/public/icons/app-192.png
+magick -background none -density 576 apps/web/public/icons/app.svg -resize 512x512 -strip PNG24:apps/web/public/icons/app-512.png
+magick -background none -density 576 apps/web/public/icons/app.svg -resize 180x180 -strip PNG24:apps/web/public/icons/apple-touch-icon.png
+```
+
+Android のランチャーも同じ図形・配色を使います。`clients/android/app/src/main/res/drawable/ic_launcher_foreground.xml` に図形、`values/colors.xml` に背景色を置き、切り抜きの安全領域に収めるため前景を中央基準で 90% に縮小しています。
 
 ## Web Push 通知
 
