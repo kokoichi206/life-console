@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { HealthPage } from "./HealthPage";
-import { mealsQuery, weightsQuery } from "./queries";
+import { mealsQuery, weightsQuery, weightGoalQuery } from "./queries";
 
 describe("体重の記録頻度", () => {
   it("同じ日本時間の暦日の複数記録を 1 日として数える", () => {
@@ -15,7 +15,8 @@ describe("体重の記録頻度", () => {
       { id: "manual", source: "manual", weightKg: 82, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
     ]);
     client.setQueryData(mealsQuery.queryKey, []);
-    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
+    client.setQueryData(weightGoalQuery.queryKey, null);
+    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { search: {}, onRangeChange: () => undefined, goalEntryOpen: false, onGoalEntryOpenChange: () => undefined, selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
     expect(html.replace(/<[^>]*>/g, "").replace(/\s+/g, "")).toContain("記録頻度2/8日25%");
     client.clear();
   });

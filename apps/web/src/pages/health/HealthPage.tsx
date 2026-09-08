@@ -3,7 +3,7 @@ import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-q
 import { useMemo, useState, type ChangeEvent } from "react";
 
 import { api } from "../../api";
-import { Eyebrow, Field, FormError, MetricCard, Panel } from "../../components/DesignSystem";
+import { Eyebrow, Field, FormError, Panel } from "../../components/DesignSystem";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/input";
@@ -11,12 +11,14 @@ import { Input } from "../../components/ui/input";
 import { MealEntryDialog } from "./_components/MealEntryDialog";
 import { MealGallery } from "./_components/MealGallery";
 import { WeightEntryDialog } from "./_components/WeightEntryDialog";
+import { WeightGoalDialog } from "./_components/WeightGoalDialog";
+import { WeightGoalProgress } from "./_components/WeightGoalProgress";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
-import { mealsQuery, weightsQuery } from "./queries";
+import type { HealthSearch } from "./health-search";
+import { mealsQuery, weightsQuery, weightGoalQuery } from "./queries";
+import { WEIGHT_DAY_MS, type WeightWindow } from "./weight-window";
 
-const ONE_DAY_MILLISECONDS = 86_400_000;
-
-type WeightRange = "d90" | "all" | `year-${string}`;
+const ONE_DAY_MILLISECONDS = WEIGHT_DAY_MS;
 
 const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo",
@@ -25,7 +27,11 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
   day: "numeric",
 }).format(new Date(occurredAt));
 
-export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+  readonly search: HealthSearch;
+  readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
+  readonly goalEntryOpen: boolean;
+  readonly onGoalEntryOpenChange: (open: boolean) => void;
   readonly selectedMealId: string | undefined;
   readonly onSelectMeal: (id: string | undefined) => void;
   readonly mealEntryOpen: boolean;
@@ -36,21 +42,29 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
   const queryClient = useQueryClient();
   const { data: weights } = useSuspenseQuery(weightsQuery);
   const { data: meals } = useSuspenseQuery(mealsQuery);
-  const [weightRange, setWeightRange] = useState<WeightRange>("d90");
+  const { data: weightGoal } = useSuspenseQuery(weightGoalQuery);
+  const weightRange = search.from === undefined ? search.range ?? "d90" : "custom";
   const [showWeightTable, setShowWeightTable] = useState(false);
   const weightTrend = useMemo(() => calculate7DayMovingAverage(weights), [weights]);
   const latestWeight = weightTrend.at(-1);
   const availableYears = useMemo(() => [...new Set(weightTrend.map((point) => weightCalendarDate(point.occurredAt).slice(0, 4)))].reverse(), [weightTrend]);
-  const visibleWeightTrend = useMemo(() => {
-    if (weightRange === "all") return weightTrend;
-    if (weightRange.startsWith("year-")) {
-      const year = weightRange.slice(5);
-      return weightTrend.filter((point) => weightCalendarDate(point.occurredAt).startsWith(year));
-    }
-    if (latestWeight === undefined) return weightTrend;
-    const firstVisibleDay = weightCalendarDayTimestamp(latestWeight.occurredAt) - (89 * ONE_DAY_MILLISECONDS);
-    return weightTrend.filter((point) => weightCalendarDayTimestamp(point.occurredAt) >= firstVisibleDay);
-  }, [latestWeight, weightRange, weightTrend]);
+  const latestDay = latestWeight === undefined ? weightCalendarDayTimestamp(new Date().toISOString()) : weightCalendarDayTimestamp(latestWeight.occurredAt);
+  const earliestDay = weightTrend[0] === undefined ? latestDay : weightCalendarDayTimestamp(weightTrend[0].occurredAt);
+  const visibleWindow: WeightWindow = (() => {
+    if (search.from !== undefined && search.to !== undefined) return { start: Date.parse(search.from), end: Date.parse(search.to) };
+    if (weightRange === "all") return { start: Math.min(earliestDay, latestDay - WEIGHT_DAY_MS), end: latestDay };
+    if (weightRange.startsWith("year-")) return { start: Date.parse(`${weightRange.slice(5)}-01-01`), end: Date.parse(`${weightRange.slice(5)}-12-31`) };
+    return { start: latestDay - (weightRange === "d30" ? 29 : 89) * WEIGHT_DAY_MS, end: latestDay };
+  })();
+  const windowBounds = {
+    start: Math.min(Date.parse(`${new Date(earliestDay).getUTCFullYear()}-01-01`), latestDay - 89 * WEIGHT_DAY_MS, visibleWindow.start),
+    end: Math.max(Date.parse(`${new Date(latestDay).getUTCFullYear()}-12-31`), visibleWindow.end),
+  };
+  const changeWindow = (window: WeightWindow) => onRangeChange({ from: new Date(window.start).toISOString().slice(0, 10), to: new Date(window.end).toISOString().slice(0, 10) });
+  const visibleWeightTrend = weightTrend.filter((point) => {
+    const day = weightCalendarDayTimestamp(point.occurredAt);
+    return day >= visibleWindow.start && day <= visibleWindow.end;
+  });
   const firstVisibleWeight = visibleWeightTrend[0];
   const lastVisibleWeight = visibleWeightTrend.at(-1);
   const recordedDayCount = new Set(visibleWeightTrend.map((point) => weightCalendarDate(point.occurredAt))).size;
@@ -74,15 +88,16 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
   return (
     <>
       <PageHeader eyebrow="LIFE / HEALTH" title="体重と食事" description="体重の実測値と 7 日移動平均、食事の記録をまとめて確認します。" />
-      <div className="mb-6 flex flex-wrap justify-end gap-3">
-        <a href="#meals" className="mr-auto inline-flex h-11 items-center rounded-xl px-3 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring">食事の一覧を見る</a>
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:ml-auto sm:max-w-sm">
         <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => onMealEntryOpenChange(true)}>食事を記録</Button>
         <Button className="h-11 rounded-xl px-5" onClick={() => onWeightEntryOpenChange(true)}>体重を記録</Button>
       </div>
       <MealEntryDialog open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />
       <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />
+      <WeightGoalDialog open={goalEntryOpen} onOpenChange={onGoalEntryOpenChange} goal={weightGoal} initialWeight={weightTrend[0]?.weightKg} />
+      <WeightGoalProgress goal={weightGoal} latestWeight={latestWeight?.weightKg} onEdit={() => onGoalEntryOpenChange(true)} />
       <section className="mb-6">
-        <header className="mb-4 flex items-end justify-between gap-6 max-md:flex-col max-md:items-start">
+        <header className="mb-4 flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
           <div>
             <h2 className="text-xl font-semibold tracking-tight">体重の推移</h2>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -94,66 +109,34 @@ export const HealthPage = ({ weightEntryOpen, onWeightEntryOpenChange, mealEntry
               {weightTrend.length > 0 && ` ・ ${shortDate(weightTrend[0]?.occurredAt ?? "")}〜${shortDate(latestWeight?.occurredAt ?? "")}`}
             </p>
           </div>
-          <div className="flex flex-wrap gap-1 rounded-lg border bg-card p-1" role="group" aria-label="表示期間">
-            <Button type="button" size="sm" variant={weightRange === "d90" ? "default" : "ghost"} onClick={() => setWeightRange("d90")}>直近 90 日</Button>
+          <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border bg-card p-1" role="group" aria-label="表示期間">
+            <Button type="button" size="sm" aria-pressed={weightRange === "d30"} variant={weightRange === "d30" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d30" })}>30 日</Button>
+            <Button type="button" size="sm" aria-pressed={weightRange === "d90"} variant={weightRange === "d90" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d90" })}>直近 90 日</Button>
             {availableYears.map((year) => (
-              <Button key={year} type="button" size="sm" variant={weightRange === `year-${year}` ? "default" : "ghost"} onClick={() => setWeightRange(`year-${year}`)}>{year}</Button>
+              <Button key={year} type="button" size="sm" aria-pressed={weightRange === `year-${year}`} variant={weightRange === `year-${year}` ? "default" : "ghost"} onClick={() => onRangeChange({ range: `year-${year}` })}>{year}</Button>
             ))}
-            <Button type="button" size="sm" variant={weightRange === "all" ? "default" : "ghost"} onClick={() => setWeightRange("all")}>全期間</Button>
+            <Button type="button" size="sm" aria-pressed={weightRange === "all"} variant={weightRange === "all" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "all" })}>全期間</Button>
           </div>
         </header>
-        <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            label="最新"
-            value={(
-              <>
-                {lastVisibleWeight?.weightKg.toFixed(1) ?? "—"}
-                <span className="ml-1 text-sm text-muted-foreground">kg</span>
-              </>
-            )}
-            detail={lastVisibleWeight === undefined ? "記録なし" : shortDate(lastVisibleWeight.occurredAt)}
-            tone="orange"
-          />
-          <MetricCard
-            label="期間内の変化"
-            value={(
-              <>
-                {periodChange === undefined ? "—" : `${periodChange > 0 ? "+" : ""}${periodChange.toFixed(1)}`}
-                <span className="ml-1 text-sm text-muted-foreground">kg</span>
-              </>
-            )}
-            detail="期間の最初との比較"
-            tone="primary"
-          />
-          <MetricCard
-            label="最小値"
-            value={(
-              <>
-                {minimumVisibleWeight?.toFixed(1) ?? "—"}
-                <span className="ml-1 text-sm text-muted-foreground">kg</span>
-              </>
-            )}
-            detail="表示期間内"
-            tone="blue"
-          />
-          <MetricCard
-            label="記録頻度"
-            value={(
-              <>
-                {recordedDayCount}
-                <span className="ml-1 text-sm text-muted-foreground">
-                  /
-                  {visibleDayCount}
-                  日
-                </span>
-              </>
-            )}
-            detail={visibleDayCount === 0 ? "—" : `${Math.round((recordedDayCount / visibleDayCount) * 100)}%`}
-            tone="gold"
-          />
-        </div>
-        <Panel className="overflow-visible py-0">
-          <WeightTrendChart points={visibleWeightTrend} />
+        <Panel className="overflow-hidden rounded-3xl py-0">
+          <WeightTrendChart points={visibleWeightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
+          <dl className="mx-4 my-3 grid grid-cols-2 gap-x-4 gap-y-4 rounded-2xl bg-muted/50 p-4 sm:grid-cols-4">
+            {[
+              { label: "最新", value: lastVisibleWeight?.weightKg.toFixed(1) ?? "—", unit: "kg", detail: lastVisibleWeight === undefined ? "記録なし" : shortDate(lastVisibleWeight.occurredAt) },
+              { label: "期間内の変化", value: periodChange === undefined ? "—" : `${periodChange > 0 ? "+" : ""}${periodChange.toFixed(1)}`, unit: "kg", detail: "期間の最初との比較" },
+              { label: "最小値", value: minimumVisibleWeight?.toFixed(1) ?? "—", unit: "kg", detail: "表示期間内" },
+              { label: "記録頻度", value: String(recordedDayCount), unit: `/ ${visibleDayCount} 日`, detail: visibleDayCount === 0 ? "—" : `${Math.round(recordedDayCount / visibleDayCount * 100)}%` },
+            ].map((metric) => (
+              <div key={metric.label}>
+                <dt className="text-xs text-muted-foreground">{metric.label}</dt>
+                <dd className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">
+                  {metric.value}
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">{metric.unit}</span>
+                </dd>
+                <dd className="mt-1 text-[0.65rem] text-muted-foreground">{metric.detail}</dd>
+              </div>
+            ))}
+          </dl>
           <div className="flex justify-end px-5 pb-3">
             <Button type="button" variant="outline" size="sm" aria-expanded={showWeightTable} onClick={() => setShowWeightTable((current) => !current)}>
               {showWeightTable ? "表を閉じる" : "表で見る"}
