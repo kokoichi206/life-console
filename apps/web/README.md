@@ -58,11 +58,3 @@ Storybook では MSW が架空の応答を返します。未定義の API 操作
 Vitest Browser Mode で stories を実際に描画し、play の操作とアクセシビリティ検査を行います。`pnpm check` に静的ビルドとブラウザテストも含めています。共通 UI を追加して story を忘れた場合は ESLint が失敗します。
 
 `src/styles.css` は Tailwind の読込、テーマの CSS 変数、ベーススタイルを持ちます。ページごとのスタイルをまとめる場所ではありません。
-
-## PWA の外枠とテーマ
-
-PWA の外枠と起動画面は `#090807` に固定します。`index.html` の `theme-color` と `public/manifest.webmanifest` の `theme_color`、`background_color` をそろえ、本文のライト・ダーク切り替えでは変更しません。
-
-Pixel 9a（Android 17、Chrome 152.0.7977.75）では、インストール時の manifest の色が上部の帯に残り、ページの `theme-color` を変えても背景が更新されませんでした。時計などの前景色だけは切り替わるため、manifest だけ暗くしてページ側の色変更を残すと、ライトモードで黒い背景に黒い文字になります。外枠の配色を固定し、本文のテーマから分離して可読性を保ちます。ライトモードでも外枠はダーク色です。
-
-既存の Android PWA には WebAPK の更新が必要です。ページの再読み込みだけでは manifest の変更は反映されません。デプロイ後は Chrome の `about://webapks` から対象アプリの更新を要求するか、PWA を再インストールして確認します。手動更新の手順は [Chrome の manifest 更新ガイド](https://web.dev/articles/manifest-updates#test-manifest-updates) を参照してください。manifest の URL、`id`、`start_url` は維持します。
