@@ -4,8 +4,13 @@ export type WeightWindow = { readonly start: number; readonly end: number };
 export const constrainWeightWindow = (window: WeightWindow, bounds: WeightWindow): WeightWindow => {
   const span = Math.min(Math.max(window.end - window.start, WEIGHT_DAY_MS), bounds.end - bounds.start);
   const start = Math.max(bounds.start, Math.min(window.start, bounds.end - span));
-  return { start: Math.round(start / WEIGHT_DAY_MS) * WEIGHT_DAY_MS, end: Math.round((start + span) / WEIGHT_DAY_MS) * WEIGHT_DAY_MS };
+  return { start, end: start + span };
 };
+
+export const snapWeightWindow = (window: WeightWindow): WeightWindow => ({
+  start: Math.round(window.start / WEIGHT_DAY_MS) * WEIGHT_DAY_MS,
+  end: Math.round(window.end / WEIGHT_DAY_MS) * WEIGHT_DAY_MS,
+});
 
 export const gestureWeightWindow = (window: WeightWindow, bounds: WeightWindow, initial: readonly [number, number], current: readonly [number, number], plotWidth: number): WeightWindow => {
   const span = window.end - window.start;

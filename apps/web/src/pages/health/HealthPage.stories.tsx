@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { http, HttpResponse } from "msw";
 import { useMemo } from "react";
-import { expect, waitFor, within } from "storybook/test";
+import { expect, fireEvent, waitFor, within } from "storybook/test";
 
 import { parseHealthSearch } from "./health-search";
 import { HealthRoutePage } from "./HealthRoutePage";
@@ -156,4 +156,61 @@ export const MobileWeightOverview: Story = {
     },
   },
   globals: { viewport: { value: "weightMobile", isRotated: false } },
+};
+
+export const DragWeightPeriod: Story = {
+  name: "グラフを直接動かし、最新の期間へ戻る",
+  parameters: { ...GoalOverview.parameters },
+  decorators: [(Story) => <div style={{ maxWidth: 390 }}><Story /></div>],
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重の実測値と 7 日移動平均の推移" });
+    chart.scrollIntoView({ block: "center" });
+    const start = canvas.getByLabelText("表示開始日");
+    const end = canvas.getByLabelText("表示終了日");
+    const initialStart = (start as HTMLInputElement).value;
+    const initialEnd = (end as HTMLInputElement).value;
+    const bounds = chart.getBoundingClientRect();
+    const origin = { clientX: bounds.left + bounds.width * 0.3, clientY: bounds.top + 150 };
+    await userEvent.pointer({ target: chart, keys: "[MouseLeft>]", coords: origin });
+    await userEvent.pointer({ target: chart, coords: { ...origin, clientX: origin.clientX + 45 } });
+    await expect(start).toHaveValue(initialStart);
+    await expect(canvas.queryByRole("tooltip")).not.toBeInTheDocument();
+    await userEvent.pointer({ target: chart, keys: "[/MouseLeft]" });
+    await waitFor(() => expect(start).not.toHaveValue(initialStart));
+    const shiftedStart = (start as HTMLInputElement).value;
+    const shiftedEnd = (end as HTMLInputElement).value;
+    await expect(Date.parse(shiftedEnd) - Date.parse(shiftedStart)).toBe(Date.parse(initialEnd) - Date.parse(initialStart));
+    await userEvent.click(canvas.getByRole("button", { name: "体重を記録" }));
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await screen.findByRole("button", { name: "体重の記録を閉じる" }));
+    await expect(start).toHaveValue(shiftedStart);
+    await userEvent.click(canvas.getByRole("button", { name: "最新へ" }));
+    await waitFor(() => expect(start).toHaveValue(initialStart));
+    await expect(end).toHaveValue(initialEnd);
+    chart.scrollIntoView({ block: "center" });
+    const restoredBounds = chart.getBoundingClientRect();
+    const restoredOrigin = { clientX: restoredBounds.left + restoredBounds.width * 0.3, clientY: restoredBounds.top + 150 };
+    await userEvent.pointer({ target: chart, keys: "[MouseLeft>]", coords: restoredOrigin });
+    await userEvent.pointer({ target: chart, coords: { ...restoredOrigin, clientX: restoredOrigin.clientX + 45 } });
+    fireEvent.pointerCancel(chart, { pointerId: 1 });
+    await userEvent.pointer({ target: chart, keys: "[/MouseLeft]" });
+    await expect(start).toHaveValue(initialStart);
+    await expect(end).toHaveValue(initialEnd);
+  },
+};
+
+export const TapWeightDetails: Story = {
+  name: "タップした体重を指を離してから読める",
+  parameters: { ...GoalOverview.parameters },
+  play: async ({ canvas, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重の実測値と 7 日移動平均の推移" });
+    chart.scrollIntoView({ block: "center" });
+    const bounds = chart.getBoundingClientRect();
+    await userEvent.pointer({ target: chart, keys: "[MouseLeft]", coords: { clientX: bounds.left + bounds.width / 2, clientY: bounds.top + 150 } });
+    await expect(await canvas.findByRole("tooltip")).toHaveTextContent("実測");
+    await userEvent.unhover(chart);
+    await expect(canvas.getByRole("tooltip")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "表示期間を狭める" }));
+    await expect(canvas.queryByRole("tooltip")).not.toBeInTheDocument();
+  },
 };
