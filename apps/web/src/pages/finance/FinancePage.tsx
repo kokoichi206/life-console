@@ -119,9 +119,7 @@ export const FinancePage = () => {
   return (
     <>
       <PageHeader
-        eyebrow="MONEY / OVERVIEW"
         title="収支と資産"
-        description="元データは上書きせず、補正履歴を残しながら収支・純資産・資産配分を確認します。"
         actions={(
           <Field label="集計月" className="min-w-36">
             <Input type="month" value={analysisMonth} onChange={(event) => setAnalysisMonth(event.target.value)} />
