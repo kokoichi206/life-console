@@ -23,7 +23,7 @@ export const createHealthUsecase = (
   idGenerator: IdGenerator,
 ): HealthUsecase => ({
   listMeals: (period) => repository.listMeals(period),
-  createMeal: (input) => repository.createMeal(idGenerator.create(), input, clock.now().toISOString()),
+  createMeal: (input) => repository.createMealAndQueueNutrition(idGenerator.create(), input, clock.now().toISOString()),
   getWeightGoal: () => repository.getWeightGoal(),
   saveWeightGoal: (input) => repository.saveWeightGoal(input),
   listWeights: () => repository.listWeights(),

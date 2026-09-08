@@ -21,6 +21,7 @@ const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null) => [
     return HttpResponse.json({ data: null });
   }),
   http.get("*/api/v1/weights", () => HttpResponse.json({ data: entries })),
+  http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: [] })),
   http.get("*/api/v1/meals", () => HttpResponse.json({ data: [] })),
 ];
 const meta = {

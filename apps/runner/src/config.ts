@@ -5,10 +5,12 @@ import { resolve } from "node:path";
 import type { MonitorTarget } from "@life-console/contracts";
 
 import { runnerEnvironmentSchema } from "./environment";
+import type { NutritionSettings } from "./repositories/nutrition-generator";
 
 const environment = runnerEnvironmentSchema.parse(process.env);
 
 export type RunnerConfig = {
+  readonly nutrition: NutritionSettings;
   readonly monitorTargets: ReadonlyArray<MonitorTarget>;
   readonly monitorQueuePath: string;
   readonly apiUrl: string;
@@ -38,6 +40,7 @@ export type RunnerConfig = {
 };
 
 export const runnerConfig: RunnerConfig = {
+  nutrition: { provider: environment.LIFE_CONSOLE_NUTRITION_PROVIDER, model: environment.LIFE_CONSOLE_NUTRITION_MODEL, geminiCliHome: environment.GEMINI_CLI_HOME, geminiAuth: environment.GEMINI_API_KEY === undefined ? "oauth-personal" : "gemini-api-key" },
   monitorTargets: [{ service: "runner", account: "process" }, ...environment.LIFE_CONSOLE_MONITOR_SERVICES.map((service) => ({ service,
     account: ({ slack: environment.SLACK_WORKSPACE, chatwork: environment.CHATWORK_ACCOUNT, talknote: environment.TALKNOTE_ACCOUNT,
       gmail: environment.GMAIL_ACCOUNT, calendar: environment.GMAIL_ACCOUNT, orca: "local" })[service] ?? "default",
