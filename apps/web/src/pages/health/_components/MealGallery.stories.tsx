@@ -2,7 +2,7 @@ import type { Meal } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { http, HttpResponse } from "msw";
 import { useState } from "react";
-import { expect, fn, within } from "storybook/test";
+import { expect, fn, waitFor, within } from "storybook/test";
 
 import { MealGallery } from "./MealGallery";
 
@@ -48,13 +48,14 @@ export const Photos: Story = {
     await expect(detail.getByText(/ごはんと焼き魚/)).toHaveTextContent("味噌汁");
     await expect(detail.getByRole("img", { name: "夕食の写真" })).toBeVisible();
     await userEvent.keyboard("{Escape}");
-    await expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    await expect(mealButton).toHaveFocus();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(mealButton).toHaveFocus());
     await userEvent.click(canvas.getByRole("button", { name: "2026/9/8 18:00 の昼食を開く" }));
     const memoDetail = within(await screen.findByRole("dialog", { name: "昼食" }));
     await expect(memoDetail.getByText("おにぎりとお茶")).toBeVisible();
     await expect(memoDetail.queryByRole("img")).not.toBeInTheDocument();
     await userEvent.click(memoDetail.getByRole("button", { name: "食事の詳細を閉じる" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   },
 };
 export const Dark: Story = { name: "ダーク", globals: { theme: "dark" } };
