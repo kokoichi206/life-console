@@ -803,7 +803,12 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
 
   async heartbeatJob(jobId: string, input: JobHeartbeatInput, leaseExpiresAt: string, now: string): Promise<Result<{ readonly cancelRequested: boolean }, AppError>> {
     const status = input.waitingForUser ? "waiting_for_user" : "running";
-    const result = await safeTry(() => this.#database.prepare(`
+    const result = await safeTry(() => this.#database.batch<{ readonly cancelRequestedAt: string | null }>([
+      this.#database.prepare(`INSERT INTO job_heartbeat_observations (job_id, runner_id, received_at, accepted)
+        VALUES (?, ?, ?, EXISTS (SELECT 1 FROM jobs WHERE id = ? AND runner_id = ? AND lease_token = ?
+          AND status IN ('claimed', 'running', 'waiting_for_user') AND julianday(lease_expires_at) > julianday(?)))`)
+        .bind(jobId, input.runnerId, now, jobId, input.runnerId, input.leaseToken, now),
+      this.#database.prepare(`
       UPDATE jobs
       SET status = ?, lease_expires_at = ?, last_heartbeat_at = ?,
           progress_updated_at = CASE WHEN ? IS NULL THEN progress_updated_at ELSE ? END,
@@ -814,22 +819,23 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
         AND julianday(lease_expires_at) > julianday(?)
       RETURNING cancel_requested_at AS cancelRequestedAt
     `).bind(
-      status,
-      leaseExpiresAt,
-      now,
-      input.progressSummary,
-      now,
-      input.progressSummary,
-      input.progressSummary,
-      now,
-      jobId,
-      input.runnerId,
-      input.leaseToken,
-      now,
-    ).first<{ readonly cancelRequestedAt: string | null }>());
+        status,
+        leaseExpiresAt,
+        now,
+        input.progressSummary,
+        now,
+        input.progressSummary,
+        input.progressSummary,
+        now,
+        jobId,
+        input.runnerId,
+        input.leaseToken,
+        now,
+      )]));
     if (!result.ok) return err(appError.storage(result.error));
-    if (result.value === null) return err(appError.invalidLease());
-    return ok({ cancelRequested: result.value.cancelRequestedAt !== null });
+    const updated = result.value[1]!.results[0];
+    if (updated === undefined) return err(appError.invalidLease());
+    return ok({ cancelRequested: updated.cancelRequestedAt !== null });
   }
 
   async completeJob(jobId: string, input: CompleteJobInput, now: string): Promise<Result<void, AppError>> {

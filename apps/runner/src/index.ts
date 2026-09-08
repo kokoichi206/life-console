@@ -7,6 +7,8 @@ import { processCommandRepository } from "./repositories/command-repository";
 import { createChatworkConnector, createConversationReplyRepository, createSlackConnector } from "./repositories/connectors";
 import { createGmailConnector } from "./repositories/gmail-connector";
 import { fileImportRepository } from "./repositories/import-repository";
+import { createMonitorProbeRepository } from "./repositories/monitor-probe-repository";
+import { openMonitorQueue } from "./repositories/monitor-queue-repository";
 import { createOrcaRepository } from "./repositories/orca-repository";
 import { createReplyCalendarRepository } from "./repositories/reply-calendar-repository";
 import { createReplyContextRepository } from "./repositories/reply-context-repository";
@@ -15,12 +17,10 @@ import { createOrcaRepositoryScanner } from "./repositories/repository-scanner";
 import { createTalknoteConnector } from "./repositories/talknote-connector";
 import { fileWeightHistoryRepository } from "./repositories/weight-history-repository";
 import { createJobExecutorUsecase } from "./usecases/job-executor-usecase";
+import { createRunnerMonitoringUsecase } from "./usecases/monitoring-usecase";
+import { runRunnerLoops } from "./usecases/runner-loops";
 import { createRunnerUsecase } from "./usecases/runner-usecase";
 import { createWeightObsidianExportUsecase } from "./usecases/weight-obsidian-export-usecase";
-
-const wait = (milliseconds: number): Promise<void> => new Promise((resolve) => {
-  setTimeout(resolve, milliseconds);
-});
 
 const api = createApiRepository(runnerConfig);
 const orca = createOrcaRepository(processCommandRepository);
@@ -47,23 +47,35 @@ const runner = createRunnerUsecase({
   executor,
   heartbeatMilliseconds: runnerConfig.heartbeatMilliseconds,
   logger: localLogger,
-  orca,
 });
 
 const main = async (): Promise<void> => {
-  const registered = await runner.register();
-  if (!registered) {
+  const opened = await openMonitorQueue(runnerConfig.monitorQueuePath);
+  if (!opened.ok) {
+    localLogger.error({ event: "monitoring_start_failed", errorCode: opened.error.code, timestamp: new Date().toISOString() });
     process.exitCode = 1;
     return;
   }
-  if (process.argv.includes("--once")) {
-    await runner.runOnce();
+  const monitoring = createRunnerMonitoringUsecase(api, createMonitorProbeRepository(processCommandRepository, runnerConfig), opened.value, runnerConfig.runnerId, localLogger);
+  const once = process.argv.includes("--once");
+  const register = async () => {
+    if (!await runner.register()) return false;
+    const monitors = await api.registerMonitors(runnerConfig.monitorTargets);
+    if (!monitors.ok) localLogger.error({ event: "monitor_registration_failed", errorCode: monitors.error.code, timestamp: new Date().toISOString() });
+    return monitors.ok;
+  };
+  if (once) {
+    const registered = await register();
+    await Promise.all(runnerConfig.monitorTargets.map((target) => monitoring.observe(target, registered)));
+    if (registered) {
+      await monitoring.flush();
+      await runner.runOnce();
+    } else process.exitCode = 1;
+    opened.value.close();
     return;
   }
-  while (true) {
-    await runner.runOnce();
-    await wait(runnerConfig.pollMilliseconds);
-  }
+  await runRunnerLoops({ targets: runnerConfig.monitorTargets, register, observe: monitoring.observe, flush: monitoring.flush,
+    runJob: () => runner.runOnce(), pollMilliseconds: runnerConfig.pollMilliseconds }, new AbortController().signal);
 };
 
 void main().catch(() => {

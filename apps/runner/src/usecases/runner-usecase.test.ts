@@ -21,7 +21,6 @@ const createRunnerTest = (heartbeatJob: ApiRepository["heartbeatJob"]) => {
     executor: { execute },
     heartbeatMilliseconds: 60_000,
     logger: { error: vi.fn(), info: vi.fn() },
-    orca: { health: vi.fn().mockResolvedValue("healthy"), launchAgent: vi.fn() },
   });
   return { runner, execute, completeJob };
 };

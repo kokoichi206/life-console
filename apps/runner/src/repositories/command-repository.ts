@@ -10,7 +10,7 @@ export type CommandOutput = {
 };
 
 export interface CommandRepository {
-  execute(command: string, arguments_: ReadonlyArray<string>, options?: { readonly cwd?: string; readonly signal?: AbortSignal; readonly stdin?: string }): Promise<Result<CommandOutput, RunnerError>>;
+  execute(command: string, arguments_: ReadonlyArray<string>, options?: { readonly cwd?: string; readonly signal?: AbortSignal; readonly stdin?: string; readonly killSignal?: NodeJS.Signals }): Promise<Result<CommandOutput, RunnerError>>;
 }
 
 export const processCommandRepository: CommandRepository = {
@@ -19,6 +19,7 @@ export const processCommandRepository: CommandRepository = {
       const child = spawn(command, arguments_, {
         cwd: options?.cwd,
         signal: options?.signal,
+        killSignal: options?.killSignal,
         stdio: ["pipe", "pipe", "pipe"],
       });
       child.stdin.on("error", (cause) => {
