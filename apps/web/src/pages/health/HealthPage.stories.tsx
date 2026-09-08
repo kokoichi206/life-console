@@ -44,6 +44,37 @@ export const Recorded: Story = {
 };
 export const Empty: Story = { parameters: { msw: { handlers: handlers([]) } } };
 export const Dark: Story = { globals: { theme: "dark" } };
+export const ChartTooltipMobile: Story = {
+  name: "狭い画面でも体重の詳細が切れない",
+  parameters: { msw: { handlers: handlers(weights.map((point) => point.id === "csv" ? { ...point, occurredAt: "2026-09-05T00:00:00+09:00" } : point)) } },
+  decorators: [(Story) => <div style={{ maxWidth: 360 }}><Story /></div>],
+  play: async ({ canvas, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重の実測値と 7 日移動平均の推移" });
+    chart.scrollIntoView({ block: "center" });
+    const chartBounds = chart.getBoundingClientRect();
+    for (const ratio of [0.06, 0.65, 0.98]) {
+      await userEvent.pointer({ target: chart, coords: { clientX: chartBounds.left + chartBounds.width * ratio, clientY: chartBounds.top + 20 } });
+      const tooltip = await canvas.findByRole("tooltip");
+      const bounds = tooltip.getBoundingClientRect();
+      await expect(bounds.left).toBeGreaterThanOrEqual(chartBounds.left);
+      await expect(bounds.right).toBeLessThanOrEqual(chartBounds.right);
+      // 通常はポインター判定の対象外なので、前面表示の検証中だけヒットテストを有効にする。
+      tooltip.style.pointerEvents = "auto";
+      try {
+        for (const line of tooltip.children) {
+          const lineBounds = line.getBoundingClientRect();
+          const paintedElement = tooltip.ownerDocument.elementFromPoint(lineBounds.left + 2, lineBounds.top + lineBounds.height / 2);
+          await expect(tooltip.contains(paintedElement)).toBe(true);
+        }
+      } finally {
+        tooltip.style.pointerEvents = "";
+      }
+    }
+    await userEvent.unhover(chart);
+    await expect(canvas.queryByRole("tooltip")).not.toBeInTheDocument();
+  },
+};
+export const ChartTooltipMobileDark: Story = { ...ChartTooltipMobile, globals: { theme: "dark" } };
 export const WeightEntryOpen: Story = { name: "URL から体重記録を開く", parameters: { entry: "weight" } };
 
 export const MealEntryOpen: Story = {
