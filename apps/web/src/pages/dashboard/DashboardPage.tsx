@@ -39,7 +39,6 @@ export const DashboardPage = () => {
   return (
     <>
       <PageHeader
-        eyebrow="TODAY / OVERVIEW"
         title="ホーム"
         actions={<CountBadge>{new Intl.DateTimeFormat("ja-JP", { dateStyle: "long" }).format(new Date())}</CountBadge>}
       />
