@@ -214,7 +214,7 @@ Storybook の `Health/食事の一覧` で写真・メモのみ・空・写真�
 
 ## 品質確認
 
-`develop` と `main` 向けの PR では GitHub Actions の `ci / Quality checks` が `pnpm check` を実行します。両ブランチの Rulesets で `Quality checks` を必須チェックに設定します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
+`develop` と `main` 向けの PR では GitHub Actions の `ci / Quality checks` が、`pnpm check` と同じ検査を個別の step で実行します。失敗した検査名、所要時間、ログを step ごとに確認できます。両ブランチの Rulesets で `Quality checks` を必須チェックに設定します。PR の CI は本番の Secrets を使わず、デプロイも行いません。
 
 Android の変更には [ci-android](.github/workflows/ci-android.yml) で ktlint、カスタムルールのテスト、Android Lint、Debug APK ビルドを実行します。手元でのコマンドは [Android の README](clients/android/README.md#lint-と-ci) を参照してください。workflow 自体は [ci-github-workflows](.github/README.md) で zizmor と運用規約の検査にかけます。
 
@@ -222,7 +222,7 @@ Android の変更には [ci-android](.github/workflows/ci-android.yml) で ktlin
 pnpm check
 ```
 
-上記で AI ハーネスの整合性、ESLint、TypeScript strict、Vitest、Web/API/runner の production build、Storybook のビルドとブラウザテストを順に実行します。初回だけ `pnpm --filter @life-console/web exec playwright install chromium` でテスト用 Chromium を準備してください。自動修正は `pnpm lint:fix` です。
+上記で AI ハーネスの整合性、migration の生成漏れ、ESLint、TypeScript strict、Vitest、Web/API/runner の production build、Storybook のビルドとブラウザテストを順に検査します。migration の検査だけなら `pnpm migrations:check` を実行します。初回だけ `pnpm --filter @life-console/web exec playwright install chromium` でテスト用 Chromium を準備してください。自動修正は `pnpm lint:fix` です。
 
 runner のビルドには TS ソースを公開する共通パッケージも含めます。ビルド後に Node.js で実行し、テスト専用 API への登録・heartbeat・空のジョブ取得まで確認します。このテストは外部 CLI を探索せず、実 API や実ジョブを使用しません。
 
