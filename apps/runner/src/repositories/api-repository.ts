@@ -1,4 +1,4 @@
-import { type Conversation, type CreateReplyDraftsInput, type SaveReplyDraftInput } from "@life-console/contracts";
+import { type WeightPoint, type Conversation, type CreateReplyDraftsInput, type SaveReplyDraftInput } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
 import { z } from "zod";
 
@@ -50,6 +50,7 @@ export interface ApiRepository {
   completeJob(jobId: string, leaseToken: string, outcome: string, errorCode: string | null, summary: string): Promise<Result<void, RunnerError>>;
   validateLease(jobId: string, leaseToken: string): Promise<Result<boolean, RunnerError>>;
   importConversations(input: unknown): Promise<Result<number, RunnerError>>;
+  listWeightsForExport(signal: AbortSignal): Promise<Result<ReadonlyArray<WeightPoint>, RunnerError>>;
   importWeightCsv(csv: string): Promise<Result<number, RunnerError>>;
   createFinanceTransaction(input: unknown): Promise<Result<void, RunnerError>>;
   createRepository(input: { readonly name: string; readonly localPath: string }): Promise<Result<void, RunnerError>>;
@@ -160,6 +161,10 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
       z.boolean(),
     ),
     importConversations: (input) => jsonRequest("/api/v1/runner/conversations/import", z.number(), input),
+    listWeightsForExport: (signal) => request("/api/v1/runner/weights/export", z.array(z.object({
+      id: z.string(), source: z.string(), weightKg: z.number(),
+      occurredAt: z.iso.datetime({ offset: true }), recordedAt: z.iso.datetime({ offset: true }),
+    })), { signal }),
     importWeightCsv: (csv) => request("/api/v1/weights/import", z.number(), {
       method: "POST",
       headers: { "Content-Type": "text/csv" },

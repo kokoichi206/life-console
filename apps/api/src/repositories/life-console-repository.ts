@@ -188,6 +188,7 @@ export interface LifeConsoleRepository {
   getMealPhoto(id: string): Promise<Result<{ readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>>;
   markMealPhotoUploaded(id: string, now: string): Promise<Result<void, AppError>>;
   listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
+  listWeightsForExport(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   createWeight(id: string, input: CreateWeightInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>>;
   getFinanceSummary(): Promise<Result<FinanceSummary, AppError>>;
   createFinanceTransaction(id: string, input: CreateFinanceTransactionInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>>;

@@ -383,16 +383,24 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(undefined);
   }
 
-  async listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
+  listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
+    return this.#readWeights(730);
+  }
+
+  listWeightsForExport(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
+    return this.#readWeights(-1);
+  }
+
+  async #readWeights(limit: number): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
     type WeightRow = Omit<WeightPoint, "weightKg"> & { readonly weightGrams: number };
     const result = await safeTry(() => this.#database.prepare(`
       SELECT id, source, weight_grams AS weightGrams,
              occurred_at AS occurredAt, recorded_at AS recordedAt
       FROM weights
       WHERE deleted_at IS NULL
-      ORDER BY julianday(occurred_at) ASC
-      LIMIT 730
-    `).all<WeightRow>());
+      ORDER BY julianday(occurred_at) ASC, id ASC
+      LIMIT ?
+    `).bind(limit).all<WeightRow>());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(result.value.results.map((row) => ({
       id: row.id,
@@ -887,13 +895,14 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   async createSchedule(id: string, input: CreateScheduleInput, now: string): Promise<Result<void, AppError>> {
     const result = await safeTry(() => this.#database.prepare(`
       INSERT INTO schedules (
-        id, name, job_kind, interval, timezone, next_run_at, coalescing,
+        id, name, job_kind, payload_json, interval, timezone, next_run_at, coalescing,
         deadline_seconds, enabled, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `).bind(
       id,
       input.name,
       input.jobKind,
+      JSON.stringify(input.payload ?? {}),
       input.interval,
       input.timezone,
       input.nextRunAt,
@@ -916,11 +925,11 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
           summary, error_code, started_at, finished_at, created_at, updated_at
         )
         WITH RECURSIVE due_periods AS (
-          SELECT id AS schedule_id, job_kind, next_run_at AS period_start,
+          SELECT id AS schedule_id, job_kind, payload_json, next_run_at AS period_start,
                  interval, coalescing, deadline_seconds
           FROM schedules WHERE enabled = 1 AND julianday(next_run_at) <= julianday(?)
           UNION ALL
-          SELECT schedule_id, job_kind,
+          SELECT schedule_id, job_kind, payload_json,
                  CASE interval
                    WHEN 'hourly' THEN strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+1 hour')
                    WHEN 'daily' THEN strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+1 day')
@@ -939,7 +948,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
           ) AS period_rank FROM due_periods
         )
         SELECT lower(hex(randomblob(16))), due.schedule_id, NULL, NULL, due.job_kind,
-               'queued', due.schedule_id || ':' || due.period_start, '{}',
+               'queued', due.schedule_id || ':' || due.period_start, due.payload_json,
                NULL, NULL, NULL, NULL, NULL, NULL,
                strftime('%Y-%m-%dT%H:%M:%fZ', due.period_start, '+' || due.deadline_seconds || ' seconds'),
                0, NULL, NULL, NULL, NULL, NULL, ?, ?

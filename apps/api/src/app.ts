@@ -310,6 +310,7 @@ const _routes = app
   .post("/api/v1/schedules", zValidator("json", createScheduleSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createSchedule(context.req.valid("json")));
   })
+  .get("/api/v1/runner/weights/export", async (context) => respond(context, await createHandlers(context.get("environment")).listWeightsForExport()))
   .get("/api/v1/runner/runners", async (context) => respond(context, await createHandlers(context.get("environment")).listRunners()))
   .post("/api/v1/runner/register", zValidator("json", registerRunnerSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).registerRunner(context.req.valid("json")));

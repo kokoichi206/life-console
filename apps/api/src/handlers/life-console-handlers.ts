@@ -66,6 +66,7 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   uploadMealPhoto: (photoId: string, token: string, contentType: string, body: ReadableStream) => dependencies.mealPhotos.uploadViaWorker(photoId, token, contentType, body),
   readMealPhoto: (photoId: string) => dependencies.mealPhotos.read(photoId),
   listWeights: () => dependencies.health.listWeights(),
+  listWeightsForExport: () => dependencies.health.listWeightsForExport(),
   createWeight: (input: CreateWeightInput) => dependencies.health.createWeight(input),
   importWeights: (inputs: ReadonlyArray<CreateWeightInput>) => dependencies.health.importWeights(inputs),
   financeSummary: () => dependencies.finance.summary(),

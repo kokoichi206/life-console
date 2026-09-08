@@ -10,6 +10,7 @@ export interface HealthUsecase {
   listMeals(): Promise<Result<ReadonlyArray<Meal>, AppError>>;
   createMeal(input: CreateMealInput): Promise<Result<Meal, AppError>>;
   listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
+  listWeightsForExport(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   createWeight(input: CreateWeightInput): Promise<Result<void, AppError>>;
   importWeights(inputs: ReadonlyArray<CreateWeightInput>): Promise<Result<number, AppError>>;
 }
@@ -22,6 +23,7 @@ export const createHealthUsecase = (
   listMeals: () => repository.listMeals(),
   createMeal: (input) => repository.createMeal(idGenerator.create(), input, clock.now().toISOString()),
   listWeights: () => repository.listWeights(),
+  listWeightsForExport: () => repository.listWeightsForExport(),
   createWeight: (input) => repository.createWeight(
     idGenerator.create(),
     input,

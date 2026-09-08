@@ -1,28 +1,8 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
-
 import { describe, expect, it } from "vitest";
 
-import { D1LifeConsoleRepository } from "../apps/api/src/repositories/d1-life-console-repository";
+import { createScheduleSchema } from "../packages/contracts/src/schemas";
 
-const createJobStorage = () => {
-  const database = new DatabaseSync(":memory:");
-  const migrations = new URL("../packages/db/migrations/", import.meta.url);
-  for (const migration of readdirSync(migrations).filter((name) => name.endsWith(".sql")).sort()) {
-    database.exec(readFileSync(new URL(migration, migrations), "utf8"));
-  }
-  const statement = (sql: string, parameters: (string | number | null)[] = []) => ({
-    bind: (...bound: (string | number | null)[]) => statement(sql, bound),
-    run: async () => ({ meta: { changes: Number(database.prepare(sql).run(...parameters).changes) } }),
-    all: async () => ({ results: database.prepare(sql).all(...parameters) }),
-    first: async () => database.prepare(sql).get(...parameters) ?? null,
-  });
-  const repository = new D1LifeConsoleRepository({
-    prepare: statement,
-    batch: (statements: ReturnType<typeof statement>[]) => Promise.all(statements.map((query) => query.run())),
-  } as unknown as ConstructorParameters<typeof D1LifeConsoleRepository>[0]);
-  return { database, repository };
-};
+import { createJobStorage } from "./support/d1-storage";
 
 const now = "2026-09-07T12:30:00.000Z";
 
@@ -65,6 +45,39 @@ describe("ジョブの時刻と実行権限", () => {
     expect(database.prepare("SELECT next_run_at FROM schedules").get()?.next_run_at).toBe("2026-09-07T13:00:00.000Z");
     expect(await repository.claimJob("r1", "lease", "2026-09-07T12:33:00.000Z", now)).toMatchObject({ ok: true, value: { status: "claimed" } });
     expect(await repository.enqueueDueSchedules(now)).toMatchObject({ ok: true, value: 0 });
+    database.close();
+  });
+
+  it("定期設定の入力を各 job に固定し、設定変更後も既存 job の入力を変えない", async () => {
+    const { database, repository } = createJobStorage();
+    const input = createScheduleSchema.parse({ name: "書き出し", jobKind: "weight_obsidian_export", interval: "hourly",
+      timezone: "Asia/Tokyo", nextRunAt: "2026-09-07T12:00:00.000Z", coalescing: "queue_all", deadlineSeconds: 7200,
+      payload: { dataDirectory: "data/weight" } });
+    expect(await repository.createSchedule("export", input, now)).toMatchObject({ ok: true });
+    expect(await repository.enqueueDueSchedules(now)).toMatchObject({ ok: true, value: 1 });
+    database.prepare("UPDATE schedules SET payload_json = ? WHERE id = ?").run(JSON.stringify({ dataDirectory: "data/history" }), "export");
+    expect(await repository.enqueueDueSchedules("2026-09-07T13:30:00.000Z")).toMatchObject({ ok: true, value: 1 });
+    const rows = database.prepare("SELECT payload_json FROM jobs ORDER BY created_at").all();
+    expect(rows.map((row) => JSON.parse(String(row.payload_json)))).toEqual([
+      { dataDirectory: "data/weight" }, { dataDirectory: "data/history" },
+    ]);
+    database.close();
+  });
+
+  it("書き出しは 730 件を超える最新の記録を含め、削除済みを除外する", async () => {
+    const { database, repository } = createJobStorage();
+    for (let index = 0; index < 735; index += 1) {
+      const occurredAt = new Date(Date.parse("2024-01-01T00:00:00Z") + index * 86_400_000).toISOString();
+      await repository.createWeight(`weight-${String(index)}`, { source: "manual", sourceKey: String(index), weightKg: 70,
+        occurredAt }, now);
+    }
+    database.prepare("UPDATE weights SET deleted_at = ? WHERE id = ?").run(now, "weight-1");
+    const listed = await repository.listWeights();
+    expect(listed.ok && listed.value.length).toBe(730);
+    const exported = await repository.listWeightsForExport();
+    expect(exported.ok && exported.value.length).toBe(734);
+    expect(exported.ok && exported.value.at(-1)?.id).toBe("weight-734");
+    expect(exported.ok && exported.value.some((point) => point.id === "weight-1")).toBe(false);
     database.close();
   });
 
