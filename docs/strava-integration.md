@@ -6,7 +6,7 @@
 
 [Strava の API 設定](https://www.strava.com/settings/api) で本人のアプリを作成する。有料プランのアカウントを使い、Authorization Callback Domain は配置先のホストに合わせる。ローカルでは `localhost` を使える。
 
-API の環境変数を 4 項目すべて指定する。ローカルは未追跡の `apps/api/.dev.vars`、配置先は既存の環境別 Wrangler 設定・secret を使う。
+API の環境変数を 4 項目すべて指定する。ローカルは未追跡の `apps/api/.dev.vars` を使う。配置先では対象 Worker に 4 項目すべてを secret binding として登録する。Worker の配置は [Terraform](../infra/terraform/README.md) が担当し、既存の `secret_text` を保持するため、Wrangler の `vars` や Terraform の tfvars へ複製しない。
 
 | 名前 | 値 |
 | --- | --- |

@@ -40,9 +40,10 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek }: {
     enabled: connected && !disconnect.isPending,
     retry: false, gcTime: 0, staleTime: 0, refetchOnWindowFocus: false,
   });
+  const { fetchNextPage, hasNextPage, isFetching, isError } = activities;
   useEffect(() => {
-    if (connected && !disconnect.isPending && activities.hasNextPage && !activities.isFetching && !activities.isError) void activities.fetchNextPage();
-  }, [connected, disconnect.isPending, activities.hasNextPage, activities.isFetching, activities.isError, activities.fetchNextPage]);
+    if (connected && !disconnect.isPending && hasNextPage && !isFetching && !isError) void fetchNextPage();
+  }, [connected, disconnect.isPending, hasNextPage, isFetching, isError, fetchNextPage]);
   const complete = connected && activities.isSuccess && !activities.hasNextPage && !activities.isFetching && !disconnect.isPending;
   const records = complete ? [...new Map(activities.data.pages.flatMap((page) => page.activities).map((activity) => [activity.id, activity])).values()] : [];
   const weeks = complete && meals !== undefined ? exerciseWeeks(from, to, records, weights, meals) : [];

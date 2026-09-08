@@ -88,13 +88,19 @@ it("期限切れの認証を 1 件ずつ更新し、返された最新の refres
     await repository.claim("setup", Date.now());
     await repository.write({ ...credentials, expiresAt: 1 }, "setup", Date.now());
     await repository.release("setup");
-    const refreshStarted = Promise.withResolvers<void>();
-    const refreshResponse = Promise.withResolvers<Response>();
+    let notifyRefreshStarted!: () => void;
+    const refreshStarted = new Promise<void>((resolve) => {
+      notifyRefreshStarted = resolve;
+    });
+    let completeRefresh!: (response: Response) => void;
+    const refreshResponse = new Promise<Response>((resolve) => {
+      completeRefresh = resolve;
+    });
     const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       if (String(input).endsWith("/oauth/token")) {
         expect(String(init?.body)).toContain("refresh_token=test-refresh");
-        refreshStarted.resolve();
-        return refreshResponse.promise;
+        notifyRefreshStarted();
+        return refreshResponse;
       }
       expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer new-access");
       return Response.json([]);
@@ -103,9 +109,9 @@ it("期限切れの認証を 1 件ずつ更新し、返された最新の refres
     const environment = { ...settings, DB: binding };
     const path = "/api/v1/strava/activities?from=2026-09-07&to=2026-09-13";
     const first = app.request(path, {}, environment);
-    await refreshStarted.promise;
+    await refreshStarted;
     expect((await app.request(path, {}, environment)).status).toBe(409);
-    refreshResponse.resolve(Response.json({ access_token: "new-access", refresh_token: "new-refresh", expires_at: credentials.expiresAt }));
+    completeRefresh(Response.json({ access_token: "new-access", refresh_token: "new-refresh", expires_at: credentials.expiresAt }));
     expect((await first).status).toBe(200);
     expect(await repository.read()).toEqual({ ok: true, value: { ...credentials, accessToken: "new-access", refreshToken: "new-refresh" } });
     expect(fetcher).toHaveBeenCalledTimes(2);
