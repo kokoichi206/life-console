@@ -16,8 +16,8 @@ permissions:
 
 concurrency:
   group: ci-terraform-${{ github.event.pull_request.number || github.ref }}
-  # 実環境の plan が R2 の state lock を解放できるよう、途中で取り消さない。
-  cancel-in-progress: false
+  # PR の実環境 plan が R2 の state lock を解放できるよう、検査だけの実行を取り消す。
+  cancel-in-progress: ${{ github.event_name != 'pull_request' }}
 
 jobs:
   validate:
