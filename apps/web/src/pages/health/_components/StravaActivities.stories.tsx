@@ -46,7 +46,8 @@ export const PartialFailure: Story = {
 export const Disconnect: Story = {
   parameters: { msw: { handlers: (() => {
     let isConnected = true;
-    return [http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: isConnected ? 42 : null } })), pages, http.delete("*/api/v1/strava/connection", () => {
+    return [http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: isConnected ? 42 : null } })), pages, http.delete("*/api/v1/strava/connection", async () => {
+      await delay(500);
       isConnected = false;
       return HttpResponse.json({ data: null });
     })];
@@ -54,6 +55,8 @@ export const Disconnect: Story = {
   play: async ({ canvas, userEvent }) => {
     await canvas.findByRole("table");
     await userEvent.click(canvas.getByRole("button", { name: "接続を解除" }));
+    await expect(await canvas.findByText("Strava の接続を解除しています。")).toBeVisible();
+    await expect(canvas.queryByText(/期間内の運動を取得しています/)).not.toBeInTheDocument();
     await expect(await canvas.findByRole("button", { name: "Connect with Strava" })).toBeVisible();
     await waitFor(() => expect(canvas.queryByRole("table")).not.toBeInTheDocument());
   },

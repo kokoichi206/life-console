@@ -31,7 +31,7 @@ export const createStravaUsecase = (connections: StravaConnectionRepository, ups
       if (!refreshed.ok) return refreshed;
       const credentials = { athleteId: latest.value.athleteId, accessToken: refreshed.value.access_token, refreshToken: refreshed.value.refresh_token, expiresAt: refreshed.value.expires_at };
       const saved = await connections.write(credentials, lease, clock.now().getTime());
-      return saved.ok ? ok(credentials) : saved;
+      return saved.ok ? ok(credentials) : err({ ...saved.error, message: "更新した接続情報を保存できませんでした。Strava に再接続してください。" });
     });
   };
   return {

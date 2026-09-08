@@ -82,7 +82,8 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek }: {
           <Button size="sm" variant="outline" disabled={authorize.isPending} onClick={() => authorize.mutate()}>Strava に再接続</Button>
         </div>
       )}
-      {connected && !activities.isError && !complete && <p role="status">期間内の運動を取得しています。全件の取得後に週の合計を表示します。</p>}
+      {disconnect.isPending && <p role="status">Strava の接続を解除しています。</p>}
+      {connected && !disconnect.isPending && !activities.isError && !complete && <p role="status">期間内の運動を取得しています。全件の取得後に週の合計を表示します。</p>}
       {complete && meals === undefined && <p role="status">同じ期間の食事記録を取得しています。</p>}
       {weeks.length > 0 && (
         <>
