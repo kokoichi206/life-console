@@ -1,4 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
+import { nutritionAnalysisPayloadSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
 import { mealPeriodQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
 import { weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
@@ -10,6 +11,7 @@ import { z } from "zod";
 import { createLifeConsoleHandlers } from "./handlers/life-console-handlers";
 import { D1LifeConsoleRepository } from "./repositories/d1-life-console-repository";
 import { createMonitoringRepository } from "./repositories/monitoring-repository";
+import { createNutritionRepository } from "./repositories/nutrition-repository";
 import { createPushSubscriptionRepository } from "./repositories/push-subscription-repository";
 import { createStravaApiRepository } from "./repositories/strava-api-repository";
 import { createStravaConnectionRepository } from "./repositories/strava-connection-repository";
@@ -28,6 +30,7 @@ import { createJobUsecase } from "./usecases/job-usecase";
 import { createMealPhotoUsecase } from "./usecases/meal-photo-usecase";
 import { createMonitoringUsecase } from "./usecases/monitoring-usecase";
 import { createNoteUsecase } from "./usecases/note-usecase";
+import { createNutritionUsecase } from "./usecases/nutrition-usecase";
 import { createPushNotificationUsecase } from "./usecases/push-notification-usecase";
 import { createReplyDraftUsecase } from "./usecases/reply-draft-usecase";
 import { createRepositoryUsecase } from "./usecases/repository-usecase";
@@ -77,6 +80,10 @@ const createHandlers = (environment: ApiEnvironment) => {
     tasks: createTaskUsecase(repository, systemClock, cryptoIdGenerator),
   });
 };
+
+const createNutritionHandlers = (environment: ApiEnvironment) => createNutritionUsecase(
+  createNutritionRepository(environment.DB), new D1LifeConsoleRepository(environment.DB), systemClock, cryptoIdGenerator,
+);
 
 const pushKeys = (environment: ApiEnvironment) => environment.WEB_PUSH_PUBLIC_KEY === undefined
   ? null
@@ -222,6 +229,15 @@ const _routes = app
   })
   .get("/api/v1/strava/activities", zValidator("query", stravaActivityQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activities(context.req.valid("query"))))
   .delete("/api/v1/strava/connection", async (context) => respond(context, await createStravaHandlers(context.get("environment")).disconnect()))
+  .get("/api/v1/nutrition", async (context) => respond(context, await createNutritionHandlers(context.get("environment")).list()))
+  .post("/api/v1/nutrition/analyze", zValidator("json", nutritionAnalysisPayloadSchema), async (context) => respond(context, await createNutritionHandlers(context.get("environment")).generate(context.req.valid("json"))))
+  .get("/api/v1/runner/nutrition/candidates", zValidator("query", nutritionAnalysisPayloadSchema), async (context) => respond(context, await createNutritionHandlers(context.get("environment")).candidates(context.req.valid("query"))))
+  .post("/api/v1/runner/nutrition/estimates", zValidator("json", saveNutritionEstimateSchema), async (context) => respond(context, await createNutritionHandlers(context.get("environment")).save(context.req.valid("json"))))
+  .get("/api/v1/runner/meal-photos/:id/content", zValidator("param", identifierParameterSchema), async (context) => {
+    const photo = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id);
+    if (!photo.ok) return respond(context, photo);
+    return new Response(photo.value.body, { headers: { "Content-Type": photo.value.contentType, "Cache-Control": "no-store" } });
+  })
   .post("/api/v1/runner/monitoring/register", zValidator("json", registerMonitorsSchema), async (context) => respond(context, await createMonitoringHandlers(context.get("environment")).register(context.req.valid("json"))))
   .post("/api/v1/runner/monitoring/observations", zValidator("json", reportMonitoringSchema), async (context) => {
     const input = context.req.valid("json");

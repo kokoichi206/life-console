@@ -1,4 +1,5 @@
 import type { AppType } from "@life-console/api";
+import type { MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
 import type { StravaActivityPage, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
   PushConfiguration,
@@ -61,6 +62,8 @@ export const api = {
   disconnectStrava: async () => unwrap<null>(await client.api.v1.strava.connection.$delete()),
   stravaActivities: async (from: string, to: string, page: number, signal: AbortSignal) => unwrap<StravaActivityPage>(await client.api.v1.strava.activities.$get({ query: { from, to, page: String(page) } }, { init: { signal } })),
   mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get({ query: { from, to } })),
+  nutrition: async () => unwrap<ReadonlyArray<MealNutrition>>(await client.api.v1.nutrition.$get()),
+  analyzeNutrition: async (input: NutritionAnalysisPayload) => unwrap<Job>(await client.api.v1.nutrition.analyze.$post({ json: input })),
   monitoring: async () => unwrap<MonitoringSummary>(await client.api.v1.monitoring.$get()),
   monitoringHistory: async (targetId?: string, before?: number) => unwrap<MonitorHistory[]>(await client.api.v1.monitoring.history.$get({ query: {
     ...(targetId === undefined ? {} : { targetId }), ...(before === undefined ? {} : { before: String(before) }),

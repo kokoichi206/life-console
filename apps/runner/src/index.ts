@@ -9,6 +9,7 @@ import { createGmailConnector } from "./repositories/gmail-connector";
 import { fileImportRepository } from "./repositories/import-repository";
 import { createMonitorProbeRepository } from "./repositories/monitor-probe-repository";
 import { openMonitorQueue } from "./repositories/monitor-queue-repository";
+import { createNutritionGenerator } from "./repositories/nutrition-generator";
 import { createOrcaRepository } from "./repositories/orca-repository";
 import { createReplyCalendarRepository } from "./repositories/reply-calendar-repository";
 import { createReplyContextRepository } from "./repositories/reply-context-repository";
@@ -26,6 +27,7 @@ const api = createApiRepository(runnerConfig);
 const orca = createOrcaRepository(processCommandRepository);
 const executor = createJobExecutorUsecase({
   api,
+  nutritionGenerator: createNutritionGenerator(processCommandRepository, api, runnerConfig.nutrition),
   weightExport: createWeightObsidianExportUsecase({ api, history: fileWeightHistoryRepository, vaultPath: runnerConfig.obsidianVaultPath }),
   backup: createCloudflareBackupRepository(processCommandRepository, runnerConfig),
   capabilities: fileCapabilityRepository,

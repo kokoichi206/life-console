@@ -78,6 +78,7 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["meals"] }),
+        queryClient.invalidateQueries({ queryKey: ["nutrition"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
       ]);
       onSaved();
