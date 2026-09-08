@@ -33,7 +33,8 @@ Node.js 24 以上、pnpm は `package.json` の `packageManager` を使う。初
 
 - 実装中は変更箇所のテストと lint・型検査を選んで実行する。バグ修正では再現条件を確認し、継続して守る必要がある挙動に回帰テストを追加する。
 - コード・実行設定の変更を仕上げるときは `pnpm check` を実行する。AI 指示・ルール・スキル本文のみなら `pnpm harness:check` と参照先・内容の確認でよい。CI は `develop` 向け PR で全チェックを実行する。
-- `pnpm check` はハーネスの整合性、lint、型検査、Vitest、Web/API/runner の build、Storybook の build とブラウザテストを実行する。Chromium の初回準備は `pnpm --filter @life-console/web exec playwright install chromium`。
+- `pnpm check` はハーネスの整合性、lint、型検査、Vitest、Web/API/runner の build、実 API・D1・runner の E2E、Storybook の build とブラウザテストを実行する。Chromium の初回準備は `pnpm --filter @life-console/web exec playwright install chromium`。
+- テストの配置は [API の DB 結合テスト](apps/api/tests/integration/README.md) と [API・runner の E2E](e2e/README.md) を参照する。`pnpm test:e2e` でビルドと E2E を実行できる。
 - UI や実行経路を変更したら [verify-implementation](.agents/skills/verify-implementation/SKILL.md) を使い、要求された利用経路と最終結果を確認する。Storybook やスタブだけで実データ確認済みとはしない。
 - 完了前は [self-review](.agents/skills/self-review/SKILL.md) の該当観点で差分を点検する。確認済み、未確認、失敗したチェックを分けて報告する。
 

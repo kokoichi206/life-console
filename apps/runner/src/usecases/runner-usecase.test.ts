@@ -58,3 +58,33 @@ describe("実行開始前の heartbeat", () => {
     expect(completeJob).not.toHaveBeenCalled();
   });
 });
+
+describe("実行終了後の heartbeat", () => {
+  it("完了後はプロセスを待機させるタイマーを残さない", async () => {
+    vi.useFakeTimers();
+    const { runner, completeJob } = createRunnerTest(async () => ok({ cancelRequested: false }));
+    await runner.runOnce();
+    expect(completeJob).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("実行中に送った heartbeat の応答が完了後に戻っても次回を予約しない", async () => {
+    vi.useFakeTimers();
+    const heartbeatJob = vi.fn<ApiRepository["heartbeatJob"]>()
+      .mockResolvedValueOnce(ok({ cancelRequested: false }))
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        setTimeout(() => resolve(ok({ cancelRequested: false })), 100);
+      }));
+    const { runner, execute, completeJob } = createRunnerTest(heartbeatJob);
+    execute.mockImplementationOnce(() => new Promise((resolve) => {
+      setTimeout(() => resolve({ outcome: "succeeded", reportedExternally: false, summary: "完了", errorCode: null }), 60_050);
+    }));
+    const running = runner.runOnce();
+    await vi.advanceTimersByTimeAsync(60_050);
+    expect(heartbeatJob).toHaveBeenCalledTimes(2);
+    await running;
+    await vi.advanceTimersByTimeAsync(50);
+    expect(completeJob).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});

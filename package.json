@@ -23,7 +23,9 @@
     "storybook:test": "pnpm --filter @life-console/web storybook:test",
     "harness:check": "node .agents/scripts/check-harness.mjs",
     "migrations:check": "pnpm --filter @life-console/db migrations:check",
-    "check": "pnpm harness:check && pnpm migrations:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test"
+    "check": "pnpm harness:check && pnpm migrations:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e:run && pnpm storybook:build && pnpm storybook:test",
+    "test:e2e": "pnpm build && pnpm test:e2e:run",
+    "test:e2e:run": "node --test e2e/*.test.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260901.1",

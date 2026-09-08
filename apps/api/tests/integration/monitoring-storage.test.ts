@@ -2,22 +2,22 @@ import { randomUUID } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createMonitoringRepository } from "../apps/api/src/repositories/monitoring-repository";
-import { createPushSubscriptionRepository } from "../apps/api/src/repositories/push-subscription-repository";
-import { appError } from "../apps/api/src/shared/app-error";
-import { createMonitoringUsecase } from "../apps/api/src/usecases/monitoring-usecase";
-import { monitorTargetId, type MonitorObservation } from "../packages/contracts/src/index";
-import { ok, err } from "../packages/core/src/index";
+import { monitorTargetId, type MonitorObservation } from "../../../../packages/contracts/src/index";
+import { ok, err } from "../../../../packages/core/src/index";
+import { createMonitoringRepository } from "../../src/repositories/monitoring-repository";
+import { createPushSubscriptionRepository } from "../../src/repositories/push-subscription-repository";
+import { appError } from "../../src/shared/app-error";
+import { createMonitoringUsecase } from "../../src/usecases/monitoring-usecase";
 
-import { createJobStorage } from "./support/d1-storage";
+import { createApiStorage } from "./support/d1-storage";
 
-const databases: ReturnType<typeof createJobStorage>["database"][] = [];
+const databases: ReturnType<typeof createApiStorage>["database"][] = [];
 afterEach(() => {
   databases.forEach((database) => database.close());
   databases.length = 0;
 });
 const setup = async () => {
-  const storage = createJobStorage();
+  const storage = createApiStorage();
   databases.push(storage.database);
   let now = new Date("2026-09-08T00:00:00.000Z");
   const repository = createMonitoringRepository(storage.binding);

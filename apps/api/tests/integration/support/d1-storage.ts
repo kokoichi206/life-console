@@ -2,11 +2,11 @@ import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { URL } from "node:url";
 
-import { D1LifeConsoleRepository } from "../../apps/api/src/repositories/d1-life-console-repository";
+import { D1LifeConsoleRepository } from "../../../src/repositories/d1-life-console-repository";
 
-export const createJobStorage = () => {
+export const createApiStorage = () => {
   const database = new DatabaseSync(":memory:");
-  const migrations = new URL("../../packages/db/migrations/", import.meta.url);
+  const migrations = new URL("../../../../../packages/db/migrations/", import.meta.url);
   for (const migration of readdirSync(migrations).filter((name) => name.endsWith(".sql")).sort()) {
     database.exec(readFileSync(new URL(migration, migrations), "utf8"));
   }
