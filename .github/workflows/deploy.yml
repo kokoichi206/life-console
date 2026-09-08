@@ -101,13 +101,13 @@ jobs:
 
       - name: Prepare Terraform inputs
         env:
-          TERRAFORM_TFVARS_JSON: ${{ secrets.TERRAFORM_TFVARS_JSON }}
+          TERRAFORM_ENVIRONMENTS_JSON: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
         run: |
-          : "${TERRAFORM_TFVARS_JSON:?対象 Environment の TERRAFORM_TFVARS_JSON を設定してください}"
+          : "${TERRAFORM_ENVIRONMENTS_JSON:?Repository Secret の TERRAFORM_ENVIRONMENTS_JSON を設定してください}"
           node --input-type=module <<'NODE'
           import { writeFileSync } from 'node:fs';
 
-          const variables = JSON.parse(process.env.TERRAFORM_TFVARS_JSON);
+          const variables = JSON.parse(process.env.TERRAFORM_ENVIRONMENTS_JSON)[process.env.DEPLOY_ENVIRONMENT];
           for (const value of Object.values(variables)) {
             const escaped = value.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
             console.log(`::add-mask::${escaped}`);
@@ -129,7 +129,9 @@ jobs:
           : "${AWS_SECRET_ACCESS_KEY:?state 用 R2 secret key を設定してください}"
           terraform -chdir="$TF_ROOT" init -input=false -lockfile=readonly -backend-config=backend.hcl
           terraform -chdir="$TF_ROOT" plan -input=false -lock-timeout=5m -out="$RUNNER_TEMP/deploy.tfplan"
-          terraform -chdir="$TF_ROOT" show -json "$RUNNER_TEMP/deploy.tfplan" | python3 .github/scripts/check-terraform-plan.py
+          # module ごと消した場合は prevent_destroy が効かないため、適用前にも確認する。
+          terraform -chdir="$TF_ROOT" show -json "$RUNNER_TEMP/deploy.tfplan" |
+            jq -e 'all(.resource_changes[]?; .change.actions | index("delete") == null)' >/dev/null
           terraform -chdir="$TF_ROOT" output -json > "$RUNNER_TEMP/terraform-outputs.json"
 
       - name: Prepare D1 migration configuration from Terraform outputs

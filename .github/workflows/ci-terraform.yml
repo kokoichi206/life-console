@@ -5,16 +5,10 @@ on:
     branches:
       - develop
       - main
-    paths:
-      - "infra/terraform/**"
-      - ".github/workflows/ci-terraform.yml"
   push:
     branches:
       - develop
       - main
-    paths:
-      - "infra/terraform/**"
-      - ".github/workflows/ci-terraform.yml"
   workflow_dispatch:
 
 permissions:
@@ -22,7 +16,8 @@ permissions:
 
 concurrency:
   group: ci-terraform-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # 実環境の plan が R2 の state lock を解放できるよう、途中で取り消さない。
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -47,3 +42,130 @@ jobs:
 
       - name: Check Terraform configuration
         run: bash infra/terraform/check.sh
+
+  plan:
+    name: Terraform plan (${{ matrix.environment }})
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        environment:
+          - development
+          - production
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEPLOY_ENVIRONMENT: ${{ matrix.environment }}
+      VITE_APP_ENV: ${{ matrix.environment }}
+      TF_ROOT: infra/terraform/envs/${{ matrix.environment }}
+      TF_IN_AUTOMATION: "true"
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Web
+        run: pnpm --filter @life-console/web build
+
+      - name: Build API
+        run: pnpm --filter @life-console/api build
+
+      - name: Read Terraform version
+        id: terraform-version
+        run: echo "version=$(awk '/^terraform /{print $2}' infra/terraform/.tool-versions)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.terraform-version.outputs.version }}
+          terraform_wrapper: false
+
+      - name: Prepare Terraform inputs
+        env:
+          TERRAFORM_ENVIRONMENTS_JSON: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
+        run: |
+          : "${TERRAFORM_ENVIRONMENTS_JSON:?Repository Secret の TERRAFORM_ENVIRONMENTS_JSON を設定してください}"
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+
+          const variables = JSON.parse(process.env.TERRAFORM_ENVIRONMENTS_JSON)[process.env.DEPLOY_ENVIRONMENT];
+          for (const value of Object.values(variables)) {
+            const escaped = value.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+            console.log(`::add-mask::${escaped}`);
+          }
+          const root = process.env.TF_ROOT;
+          writeFileSync(`${root}/terraform.tfvars.json`, JSON.stringify(variables), { mode: 0o600 });
+          const endpoint = `https://${variables.cloudflare_account_id}.r2.cloudflarestorage.com`;
+          writeFileSync(`${root}/backend.hcl`, `bucket = "life-console-tfstate"\nendpoints = { s3 = "${endpoint}" }\n`, { mode: 0o600 });
+          NODE
+
+      - name: Initialize Terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_PLAN_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_PLAN_STATE_SECRET_ACCESS_KEY }}
+        run: terraform -chdir="$TF_ROOT" init -input=false -lockfile=readonly -backend-config=backend.hcl
+
+      - name: Terraform plan
+        id: plan
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.TERRAFORM_PLAN_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_PLAN_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_PLAN_STATE_SECRET_ACCESS_KEY }}
+        run: |
+          terraform -chdir="$TF_ROOT" plan -input=false -no-color -lock-timeout=5m -out="$RUNNER_TEMP/pr.tfplan"
+          terraform -chdir="$TF_ROOT" show -json "$RUNNER_TEMP/pr.tfplan" > "$RUNNER_TEMP/plan.json"
+
+      - name: Update PR plan comment
+        if: ${{ !cancelled() }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PLAN_STATUS: ${{ steps.plan.outcome }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const environment = process.env.DEPLOY_ENVIRONMENT;
+            const marker = `<!-- terraform-plan-${environment} -->`;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let summary = `plan を完了できませんでした（${process.env.PLAN_STATUS}）。実行ログを確認してください。`;
+            if (process.env.PLAN_STATUS === 'success') {
+              const plan = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/plan.json`, 'utf8'));
+              const changes = (plan.resource_changes ?? []).filter(resource => resource.change.actions.join(',') !== 'no-op');
+              const rows = changes.map(resource => `| \`${resource.address}\` | ${resource.change.actions.join(' → ')} |`);
+              summary = rows.length ? ['| Resource | Action |', '| --- | --- |', ...rows].join('\n') : '差分なし。';
+            }
+            const body = [
+              marker,
+              `### Terraform plan: ${environment}`,
+              `検証コミット: \`${context.sha}\` / [実行ログ](${runUrl})`,
+              summary,
+              '本人情報や state の値を公開しないため、変更資源と操作だけを表示しています。apply は実行していません。',
+            ].join('\n\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number: context.issue.number,
+            });
+            const existing = comments.find(comment => comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }

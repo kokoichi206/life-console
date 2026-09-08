@@ -55,7 +55,7 @@ infra/terraform/
 
 ローカルの資格情報は `~/.config/life-console/terraform/credentials.env` に保存する。ディレクトリは `0700`、ファイルは `0600`。provider 用 `CLOUDFLARE_API_TOKEN` と、state bucket のみに読み書きを許可した `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` をプロセスの環境変数へ渡す。資格情報を `backend.hcl` や tfvars に書かない。
 
-ローカルの provider token は D1 / R2 / Access Apps / Access Policies / Workers Scripts の読み取り専用で、import・refresh・plan に使える。GHA には同じ 5 サービスの編集権限を持つ token を環境別に用意する。Cloudflare 側の権限範囲は対象アカウントで、GHA 側の Environment と許可ブランチで開発・本番の利用経路を分ける。
+ローカルの provider token は D1 / R2 / Access Apps / Access Policies / Workers Scripts の読み取り専用で、import・refresh・plan に使える。GHA の配置には同じ 5 サービスの編集権限を持つ token を環境別に用意し、PR の plan には読み取り専用 token を使う。Cloudflare 側の権限範囲は対象アカウントで、GHA 側の Environment と許可ブランチで開発・本番の利用経路を分ける。
 
 `terraform.tfvars`、`backend.hcl`、`imports.tf` は各 root 内の Git 管理外ファイル。新しい checkout では、`~/.config/life-console/terraform/` 以下の、リポジトリと同じ root 相対パスから同名ファイルを復元する（例: `envs/development/`、`bootstrap/state-storage/`）。入力はアカウント・Worker・Service Token の ID、本人メール、アカウントの workers.dev サブドメインに絞る。既知のアプリ名やセッション期間は定義に固定する。
 
@@ -119,23 +119,33 @@ R2 の公開ドメイン設定はこの定義では作成しない。import 前�
 `deploy.yml` は `develop` で開発、`main` で本番を扱う。`workflow_dispatch` でも対象ブランチを選んで同じ処理を実行できる。GitHub Environment の許可ブランチは開発が `develop`、本番が `main` のみとする。
 
 1. アプリの検査・build と Terraform の mock 検証を行う。
-2. 対象 Environment の入力と資格情報で R2 backend を初期化し、plan を保存する。
+2. Repository Secret から対象環境の入力を選び、Environment の配置用資格情報で R2 backend を初期化して plan を保存する。
 3. plan に削除・置き換えがあれば停止する。module の定義を消した場合も対象にする。
 4. Terraform output から D1 の接続先を生成し、既存の SQL migration を適用する。
 5. 同じ build 成果物のまま、保存済み plan を `terraform apply` する。Worker と Static Assets もこの apply で配置する。
 
 Terraform は既存の Worker の secret bindings を保持する。runner token や Web Push の秘密値を tfvars に複製しない。plan / state / 資格情報を CI artifact にアップロードしない。
 
-各 GitHub Environment に次の Secrets を登録する。
+Repository Secrets に次の 4 件を登録する。環境ごとの入力は `TERRAFORM_ENVIRONMENTS_JSON` の `development` / `production` に分け、各値には対応する tfvars の内容を JSON object として保存する。配置と PR の plan が同じ入力を参照する。
 
 | Secret | 内容 |
 | --- | --- |
-| `TERRAFORM_TFVARS_JSON` | その環境の `terraform.tfvars` と同じ入力を JSON で保存 |
+| `TERRAFORM_ENVIRONMENTS_JSON` | 開発・本番の Terraform 入力を環境名でまとめた JSON |
+| `TERRAFORM_PLAN_API_TOKEN` | D1・R2・Access Apps・Access Policies・Workers Scripts の読み取り専用 token |
+| `TERRAFORM_PLAN_STATE_ACCESS_KEY_ID` | state 用 R2 bucket 専用の S3 access key |
+| `TERRAFORM_PLAN_STATE_SECRET_ACCESS_KEY` | 同じ S3 secret key |
+
+PR の plan でも R2 の state lock を使うため、S3 資格情報には専用 bucket の Object Read & Write 権限を持たせる。Cloudflare API token は読み取り専用。plan workflow は state 本体を更新せず、lock の作成・解放だけを書き込む。
+
+配置用の編集資格情報は、各 GitHub Environment に次の 3 件を登録する。
+
+| Secret | 内容 |
+| --- | --- |
 | `TERRAFORM_CLOUDFLARE_API_TOKEN` | 対象アカウントの D1・R2・Access Apps・Access Policies・Workers Scripts 編集 token |
 | `TERRAFORM_STATE_ACCESS_KEY_ID` | state 用 R2 bucket 専用の S3 access key |
 | `TERRAFORM_STATE_SECRET_ACCESS_KEY` | 同じ S3 secret key |
 
-D1 ID を GitHub Secret と二重管理せず、migration は `cloudflare_d1_database_id` output を参照する。旧 `CLOUDFLARE_*` Secrets は新しい workflow では参照しないが、旧 workflow が残るブランチで必要な間は削除しない。
+D1 ID を GitHub Secret と二重管理せず、migration は `cloudflare_d1_database_id` output を参照する。旧 `CLOUDFLARE_*` Secrets と Environment の `TERRAFORM_TFVARS_JSON` は新しい workflow では参照しないが、旧 workflow が残るブランチで必要な間は削除しない。
 
 R2 の state lock と GHA の環境別 concurrency を使う。plan と apply の間に別の操作が state を更新した場合は、保存済み plan が stale と判定され、apply が停止する。migration はすでに適用されている可能性があるため、稼働中の Worker と互換性のある SQL にする。
 
@@ -154,7 +164,13 @@ pnpm check
 
 `check.sh` は fmt を確認し、公開用の定義とテストだけを一時ディレクトリへコピーして、backend 接続なしの init / validate・mock test を実行する。実運用の backend 初期化情報は書き換えない。子 module のテストは環境 root から実行し、その lock file を使う。環境ごとの保存先、Worker ID の保護、環境内の本人条件、runner のパスと Service Auth、Worker の secret 保持と API / SPA の配信設定を確認する。
 
-[ci-terraform.yml](../../.github/workflows/ci-terraform.yml) は同じ検証を行う。PR の検証には資格情報を渡さない。実環境の plan / apply は、許可ブランチの `deploy.yml` が担当する。mock test と実際の R2 ロック・import・認証の確認は区別する。
+[ci-terraform.yml](../../.github/workflows/ci-terraform.yml) の validate job は資格情報なしで同じ検証を行う。同じリポジトリ内のブランチから `develop` / `main` へ出した PR では、別の plan job が開発・本番をそれぞれ build し、読み取り専用 Cloudflare token で実環境の plan を取得する。fork PR には plan 用の資格情報を渡さず、validate のみ実行する。
+
+plan の変更資源・操作・検証コミット・実行ログへのリンクを、`actions/github-script` で環境ごとの PR コメントに表示する。push のたびに既存コメントを更新し、build・init・plan の失敗時も未完了として表示する。本人情報や Worker 本文を含む plan / state の値はコメントや artifact に載せない。
+
+PR では apply・SQL migration を実行しない。apply は許可ブランチの `deploy.yml` が毎回作り直した plan を使う。R2 の lock を解放するため、PR の plan job は後続 push で自動キャンセルしない。
+
+workflow の構文と shell は `actionlint`、セキュリティ上の設定は `zizmor` で検査する。配置前の削除・置き換え拒否は `deploy.yml` 内の `jq` で行い、専用のスクリプトやテストは持たない。
 
 ## 公式資料
 

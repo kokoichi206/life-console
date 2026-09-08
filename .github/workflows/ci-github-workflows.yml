@@ -7,14 +7,12 @@ on:
       - main
     paths:
       - ".github/workflows/**"
-      - ".github/scripts/**"
   pull_request:
     branches:
       - develop
       - main
     paths:
       - ".github/workflows/**"
-      - ".github/scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -47,8 +45,8 @@ jobs:
           advanced-security: "false"
           annotations: "true"
 
-  workflow-lint:
-    name: Workflow conventions
+  actionlint:
+    name: actionlint
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -57,13 +55,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
         with:
-          enable-cache: false
-
-      - name: Test workflow linter
-        run: uv run --script .github/scripts/lint-workflows.py --test
-
-      - name: Lint workflows
-        run: uv run --script .github/scripts/lint-workflows.py
+          args: -color
