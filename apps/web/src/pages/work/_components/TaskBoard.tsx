@@ -12,7 +12,6 @@ import { JobProgress } from "../../../features/jobs/JobProgress";
 import { jobsQuery } from "../../../features/jobs/queries";
 import { repositoriesQuery } from "../../../features/repositories/queries";
 import { tasksQuery } from "../queries";
-import type { WorkSearch } from "../work-search";
 
 const statusOptions = [
   { value: "inbox", label: "受信箱" },
@@ -141,7 +140,7 @@ export const TaskBoard = () => {
             )}
           />
           <div role="region" aria-label="タスク一覧" tabIndex={0} className="min-h-0 px-5 focus-visible:outline-2 focus-visible:outline-ring xl:overflow-y-auto xl:overscroll-contain xl:[scrollbar-gutter:stable]">
-            {search.taskId !== undefined && <Link to="/tasks" search={(previous: WorkSearch) => ({ ...previous, taskId: undefined })} className={buttonVariants({ variant: "ghost", size: "sm" })}>すべてのタスクに戻る</Link>}
+            {search.taskId !== undefined && <Link from="/tasks" to="/tasks" search={(previous) => ({ ...previous, taskId: undefined })} className={buttonVariants({ variant: "ghost", size: "sm" })}>すべてのタスクに戻る</Link>}
             {visibleTasks.map((task) => {
               const latestJob = latestJobByTaskId.get(task.id);
               const workRepositoryId = task.repositoryId;

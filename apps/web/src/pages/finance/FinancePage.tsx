@@ -186,7 +186,7 @@ export const FinancePage = () => {
         <div className="px-5"><LineChart points={data.assetHistory.map((entry) => ({ label: new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(new Date(entry.occurredAt)), value: entry.netWorthYen }))} valueSuffix=" 円" /></div>
       </Panel>
       <div className="mb-4 grid items-start gap-4 xl:grid-cols-2">
-        <form onSubmit={submitTransaction}>
+        <form id="expense-entry" onSubmit={submitTransaction}>
           <Panel className="gap-4 px-5">
             <div className="space-y-1.5">
               <Eyebrow>TRANSACTION</Eyebrow>

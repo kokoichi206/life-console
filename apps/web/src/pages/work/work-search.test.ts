@@ -26,4 +26,11 @@ describe("仕事の受信箱", () => {
     expect(parseWorkSearch({ create: true, view: "inbox" })).toEqual({ view: "inbox" });
     expect(parseWorkSearch({ status: "invalid", service: "invalid" })).toEqual({});
   });
+  it("URL の再検証でもタスク追加の状態を保持する", () => {
+    const search = parseWorkSearch({ create: true });
+    expect(parseWorkSearch(search)).toEqual(search);
+  });
+  it("文字列へ変換すると候補に一致する配列も、フィルターには受け入れない", () => {
+    expect(parseWorkSearch({ service: ["gmail"], period: ["7d"], status: ["draft"] })).toEqual({});
+  });
 });
