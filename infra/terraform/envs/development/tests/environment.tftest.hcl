@@ -1,9 +1,8 @@
 mock_provider "cloudflare" {}
 
 variables {
-  owner_email           = "owner@example.com"
-  cloudflare_account_id = "00000000000000000000000000000000"
-  access_worker_id      = "11111111111111111111111111111111"
+  owner_email      = "owner@example.com"
+  access_worker_id = "11111111111111111111111111111111"
 }
 
 run "environment_storage_names" {

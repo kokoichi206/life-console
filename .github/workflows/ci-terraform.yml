@@ -115,15 +115,13 @@ jobs:
           }
           const root = process.env.TF_ROOT;
           writeFileSync(`${root}/terraform.tfvars.json`, JSON.stringify(variables), { mode: 0o600 });
-          const endpoint = `https://${variables.cloudflare_account_id}.r2.cloudflarestorage.com`;
-          writeFileSync(`${root}/backend.hcl`, `bucket = "life-console-tfstate"\nendpoints = { s3 = "${endpoint}" }\n`, { mode: 0o600 });
           NODE
 
       - name: Initialize Terraform
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_PLAN_STATE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_PLAN_STATE_SECRET_ACCESS_KEY }}
-        run: terraform -chdir="$TF_ROOT" init -input=false -lockfile=readonly -backend-config=backend.hcl
+        run: terraform -chdir="$TF_ROOT" init -input=false -lockfile=readonly
 
       - name: Terraform plan
         id: plan

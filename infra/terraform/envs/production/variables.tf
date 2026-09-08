@@ -1,19 +1,7 @@
-variable "cloudflare_account_id" {
-  type        = string
-  sensitive   = true
-  description = "配置先の Cloudflare account ID"
-}
-
 variable "access_worker_id" {
   type        = string
   sensitive   = true
   description = "既存 Access が参照する Worker ID"
-}
-
-variable "workers_subdomain" {
-  type        = string
-  sensitive   = true
-  description = "本番 Worker の workers.dev サブドメイン"
 }
 
 variable "runner_service_token_id" {

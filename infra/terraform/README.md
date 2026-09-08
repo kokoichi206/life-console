@@ -53,11 +53,11 @@ infra/terraform/
 
 `use_lockfile = true` により、各キーの `.tflock` で同時更新を排他する。AWS 向けの資格情報・リージョン確認を省く設定は、R2 に接続するために必要。bucket の公開ドメインは無効とし、写真用 bucket を流用しない。
 
-ローカルの資格情報は `~/.config/life-console/terraform/credentials.env` に保存する。ディレクトリは `0700`、ファイルは `0600`。provider 用 `CLOUDFLARE_API_TOKEN` と、state bucket のみに読み書きを許可した `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` をプロセスの環境変数へ渡す。資格情報を `backend.hcl` や tfvars に書かない。
+ローカルの資格情報は `~/.config/life-console/terraform/credentials.env` に保存する。ディレクトリは `0700`、ファイルは `0600`。provider 用 `CLOUDFLARE_API_TOKEN` と、state bucket のみに読み書きを許可した `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` をプロセスの環境変数へ渡す。資格情報を Terraform の定義や tfvars に書かない。
 
 ローカルの provider token は D1 / R2 / Access Apps / Access Policies / Workers Scripts の読み取り専用で、import・refresh・plan に使える。GHA の配置には同じ 5 サービスの編集権限を持つ token を環境別に用意し、PR の plan には読み取り専用 token を使う。Cloudflare 側の権限範囲は対象アカウントで、GHA 側の Environment と許可ブランチで開発・本番の利用経路を分ける。
 
-`terraform.tfvars`、`backend.hcl`、`imports.tf` は各 root 内の Git 管理外ファイル。新しい checkout では、`~/.config/life-console/terraform/` 以下の、リポジトリと同じ root 相対パスから同名ファイルを復元する（例: `envs/development/`、`bootstrap/state-storage/`）。入力はアカウント・Worker・Service Token の ID、本人メール、アカウントの workers.dev サブドメインに絞る。既知のアプリ名やセッション期間は定義に固定する。
+`terraform.tfvars` と `imports.tf` は各 root 内の Git 管理外ファイル。新しい checkout では、`~/.config/life-console/terraform/` 以下の、リポジトリと同じ root 相対パスから同名ファイルを復元する（例: `envs/development/`）。入力は既存 Worker・Service Token の ID と本人メールに絞る。Cloudflare account ID と workers.dev サブドメインは各 root の `locals.tf`、state bucket と R2 endpoint は `backend.tf` に固定する。`backend.hcl` の生成・復元は不要。state 保存先の root は入力変数を持たない。
 
 state と plan は本人メールなどを含むため、Git や公開 CI artifact に保存しない。変更前のバックアップは `terraform state pull` で非公開の別保存先へ残す。state bucket 自体も管理対象だが、初回作成は backend の初期化より先に行う。
 
@@ -65,12 +65,12 @@ state と plan は本人メールなどを含むため、Git や公開 CI artifa
 
 `bootstrap/state-storage` はアプリの第三の環境ではなく、Terraform 自身の保存先だけを管理する root。bucket `life-console-tfstate` はすでに作成・import 済みなので、既存環境では再作成しない。開発・本番の state は同じ専用 bucket の別キーに保存し、Access ポリシーは共有しない。
 
-新しいアカウントで初めて構築する場合だけ、Cloudflare dashboard の R2 で非公開 bucket `life-console-tfstate` を先に作成する。公開ドメインを有効にせず、この bucket だけに Object Read & Write を許可した R2 API token を発行する。provider 用 token と S3 資格情報を非公開の環境変数ファイルに保存し、`bootstrap/state-storage` の example から `backend.hcl` と `terraform.tfvars` を用意する。
+新しいアカウントで初めて構築する場合だけ、Cloudflare dashboard の R2 で非公開 bucket `life-console-tfstate` を先に作成する。公開ドメインを有効にせず、この bucket だけに Object Read & Write を許可した R2 API token を発行する。provider 用 token と S3 資格情報を非公開の環境変数ファイルに保存する。別アカウントへ配置する場合は各 root の `locals.tf` と `backend.tf` をそのアカウントに合わせる。
 
 ```bash
 source ~/.config/life-console/terraform/credentials.env
 cd infra/terraform/bootstrap/state-storage
-terraform init -input=false -lockfile=readonly -backend-config=backend.hcl
+terraform init -input=false -lockfile=readonly
 terraform import -input=false \
   module.state_storage.cloudflare_r2_bucket.state \
   '<account-id>/life-console-tfstate/default'
@@ -86,7 +86,7 @@ source ~/.config/life-console/terraform/credentials.env
 VITE_APP_ENV=development pnpm --filter @life-console/web build
 pnpm --filter @life-console/api build
 cd infra/terraform/envs/development
-terraform init -input=false -lockfile=readonly -backend-config=backend.hcl
+terraform init -input=false -lockfile=readonly
 terraform plan -input=false -detailed-exitcode
 ```
 
@@ -97,7 +97,7 @@ D1 / R2 / Access / Worker / Cron / 公開 URL は `prevent_destroy` を持つ。
 ## 既存環境の import
 
 1. 実際の配置アカウント、D1 ID、bucket 名・jurisdiction、Access の対象・条件・ポリシー共有先を API と配置設定で照合する。
-2. `backend.hcl.example`、`terraform.tfvars.example`、`imports.tf.example` から Git 管理外の設定を作る。既存値に合わせ、本人メールや実環境の ID を example に書かない。
+2. アカウントと backend の固定値を確認し、環境 root の `terraform.tfvars.example` と各 root の `imports.tf.example` から Git 管理外の設定を作る。本人メールや既存 Worker・Service Token の ID は example に書かない。
 3. state 保存先を準備してから、開発・本番それぞれの backend を初期化して取り込む。各 `imports.tf` の `to` と `id` は CLI import のアドレス・ID にも対応する。
 4. 実環境を変更しない `terraform import` で state に登録し、plan の各差分を実設定と照合する。D1 / R2 / Access は差分なしに合わせる。Worker は build 成果物を初めて Terraform から配置する更新が残るため、import と初回配置を分けて確認する。DB データや写真はコピーしない。
 

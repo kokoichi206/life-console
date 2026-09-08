@@ -2,9 +2,7 @@ mock_provider "cloudflare" {}
 
 variables {
   owner_email             = "owner@example.com"
-  workers_subdomain       = "test-account"
   runner_service_token_id = "00000000-0000-0000-0000-000000000002"
-  cloudflare_account_id   = "00000000000000000000000000000000"
   access_worker_id        = "11111111111111111111111111111111"
 }
 

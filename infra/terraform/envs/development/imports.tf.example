@@ -1,34 +1,34 @@
 import {
   to = module.database.cloudflare_d1_database.database
-  id = "${var.cloudflare_account_id}/replace-with-existing-database-id"
+  id = "${local.cloudflare_account_id}/replace-with-existing-database-id"
 }
 
 import {
   to = module.meal_photos.cloudflare_r2_bucket.meal_photos
-  id = "${var.cloudflare_account_id}/life-console-development-meal-photos/default"
+  id = "${local.cloudflare_account_id}/life-console-development-meal-photos/default"
 }
 
 import {
   to = module.owner_access.cloudflare_zero_trust_access_application.worker
-  id = "accounts/${var.cloudflare_account_id}/replace-with-existing-access-application-id"
+  id = "accounts/${local.cloudflare_account_id}/replace-with-existing-access-application-id"
 }
 
 import {
   to = module.owner_policy.cloudflare_zero_trust_access_policy.owner
-  id = "${var.cloudflare_account_id}/replace-with-existing-owner-policy-id"
+  id = "${local.cloudflare_account_id}/replace-with-existing-owner-policy-id"
 }
 
 import {
   to = module.worker.cloudflare_workers_script.app
-  id = "${var.cloudflare_account_id}/life-console-development"
+  id = "${local.cloudflare_account_id}/life-console-development"
 }
 
 import {
   to = module.worker.cloudflare_workers_cron_trigger.app
-  id = "${var.cloudflare_account_id}/life-console-development"
+  id = "${local.cloudflare_account_id}/life-console-development"
 }
 
 import {
   to = module.worker.cloudflare_workers_script_subdomain.app
-  id = "${var.cloudflare_account_id}/life-console-development"
+  id = "${local.cloudflare_account_id}/life-console-development"
 }
