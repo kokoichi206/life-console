@@ -123,7 +123,7 @@ R2 の公開ドメインは定義しない。既存 bucket を import する場�
 
 `infra` が省略されても、必要な後続 job は実行する。上流の失敗やキャンセル後は進めない。配信だけ失敗した場合の「失敗したジョブを再実行」は、成功済み upload の version ID を使う。全ジョブの再実行では version を登録し直す。version ID は Wrangler の構造化出力 `version-upload` から取り、ログの文言を解析しない。
 
-plan は `infra` 内だけで保持する。後続 job は state の output を読み直して設定を生成するため、plan / state / 資格情報を artifact に保存しない。version 自体は Cloudflare にあるため、build 成果物の job 間転送も不要。triggers の更新には公開経路と Cron だけの設定ファイルを生成し、assets のローカルディレクトリを参照させない。
+plan は `infra` 内だけで保持する。後続 job は `deploy.yml` 内の step で `terraform output -json` を取得し、`jq` で Wrangler の設定へ値を入れる。state の output を読み直すため、plan / state / 資格情報を artifact に保存しない。version 自体は Cloudflare にあるため、build 成果物の job 間転送も不要。triggers の更新には公開経路と Cron だけの設定ファイルを生成し、assets のローカルディレクトリを参照させない。
 
 Repository Secrets に次の 4 件を登録する。環境ごとの入力は `TERRAFORM_ENVIRONMENTS_JSON` の `development` / `production` に分け、各値には対応する tfvars の内容を JSON object として保存する。配置と PR の plan が同じ入力を参照する。
 

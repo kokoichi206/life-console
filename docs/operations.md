@@ -10,7 +10,7 @@
 
 品質検査・Storybook・Terraform 検証は PR の CI が担当します。`deploy.yml` は `detect → infra → upload → migration → deploy` の 5 job に分けます。最後に成功した同じブランチの deploy workflow からの変更を検出し、必要な job だけ実行します。初回と手動実行は全工程を実行します。失敗した deploy の変更は、次の push の検出対象に残ります。
 
-`infra` はコードなしの Worker・D1・R2 を作成し、その Worker ID で Access を設定します。`upload` は Web / API を build して Wrangler の version として登録し、`migration` が D1 の SQL を適用した後、`deploy` がその version ID に配信を切り替えて公開 URL と Cron を設定します。upload 時点では配信を切り替えず、preview URL も無効です。D1 ID と R2 名は適用済み Terraform output から取得します。
+`infra` はコードなしの Worker・D1・R2 を作成し、その Worker ID で Access を設定します。`upload` は Web / API を build して Wrangler の version として登録し、`migration` が D1 の SQL を適用した後、`deploy` がその version ID に配信を切り替えて公開 URL と Cron を設定します。upload 時点では配信を切り替えず、preview URL も無効です。D1 ID と R2 名は、`deploy.yml` 内の step で適用済み Terraform output から取得し、`jq` で Wrangler の設定へ渡します。
 
 [開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例を、配置と SQL migration に使います。既存環境は `removed` と import で Worker の実体を削除せず管理を移し、GHA は削除・置き換えを含む plan を停止します。新規環境では Worker ID の入力・事前 import は不要です。state 保存先と資格情報の初回準備は [Terraform の手順](../infra/terraform/README.md#state-保存先の初回準備)を参照します。
 

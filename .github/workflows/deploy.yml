@@ -155,12 +155,44 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up deployment
-        uses: ./.github/actions/setup-deployment
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Terraform
+        uses: ./.github/actions/setup-terraform
         with:
           environments-json: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
           state-access-key-id: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
           state-secret-access-key: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Read applied infrastructure outputs
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+        run: |
+          umask 077
+          terraform -chdir="$TF_ROOT" output -json > "$RUNNER_TEMP/terraform-outputs.json"
+          jq -r '"::add-mask::" + .cloudflare_d1_database_id.value' "$RUNNER_TEMP/terraform-outputs.json"
+
+      - name: Set Wrangler configuration from Terraform outputs
+        run: |
+          umask 077
+          config="apps/api/wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
+          jq --slurpfile outputs "$RUNNER_TEMP/terraform-outputs.json" '
+            .account_id = $outputs[0].cloudflare_account_id.value |
+            .name = $outputs[0].cloudflare_worker_name.value |
+            .d1_databases[0].database_id = $outputs[0].cloudflare_d1_database_id.value |
+            .r2_buckets[0].bucket_name = $outputs[0].cloudflare_r2_bucket_name.value
+          ' "$config.example" > "$config"
 
       - name: Build Web
         run: pnpm --filter @life-console/web exec vite build
@@ -194,12 +226,44 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up deployment
-        uses: ./.github/actions/setup-deployment
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Terraform
+        uses: ./.github/actions/setup-terraform
         with:
           environments-json: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
           state-access-key-id: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
           state-secret-access-key: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Read applied infrastructure outputs
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+        run: |
+          umask 077
+          terraform -chdir="$TF_ROOT" output -json > "$RUNNER_TEMP/terraform-outputs.json"
+          jq -r '"::add-mask::" + .cloudflare_d1_database_id.value' "$RUNNER_TEMP/terraform-outputs.json"
+
+      - name: Set Wrangler configuration from Terraform outputs
+        run: |
+          umask 077
+          config="apps/api/wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
+          jq --slurpfile outputs "$RUNNER_TEMP/terraform-outputs.json" '
+            .account_id = $outputs[0].cloudflare_account_id.value |
+            .name = $outputs[0].cloudflare_worker_name.value |
+            .d1_databases[0].database_id = $outputs[0].cloudflare_d1_database_id.value |
+            .r2_buckets[0].bucket_name = $outputs[0].cloudflare_r2_bucket_name.value
+          ' "$config.example" > "$config"
 
       - name: Apply D1 migrations
         env:
@@ -223,12 +287,44 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up deployment
-        uses: ./.github/actions/setup-deployment
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Terraform
+        uses: ./.github/actions/setup-terraform
         with:
           environments-json: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
           state-access-key-id: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
           state-secret-access-key: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Read applied infrastructure outputs
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_STATE_SECRET_ACCESS_KEY }}
+        run: |
+          umask 077
+          terraform -chdir="$TF_ROOT" output -json > "$RUNNER_TEMP/terraform-outputs.json"
+          jq -r '"::add-mask::" + .cloudflare_d1_database_id.value' "$RUNNER_TEMP/terraform-outputs.json"
+
+      - name: Set Wrangler configuration from Terraform outputs
+        run: |
+          umask 077
+          config="apps/api/wrangler.${DEPLOY_ENVIRONMENT}.jsonc"
+          jq --slurpfile outputs "$RUNNER_TEMP/terraform-outputs.json" '
+            .account_id = $outputs[0].cloudflare_account_id.value |
+            .name = $outputs[0].cloudflare_worker_name.value |
+            .d1_databases[0].database_id = $outputs[0].cloudflare_d1_database_id.value |
+            .r2_buckets[0].bucket_name = $outputs[0].cloudflare_r2_bucket_name.value
+          ' "$config.example" > "$config"
 
       - name: Switch traffic to uploaded version
         env:
@@ -239,4 +335,9 @@ jobs:
       - name: Apply public URL and Cron triggers
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.TERRAFORM_CLOUDFLARE_API_TOKEN }}
-        run: pnpm --filter @life-console/api exec wrangler triggers deploy --config "$RUNNER_TEMP/wrangler-triggers.json"
+        run: |
+          umask 077
+          # triggers の更新には build 成果物を使わず、公開経路と Cron の設定だけを渡す。
+          jq '{name, account_id, workers_dev, preview_urls, routes, triggers}' \
+            "apps/api/wrangler.${DEPLOY_ENVIRONMENT}.jsonc" > "$RUNNER_TEMP/wrangler-triggers.json"
+          pnpm --filter @life-console/api exec wrangler triggers deploy --config "$RUNNER_TEMP/wrangler-triggers.json"
