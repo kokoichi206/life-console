@@ -1,6 +1,6 @@
 output "cloudflare_account_id" {
   value       = local.cloudflare_account_id
-  description = "SQL migration が参照する Cloudflare account ID"
+  description = "配置と SQL migration が参照する Cloudflare account ID"
 }
 
 output "cloudflare_d1_database_id" {
@@ -18,4 +18,9 @@ output "access_application_id" {
   value       = module.owner_access.application_id
   sensitive   = true
   description = "取り込んだ Access アプリケーションの照合用 ID"
+}
+
+output "cloudflare_worker_name" {
+  value       = local.worker_name
+  description = "コードを upload する Worker 名"
 }

@@ -62,7 +62,6 @@ jobs:
         shell: bash
     env:
       DEPLOY_ENVIRONMENT: ${{ matrix.environment }}
-      VITE_APP_ENV: ${{ matrix.environment }}
       TF_ROOT: infra/terraform/envs/${{ matrix.environment }}
       TF_IN_AUTOMATION: "true"
       WRANGLER_SEND_METRICS: "false"
@@ -72,56 +71,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Web
-        run: pnpm --filter @life-console/web build
-
-      - name: Build API
-        run: pnpm --filter @life-console/api build
-
-      - name: Read Terraform version
-        id: terraform-version
-        run: echo "version=$(awk '/^terraform /{print $2}' infra/terraform/.tool-versions)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        uses: ./.github/actions/setup-terraform
         with:
-          terraform_version: ${{ steps.terraform-version.outputs.version }}
-          terraform_wrapper: false
-
-      - name: Prepare Terraform inputs
-        env:
-          TERRAFORM_ENVIRONMENTS_JSON: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
-        run: |
-          : "${TERRAFORM_ENVIRONMENTS_JSON:?Repository Secret の TERRAFORM_ENVIRONMENTS_JSON を設定してください}"
-          node --input-type=module <<'NODE'
-          import { writeFileSync } from 'node:fs';
-
-          const variables = JSON.parse(process.env.TERRAFORM_ENVIRONMENTS_JSON)[process.env.DEPLOY_ENVIRONMENT];
-          for (const value of Object.values(variables)) {
-            const escaped = value.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
-            console.log(`::add-mask::${escaped}`);
-          }
-          const root = process.env.TF_ROOT;
-          writeFileSync(`${root}/terraform.tfvars.json`, JSON.stringify(variables), { mode: 0o600 });
-          NODE
-
-      - name: Initialize Terraform
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_PLAN_STATE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_PLAN_STATE_SECRET_ACCESS_KEY }}
-        run: terraform -chdir="$TF_ROOT" init -input=false -lockfile=readonly
+          environments-json: ${{ secrets.TERRAFORM_ENVIRONMENTS_JSON }}
+          state-access-key-id: ${{ secrets.TERRAFORM_PLAN_STATE_ACCESS_KEY_ID }}
+          state-secret-access-key: ${{ secrets.TERRAFORM_PLAN_STATE_SECRET_ACCESS_KEY }}
 
       - name: Terraform plan
         id: plan

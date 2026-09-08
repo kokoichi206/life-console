@@ -1,46 +1,8 @@
-locals {
-  worker_bundle = "${path.module}/../../../../../apps/api/dist/index.js"
-  web_assets    = "${path.module}/../../../../../apps/web/dist"
-  deployment_sha256 = sha256(jsonencode({
-    worker = filesha256(local.worker_bundle)
-    assets = { for filename in fileset(local.web_assets, "**") : filename => filesha256("${local.web_assets}/${filename}") }
-  }))
-}
-
-resource "cloudflare_workers_script" "app" {
-  account_id          = var.account_id
-  script_name         = var.worker_name
-  main_module         = "index.js"
-  content_file        = local.worker_bundle
-  content_sha256      = filesha256(local.worker_bundle)
-  compatibility_date  = "2026-09-01"
-  compatibility_flags = ["nodejs_compat"]
-  usage_model         = "standard"
-  logpush             = false
-  tail_consumers      = []
-
-  # Web だけの更新も設定差分にし、provider が起動時間を旧 state の値に固定するのを防ぐ。
-  annotations = {
-    workers_tag = local.deployment_sha256
-  }
-
-  # 既存の runner・Web Push の秘密値を state へ取り込まず、配置時も保持する。
-  keep_bindings = ["secret_text"]
-  bindings = [
-    { name = "APP_ENV", type = "plain_text", text = var.environment },
-    { name = "ASSETS", type = "assets" },
-    { name = "DB", type = "d1", id = var.database_id, database_id = var.database_id },
-    { name = "MEAL_PHOTOS", type = "r2_bucket", bucket_name = var.photo_bucket_name },
-    { name = "PHOTO_UPLOAD_MODE", type = "plain_text", text = "worker" },
-  ]
-
-  assets = {
-    directory = local.web_assets
-    config = {
-      not_found_handling = "single-page-application"
-      run_worker_first   = ["/api/*"]
-    }
-  }
+resource "cloudflare_worker" "app" {
+  account_id     = var.account_id
+  name           = var.worker_name
+  logpush        = false
+  tail_consumers = []
 
   observability = {
     enabled            = true
@@ -58,28 +20,14 @@ resource "cloudflare_workers_script" "app" {
     }
   }
 
-  lifecycle {
-    prevent_destroy = true
+  subdomain = {
+    enabled          = false
+    previews_enabled = false
   }
-}
-
-resource "cloudflare_workers_cron_trigger" "app" {
-  account_id  = var.account_id
-  script_name = cloudflare_workers_script.app.id
-  schedules   = [{ cron = "* * * * *" }]
 
   lifecycle {
     prevent_destroy = true
-  }
-}
-
-resource "cloudflare_workers_script_subdomain" "app" {
-  account_id       = var.account_id
-  script_name      = cloudflare_workers_script.app.id
-  enabled          = true
-  previews_enabled = false
-
-  lifecycle {
-    prevent_destroy = true
+    # 初回は非公開で作り、以降の URL 設定は配信開始後の Wrangler に任せる。
+    ignore_changes = [subdomain]
   }
 }

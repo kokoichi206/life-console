@@ -17,18 +17,3 @@ import {
   to = module.owner_policy.cloudflare_zero_trust_access_policy.owner
   id = "${local.cloudflare_account_id}/replace-with-existing-owner-policy-id"
 }
-
-import {
-  to = module.worker.cloudflare_workers_script.app
-  id = "${local.cloudflare_account_id}/life-console-development"
-}
-
-import {
-  to = module.worker.cloudflare_workers_cron_trigger.app
-  id = "${local.cloudflare_account_id}/life-console-development"
-}
-
-import {
-  to = module.worker.cloudflare_workers_script_subdomain.app
-  id = "${local.cloudflare_account_id}/life-console-development"
-}

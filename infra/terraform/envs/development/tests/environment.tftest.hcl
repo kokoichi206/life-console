@@ -1,11 +1,10 @@
 mock_provider "cloudflare" {}
 
 variables {
-  owner_email      = "owner@example.com"
-  access_worker_id = "11111111111111111111111111111111"
+  owner_email = "owner@example.com"
 }
 
-run "environment_storage_names" {
+run "bootstrap_without_existing_worker_or_build" {
   command = plan
 
   assert {
