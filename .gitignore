@@ -23,5 +23,5 @@ AGENTS.override.md
 *.tfplan
 *.tfvars
 *.tfvars.json
-infra/terraform/envs/*/backend.hcl
-infra/terraform/envs/*/imports.tf
+infra/terraform/**/backend.hcl
+infra/terraform/**/imports.tf

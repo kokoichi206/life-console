@@ -17,12 +17,7 @@ variable "worker_id" {
 variable "owner_policy_id" {
   type        = string
   sensitive   = true
-  description = "shared state が管理する本人用ポリシー ID"
-}
-
-variable "session_duration" {
-  type        = string
-  description = "既存の Access セッション有効期間"
+  description = "この環境で管理する本人用ポリシー ID"
 }
 
 variable "http_only_cookie_attribute" {

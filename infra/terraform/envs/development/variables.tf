@@ -10,18 +10,9 @@ variable "access_worker_id" {
   description = "既存 Access が参照する Worker ID"
 }
 
-variable "access_owner_policy_id" {
+
+variable "owner_email" {
   type        = string
   sensitive   = true
-  description = "shared state の owner_policy_id output"
-}
-
-variable "access_application_name" {
-  type        = string
-  description = "既存の Access アプリケーション名"
-}
-
-variable "access_session_duration" {
-  type        = string
-  description = "既存の Access セッション有効期間"
+  description = "この環境で許可する本人メール"
 }

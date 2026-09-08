@@ -1,7 +1,7 @@
 terraform {
   # backend の初期化に先立ち、state 用 bucket だけは bootstrap する。
   backend "s3" {
-    key                         = "life-console/shared/terraform.tfstate"
+    key                         = "life-console/bootstrap/terraform.tfstate"
     region                      = "auto"
     use_lockfile                = true
     skip_credentials_validation = true

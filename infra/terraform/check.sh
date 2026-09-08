@@ -14,7 +14,7 @@ while IFS= read -r configuration_file; do
   cp "$terraform_root/$configuration_file" "$check_directory/$configuration_file"
 done < "$check_directory/configuration-files"
 
-for configuration in envs/shared envs/development envs/production modules/platform/owner-policy modules/services/owner-access modules/services/runner-access; do
+for configuration in bootstrap/state-storage envs/development envs/production; do
   configuration_directory="$check_directory/$configuration"
   terraform -chdir="$configuration_directory" init -backend=false -input=false -lockfile=readonly
   terraform -chdir="$configuration_directory" validate -no-color

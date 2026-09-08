@@ -1,11 +1,9 @@
 mock_provider "cloudflare" {}
 
 variables {
-  cloudflare_account_id   = "00000000000000000000000000000000"
-  access_application_name = "life-console-development"
-  access_owner_policy_id  = "00000000-0000-0000-0000-000000000001"
-  access_worker_id        = "11111111111111111111111111111111"
-  access_session_duration = "24h"
+  owner_email           = "owner@example.com"
+  cloudflare_account_id = "00000000000000000000000000000000"
+  access_worker_id      = "11111111111111111111111111111111"
 }
 
 run "environment_storage_names" {

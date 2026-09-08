@@ -1,11 +1,11 @@
 variable "account_id" {
   type        = string
-  description = "共有ポリシーの Cloudflare account ID"
+  description = "本人用ポリシーの Cloudflare account ID"
 }
 
 variable "policy_name" {
   type        = string
-  description = "共有する本人ポリシーの既存名"
+  description = "この環境の本人用ポリシー名"
 }
 
 variable "owner_email" {

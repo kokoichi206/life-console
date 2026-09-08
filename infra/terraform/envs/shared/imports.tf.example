@@ -1,8 +1,0 @@
-import {
- to = module.owner_policy.cloudflare_zero_trust_access_policy.owner
- id = "${var.cloudflare_account_id}/replace-with-existing-owner-policy-id"
-}
-import {
- to = module.state_storage.cloudflare_r2_bucket.state
- id = "${var.cloudflare_account_id}/life-console-tfstate/default"
-}

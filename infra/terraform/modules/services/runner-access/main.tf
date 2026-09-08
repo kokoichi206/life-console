@@ -7,6 +7,7 @@ resource "cloudflare_zero_trust_access_policy" "runner" {
 
   lifecycle { prevent_destroy = true }
 }
+
 resource "cloudflare_zero_trust_access_application" "runner" {
   account_id                 = var.account_id
   name                       = "Life Console runner API"

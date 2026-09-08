@@ -5,7 +5,7 @@ resource "cloudflare_zero_trust_access_application" "worker" {
   enable_binding_cookie      = false
   options_preflight_bypass   = false
   type                       = "self_hosted"
-  session_duration           = var.session_duration
+  session_duration           = "24h"
   http_only_cookie_attribute = var.http_only_cookie_attribute
   destinations               = [{ type = "worker", worker_id = var.worker_id }]
   policies                   = [{ id = var.owner_policy_id, precedence = 1 }]

@@ -11,6 +11,10 @@ variables {
 }
 run "service_auth_only_for_runner_path" {
   command = plan
+
+  module {
+    source = "../../modules/services/runner-access"
+  }
   assert {
     condition     = length(cloudflare_zero_trust_access_application.runner.destinations) == 1 && one(cloudflare_zero_trust_access_application.runner.destinations).uri == "life-console.test-account.workers.dev/api/v1/runner/*"
     error_message = "機械認証を runner API 以外へ広げないでください。"

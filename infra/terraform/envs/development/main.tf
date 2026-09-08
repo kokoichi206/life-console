@@ -10,12 +10,18 @@ module "meal_photos" {
   bucket_name = local.photo_bucket_name
 }
 
+module "owner_policy" {
+  source      = "../../modules/platform/owner-policy"
+  account_id  = var.cloudflare_account_id
+  policy_name = "Life Console development owner"
+  owner_email = var.owner_email
+}
+
 module "owner_access" {
   source                     = "../../modules/services/owner-access"
   account_id                 = var.cloudflare_account_id
   worker_id                  = var.access_worker_id
-  application_name           = var.access_application_name
-  owner_policy_id            = var.access_owner_policy_id
-  session_duration           = var.access_session_duration
+  application_name           = "life-console-development - Cloudflare Workers"
+  owner_policy_id            = module.owner_policy.policy_id
   http_only_cookie_attribute = true
 }

@@ -14,10 +14,15 @@ import {
 }
 
 import {
- to = module.runner_access.cloudflare_zero_trust_access_application.runner
- id = "accounts/${var.cloudflare_account_id}/replace-with-existing-runner-application-id"
+  to = module.runner_access.cloudflare_zero_trust_access_application.runner
+  id = "accounts/${var.cloudflare_account_id}/replace-with-existing-runner-application-id"
 }
 import {
- to = module.runner_access.cloudflare_zero_trust_access_policy.runner
- id = "${var.cloudflare_account_id}/replace-with-existing-runner-policy-id"
+  to = module.runner_access.cloudflare_zero_trust_access_policy.runner
+  id = "${var.cloudflare_account_id}/replace-with-existing-runner-policy-id"
+}
+
+import {
+  to = module.owner_policy.cloudflare_zero_trust_access_policy.owner
+  id = "${var.cloudflare_account_id}/replace-with-existing-owner-policy-id"
 }
