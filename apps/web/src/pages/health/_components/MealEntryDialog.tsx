@@ -22,6 +22,7 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
   const queryClient = useQueryClient();
   const [occurredAt, setOccurredAt] = useState(currentLocalDateTime);
   const [mealKind, setMealKind] = useState<CreateMealInput["mealKind"]>("dinner");
+  const [caloriesKcal, setCaloriesKcal] = useState("");
   const [memo, setMemo] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [quarterTurns, setQuarterTurns] = useState(0);
@@ -73,7 +74,7 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
         if (!response.ok) throw new Error("写真のアップロードに失敗しました。");
         photoId = upload.photoId;
       }
-      return api.createMeal({ clientId, photoId, memo, mealKind, occurredAt: new Date(occurredAt).toISOString(), tags: [] });
+      return api.createMeal({ clientId, photoId, ...(caloriesKcal === "" ? {} : { manualCaloriesKcal: Number(caloriesKcal) }), memo, mealKind, occurredAt: new Date(occurredAt).toISOString(), tags: [] });
     },
     onSuccess: async () => {
       await Promise.all([
@@ -133,6 +134,8 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
           </NativeSelect>
         </Field>
         <Field label="食事の日時"><Input required type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></Field>
+        <Field label="カロリー（kcal・任意）"><Input type="number" inputMode="numeric" min={0} step={1} value={caloriesKcal} onChange={(event) => setCaloriesKcal(event.target.value)} aria-describedby="meal-calories-help" /></Field>
+        <p id="meal-calories-help" className="text-xs text-muted-foreground">入力した場合は画像解析しません。空欄なら写真から自動で推定します。</p>
         <Field label="メモ"><Textarea rows={3} maxLength={2_000} placeholder="食べたものを記録" value={memo} onChange={(event) => setMemo(event.target.value)} /></Field>
         <Button type="submit" disabled={createMeal.isPending || (photo !== null && photoPreview === undefined) || (photo === null && memo.trim() === "")} className="h-12 w-full rounded-2xl text-base">
           {createMeal.isPending ? "保存しています…" : "食事を保存"}

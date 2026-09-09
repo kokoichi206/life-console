@@ -96,6 +96,7 @@ export const meals = sqliteTable("meals", {
   id: text("id").primaryKey(),
   clientId: text("client_id").notNull(),
   photoId: text("photo_id"),
+  manualCaloriesKcal: integer("manual_calories_kcal"),
   memo: text("memo").notNull(),
   mealKind: text("meal_kind", { enum: mealKinds }).notNull(),
   occurredAt: text("occurred_at").notNull(),

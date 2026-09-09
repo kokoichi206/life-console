@@ -8,6 +8,7 @@ import type { Clock } from "../shared/clock";
 import type { IdGenerator } from "../shared/id-generator";
 
 export const createNutritionUsecase = (nutrition: NutritionRepository, jobs: LifeConsoleRepository, clock: Clock, ids: IdGenerator) => ({
+  saveManualCalories: (mealId: string, caloriesKcal: number): Promise<Result<void, AppError>> => nutrition.saveManualCalories(mealId, caloriesKcal, clock.now().toISOString()),
   list: (): Promise<Result<ReadonlyArray<MealNutrition>, AppError>> => nutrition.list(),
   candidates: (input: NutritionAnalysisPayload): Promise<Result<ReadonlyArray<NutritionCandidate>, AppError>> => nutrition.candidates(input),
   save: (input: SaveNutritionEstimateInput): Promise<Result<void, AppError>> => nutrition.save(ids.create(), input, clock.now().toISOString()),
