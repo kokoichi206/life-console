@@ -1,5 +1,6 @@
 import type { LifeConsoleRepository } from "@api/repositories/life-console-repository";
 import { err, ok, safeTry, type Result } from "@life-console/core";
+import type { MealPhotoContentType } from "@life-console/domain";
 import { AwsClient } from "aws4fetch";
 
 import { appError, type AppError } from "../shared/app-error";
@@ -29,7 +30,7 @@ const sha256 = async (value: string): Promise<string> => {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
-const extensionFor = (contentType: string): string => {
+const extensionFor = (contentType: MealPhotoContentType): string => {
   switch (contentType) {
     case "image/jpeg":
       return "jpg";
@@ -37,13 +38,11 @@ const extensionFor = (contentType: string): string => {
       return "png";
     case "image/webp":
       return "webp";
-    default:
-      return "bin";
   }
 };
 
 export interface MealPhotoUsecase {
-  createUpload(clientId: string, contentType: string): Promise<Result<MealPhotoUpload, AppError>>;
+  createUpload(clientId: string, contentType: MealPhotoContentType): Promise<Result<MealPhotoUpload, AppError>>;
   confirmUploaded(photoId: string): Promise<Result<void, AppError>>;
   uploadViaWorker(photoId: string, token: string, contentType: string, body: ReadableStream): Promise<Result<void, AppError>>;
   read(photoId: string): Promise<Result<{ readonly body: ReadableStream; readonly contentType: string; readonly etag: string }, AppError>>;

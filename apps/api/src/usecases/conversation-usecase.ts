@@ -1,6 +1,7 @@
 import type { Conversation, LifeConsoleRepository, Task } from "@api/repositories/life-console-repository";
 import type { ImportConversationsInput, ListConversationsInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
+import type { ConversationClassification } from "@life-console/domain";
 
 import type { AppError } from "../shared/app-error";
 import type { Clock } from "../shared/clock";
@@ -8,7 +9,7 @@ import type { IdGenerator } from "../shared/id-generator";
 
 export interface ConversationUsecase {
   list(input: ListConversationsInput): Promise<Result<ReadonlyArray<Conversation>, AppError>>;
-  classify(id: string, classification: string): Promise<Result<void, AppError>>;
+  classify(id: string, classification: ConversationClassification): Promise<Result<void, AppError>>;
   createTask(id: string): Promise<Result<Task, AppError>>;
   import(input: ImportConversationsInput): Promise<Result<number, AppError>>;
 }

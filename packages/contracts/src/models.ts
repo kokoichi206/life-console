@@ -1,8 +1,9 @@
+import type { TaskStatus, SourceMappingConnector, SourceScope, ReplyDraftStatus } from "@life-console/domain";
 export type Task = {
   readonly id: string;
   readonly title: string;
   readonly description: string;
-  readonly status: string;
+  readonly status: TaskStatus;
   readonly dueAt: string | null;
   readonly completedAt: string | null;
   readonly conversationId: string | null;
@@ -31,7 +32,7 @@ export type ReplyDraft = {
   readonly excerpt: string;
   readonly sourceUrl: string | null;
   readonly occurredAt: string;
-  readonly status: "ready" | "replied" | "no_action" | "needs_review";
+  readonly status: ReplyDraftStatus;
   readonly body: string;
   readonly reason: string;
   readonly replyEvidenceId: string | null;
@@ -130,8 +131,8 @@ export type Repository = {
 };
 
 export type SourceRepositoryMapping = {
-  readonly connector: "slack" | "chatwork";
-  readonly sourceScope: "channel" | "room";
+  readonly connector: SourceMappingConnector;
+  readonly sourceScope: SourceScope;
   readonly sourceId: string;
   readonly sourceLabel: string;
   readonly repositoryId: string;

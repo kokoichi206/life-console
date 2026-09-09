@@ -3,6 +3,7 @@ import { calculate7DayMovingAverage } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import { err, ok, safeTry } from "@life-console/core";
 import { assetBalances, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
+import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType } from "@life-console/domain";
 import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
@@ -54,8 +55,8 @@ const sourceMappingColumns = {
   sourceLabel: sql<string>`coalesce(${connectorStates.sourceLabel}, ${sourceRepositoryMappings.sourceId})`,
   repositoryId: repositories.id, repositoryName: repositories.name,
 };
-const activeJobStatuses = ["claimed", "running", "waiting_for_user"];
-const pendingJobStatuses = ["queued", ...activeJobStatuses];
+const activeJobStatuses = ["claimed", "running", "waiting_for_user"] as const;
+const pendingJobStatuses = ["queued", ...activeJobStatuses] as const;
 
 type QueuedJobInput = Pick<SQLiteInsertValue<typeof jobs>, "id" | "kind" | "idempotencyKey" | "payloadJson" | "createdAt" | "updatedAt" | "scheduleId" | "taskId" | "repositoryId" | "provider" | "deadlineAt">;
 const queuedJobSelection = (input: QueuedJobInput) => ({
@@ -188,7 +189,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(result.value ?? null);
   }
 
-  async classifyConversation(id: string, classification: string, _now: string): Promise<Result<void, AppError>> {
+  async classifyConversation(id: string, classification: ConversationClassification, _now: string): Promise<Result<void, AppError>> {
     const result = await safeTry(() => this.#database.update(conversations).set({ classification }).where(eq(conversations.id, id)).run());
     if (!result.ok) return err(appError.storage(result.error));
     if (result.value.meta.changes === 0) return err(appError.notFound("会話が見つかりません。"));
@@ -256,7 +257,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok({ ...selected.value, tags: JSON.parse(selected.value.tagsJson) as ReadonlyArray<string> });
   }
 
-  async createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>> {
+  async createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>> {
     const result = await safeTry(() => this.#database.insert(mealPhotos).values({ id: input.id, clientId: input.clientId, objectKey: input.objectKey,
       contentType: input.contentType, uploadTokenHash: input.tokenHash, uploadExpiresAt: input.expiresAt, uploadedAt: null, createdAt: input.now,
     }).onConflictDoNothing().run());
@@ -264,7 +265,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(undefined);
   }
 
-  async getMealPhoto(id: string): Promise<Result<{ readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>> {
+  async getMealPhoto(id: string): Promise<Result<{ readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>> {
     const result = await safeTry(() => this.#database.select({ contentType: mealPhotos.contentType, objectKey: mealPhotos.objectKey,
       tokenHash: mealPhotos.uploadTokenHash, expiresAt: mealPhotos.uploadExpiresAt, uploadedAt: mealPhotos.uploadedAt,
     }).from(mealPhotos).where(eq(mealPhotos.id, id)).get());
@@ -470,7 +471,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(undefined);
   }
 
-  async assignTaskRepository(taskId: string, repositoryId: string, role: string, now: string): Promise<Result<void, AppError>> {
+  async assignTaskRepository(taskId: string, repositoryId: string, role: RepositoryRole, now: string): Promise<Result<void, AppError>> {
     const result = await safeTry(() => this.#database.insert(taskRepositories).values({ taskId, repositoryId, role, createdAt: now })
       .onConflictDoUpdate({ target: [taskRepositories.taskId, taskRepositories.repositoryId, taskRepositories.role], set: { createdAt: now } }).run());
     if (!result.ok) return err(appError.storage(result.error));
@@ -485,7 +486,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(undefined);
   }
 
-  async heartbeatRunner(runnerId: string, orcaStatus: string, now: string): Promise<Result<void, AppError>> {
+  async heartbeatRunner(runnerId: string, orcaStatus: OrcaStatus, now: string): Promise<Result<void, AppError>> {
     const result = await safeTry(() => this.#database.update(runners).set({ lastHeartbeatAt: now, orcaStatus, updatedAt: now }).where(eq(runners.id, runnerId)).run());
     if (!result.ok) return err(appError.storage(result.error));
     if (result.value.meta.changes === 0) return err(appError.notFound("runner が登録されていません。"));
@@ -515,7 +516,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(result.value);
   }
 
-  async createJob(input: { readonly id: string; readonly kind: string; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: string }): Promise<Result<Job, AppError>> {
+  async createJob(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: AgentProvider }): Promise<Result<Job, AppError>> {
     const pendingReply = this.#database.select({ id: jobs.id }).from(jobs).where(and(
       eq(jobs.kind, "conversation_reply"), inArray(jobs.status, pendingJobStatuses),
       eq(sql`json_extract(${jobs.payloadJson}, '$.conversationId')`, sql`json_extract(${input.payloadJson}, '$.conversationId')`),
@@ -576,7 +577,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(undefined);
   }
 
-  async completeJobByCapability(jobId: string, leaseToken: string, outcome: string, errorCode: string | null, summary: string, now: string): Promise<Result<void, AppError>> {
+  async completeJobByCapability(jobId: string, leaseToken: string, outcome: JobCompletionOutcome, errorCode: string | null, summary: string, now: string): Promise<Result<void, AppError>> {
     const result = await safeTry(() => this.#database.update(jobs).set({ status: outcome, summary, errorCode, finishedAt: now, leaseExpiresAt: null, updatedAt: now }).where(and(eq(jobs.id, jobId), eq(jobs.leaseToken, leaseToken), inArray(jobs.status, activeJobStatuses),
       gt(sql`julianday(${jobs.leaseExpiresAt})`, sql`julianday(${now})`))).run());
     if (!result.ok) return err(appError.storage(result.error));
@@ -686,7 +687,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
 
   async markExpiredAndLostJobs(now: string): Promise<Result<void, AppError>> {
     const expiredLease = and(inArray(jobs.status, activeJobStatuses), lte(sql`julianday(${jobs.leaseExpiresAt})`, sql`julianday(${now})`));
-    const externalJobKinds = ["agent", "github_promotion", "conversation_reply"];
+    const externalJobKinds: JobKind[] = ["agent", "github_promotion", "conversation_reply"];
     const result = await safeTry(() => this.#database.batch([
       this.#database.update(jobs).set({ status: "expired", finishedAt: now, updatedAt: now })
         .where(and(eq(jobs.status, "queued"), isNotNull(jobs.deadlineAt), lte(sql`julianday(${jobs.deadlineAt})`, sql`julianday(${now})`))),

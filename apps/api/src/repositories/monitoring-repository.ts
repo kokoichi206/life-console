@@ -1,6 +1,7 @@
 import { monitorTargetId, type MonitorHistory, type MonitorObservation, type MonitorStatus, type RegisterMonitorsInput } from "@life-console/contracts";
 import { err, ok, safeTry } from "@life-console/core";
 import { monitorDeliveryAttempts, monitorIncidents, monitorNotifications, monitorObservations, monitorTargets, pushSubscriptions, runners, systemState } from "@life-console/db";
+import type { MonitorNotificationKind, MonitorDeliveryOutcome } from "@life-console/domain";
 import { and, asc, count, desc, eq, exists, inArray, isNotNull, isNull, lt, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { drizzle } from "drizzle-orm/d1";
@@ -98,7 +99,7 @@ export const createMonitoringRepository = (database: D1Database) => {
       const current = exists(db.select({ id: monitorTargets.id }).from(monitorTargets).where(and(eq(monitorTargets.id, target.id), eq(monitorTargets.revision, target.revision))));
       const openIncident = and(eq(monitorIncidents.targetId, target.id), isNull(monitorIncidents.resolvedAt));
       const slot = sql<number>`cast((unixepoch(${now}) - unixepoch(${monitorIncidents.openedAt})) / 1800 as integer)`;
-      const notificationSelection = (kind: "alert" | "recovery", body: string) => ({
+      const notificationSelection = (kind: MonitorNotificationKind, body: string) => ({
         id: sql`lower(hex(randomblob(16)))`.as("id"), incidentId: monitorIncidents.id, endpoint: pushSubscriptions.endpoint,
         kind: sql`${kind}`.as("kind"), slot: kind === "alert" ? slot.as("slot") : sql`0`.as("slot"), body: sql`${body}`.as("body"), status: sql`'pending'`.as("status"), attempts: sql`0`.as("attempts"),
         nextAttemptAt: sql`${now}`.as("nextAttemptAt"), leaseToken: sql`null`.as("leaseToken"), leaseExpiresAt: sql`null`.as("leaseExpiresAt"), acceptedAt: sql`null`.as("acceptedAt"), createdAt: sql`${now}`.as("createdAt"),
@@ -149,7 +150,7 @@ export const createMonitoringRepository = (database: D1Database) => {
       const started = await batch([db.insert(monitorDeliveryAttempts).values({ id: token, notificationId: delivery.id, startedAt: now })]);
       return started.ok ? ok(delivery) : started;
     },
-    async finish(delivery: MonitorDelivery, outcome: "accepted" | "expired" | "failed", now: string) {
+    async finish(delivery: MonitorDelivery, outcome: MonitorDeliveryOutcome, now: string) {
       const next = new Date(Date.parse(now) + Math.min(1800, 60 * 2 ** Math.min(delivery.attempts - 1, 5)) * 1000).toISOString();
       const statements: [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]] = [
         db.update(monitorDeliveryAttempts).set({ finishedAt: now, outcome }).where(eq(monitorDeliveryAttempts.id, delivery.leaseToken)),

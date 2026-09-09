@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 
 import { describe, expect, it } from "vitest";
 
+import type { NewConversation } from "../apps/api/src/repositories/life-console-repository";
 import { createTaskSchema } from "../packages/contracts/src/schemas";
 
 import { createJobStorage } from "./support/d1-storage";
 
 const now = "2026-09-09T00:00:00.000Z";
 const later = "2026-09-10T00:00:00.000Z";
-const conversation = { id: "conversation", connector: "slack", sourceId: "channel", externalMessageId: "message",
+const conversation: NewConversation = { id: "conversation", connector: "slack", sourceId: "channel", externalMessageId: "message",
   authorLabel: "検証用", excerpt: "架空の依頼", sourceUrl: null, occurredAt: now, classification: "unprocessed" };
 
 describe("タスク・会話・リポジトリの永続化", () => {

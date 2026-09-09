@@ -1,5 +1,6 @@
 import type { WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
+import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType, ConnectorKind, TaskStatus, SourceMappingConnector, SourceScope } from "@life-console/domain";
 
 import type { AppError } from "../shared/app-error";
 
@@ -7,7 +8,7 @@ export type Task = {
   readonly id: string;
   readonly title: string;
   readonly description: string;
-  readonly status: string;
+  readonly status: TaskStatus;
   readonly dueAt: string | null;
   readonly completedAt: string | null;
   readonly conversationId: string | null;
@@ -19,13 +20,13 @@ export type Task = {
 
 export type Conversation = {
   readonly id: string;
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly externalMessageId: string;
   readonly authorLabel: string;
   readonly excerpt: string;
   readonly sourceUrl: string | null;
-  readonly classification: string;
+  readonly classification: ConversationClassification;
   readonly occurredAt: string;
 };
 
@@ -89,12 +90,12 @@ export type RunnerHealth = {
   readonly name: string;
   readonly lastHeartbeatAt: string;
   readonly tokenExpiresAt: string | null;
-  readonly orcaStatus: string;
+  readonly orcaStatus: OrcaStatus;
   readonly lastErrorCode: string | null;
 };
 
 export type ConnectorHealth = {
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly sourceLabel: string;
   readonly watermark: string | null;
@@ -119,8 +120,8 @@ export type Repository = {
 };
 
 export type SourceRepositoryMapping = {
-  readonly connector: "slack" | "chatwork";
-  readonly sourceScope: "channel" | "room";
+  readonly connector: SourceMappingConnector;
+  readonly sourceScope: SourceScope;
   readonly sourceId: string;
   readonly sourceLabel: string;
   readonly repositoryId: string;
@@ -152,19 +153,19 @@ export type Dashboard = {
 
 export type NewConversation = {
   readonly id: string;
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly externalMessageId: string;
   readonly authorLabel: string;
   readonly excerpt: string;
   readonly sourceUrl: string | null;
   readonly occurredAt: string;
-  readonly classification: string;
+  readonly classification: ConversationClassification;
 };
 
 export type ConversationListFilter = {
-  readonly connector: "slack" | "chatwork" | "gmail" | "talknote" | null;
-  readonly classification: string | null;
+  readonly connector: ConnectorKind | null;
+  readonly classification: ConversationClassification | null;
   readonly since: string | null;
 };
 
@@ -179,13 +180,13 @@ export interface LifeConsoleRepository {
   listConversations(filter: ConversationListFilter): Promise<Result<ReadonlyArray<Conversation>, AppError>>;
   getConversation(id: string): Promise<Result<Conversation, AppError>>;
   getSourceRepositoryMapping(connector: string, sourceId: string): Promise<Result<SourceRepositoryMapping | null, AppError>>;
-  classifyConversation(id: string, classification: string, now: string): Promise<Result<void, AppError>>;
+  classifyConversation(id: string, classification: ConversationClassification, now: string): Promise<Result<void, AppError>>;
   createTaskFromConversation(id: string, input: CreateTaskInput, conversationId: string, now: string): Promise<Result<Task, AppError>>;
   saveConversations(conversations: ReadonlyArray<NewConversation>, sourceLabel: string, watermark: string, now: string): Promise<Result<number, AppError>>;
   listMeals(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<Meal>, AppError>>;
   createMealAndQueueNutrition(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>>;
-  createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>>;
-  getMealPhoto(id: string): Promise<Result<{ readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>>;
+  createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>>;
+  getMealPhoto(id: string): Promise<Result<{ readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>>;
   markMealPhotoUploaded(id: string, now: string): Promise<Result<void, AppError>>;
   getWeightGoal(): Promise<Result<WeightGoal | null, AppError>>;
   saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>>;
@@ -203,17 +204,17 @@ export interface LifeConsoleRepository {
   createRepository(id: string, name: string, localPath: string, now: string): Promise<Result<void, AppError>>;
   syncRepositories(input: SyncRepositoriesInput, ids: ReadonlyArray<string>, now: string): Promise<Result<number, AppError>>;
   upsertSourceRepositoryMapping(input: UpsertSourceRepositoryMappingInput, now: string): Promise<Result<void, AppError>>;
-  assignTaskRepository(taskId: string, repositoryId: string, role: string, now: string): Promise<Result<void, AppError>>;
+  assignTaskRepository(taskId: string, repositoryId: string, role: RepositoryRole, now: string): Promise<Result<void, AppError>>;
   registerRunner(input: RegisterRunnerInput, now: string): Promise<Result<void, AppError>>;
-  heartbeatRunner(runnerId: string, orcaStatus: string, now: string): Promise<Result<void, AppError>>;
+  heartbeatRunner(runnerId: string, orcaStatus: OrcaStatus, now: string): Promise<Result<void, AppError>>;
   listRunners(): Promise<Result<ReadonlyArray<RunnerHealth>, AppError>>;
   listConnectorHealth(): Promise<Result<ReadonlyArray<ConnectorHealth>, AppError>>;
   listJobs(): Promise<Result<ReadonlyArray<Job>, AppError>>;
-  createJob(input: { readonly id: string; readonly kind: string; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: string }): Promise<Result<Job, AppError>>;
+  createJob(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: AgentProvider }): Promise<Result<Job, AppError>>;
   claimJob(runnerId: string, leaseToken: string, leaseExpiresAt: string, now: string): Promise<Result<Job | null, AppError>>;
   heartbeatJob(jobId: string, input: JobHeartbeatInput, leaseExpiresAt: string, now: string): Promise<Result<{ readonly cancelRequested: boolean }, AppError>>;
   completeJob(jobId: string, input: CompleteJobInput, now: string): Promise<Result<void, AppError>>;
-  completeJobByCapability(jobId: string, leaseToken: string, outcome: string, errorCode: string | null, summary: string, now: string): Promise<Result<void, AppError>>;
+  completeJobByCapability(jobId: string, leaseToken: string, outcome: JobCompletionOutcome, errorCode: string | null, summary: string, now: string): Promise<Result<void, AppError>>;
   requestJobCancel(jobId: string, now: string): Promise<Result<void, AppError>>;
   validateLease(jobId: string, leaseToken: string): Promise<Result<boolean, AppError>>;
   createSchedule(id: string, input: CreateScheduleInput, now: string): Promise<Result<void, AppError>>;

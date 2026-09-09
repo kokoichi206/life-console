@@ -1,6 +1,6 @@
 # @life-console/db
 
-Drizzle schema、D1 migration、ローカル確認用の架空 seed を管理します。実行時の業務クエリと Result への変換は `apps/api/src/repositories` に置きます。API からこのパッケージの schema を参照し、読み書き・集計・条件付き保存に Drizzle のクエリビルダーを使います。JSON や日付の関数などは `sql` 式を併用します。列の文字列候補は Drizzle の `enum` オプションで定義し、API の入出力 DTO には依存しません。この SQLite の enum 指定は型推論用で、DB の CHECK 制約を追加するものではありません。
+Drizzle schema、D1 migration、ローカル確認用の架空 seed を管理します。実行時の業務クエリと Result への変換は `apps/api/src/repositories` に置きます。API からこのパッケージの schema を参照し、読み書き・集計・条件付き保存に Drizzle のクエリビルダーを使います。JSON や日付の関数などは `sql` 式を併用します。列の文字列候補は [domain](../domain/README.md) の名前付き定義から Drizzle の `enum` オプションへ渡します。Zod と候補を共有し、API の入出力 DTO には依存しません。この SQLite の enum 指定は型推論用で、DB の CHECK 制約を追加するものではありません。
 
 - `src/schema.ts`: テーブル定義
 - `migrations/`: SQL と Drizzle の生成履歴
