@@ -1,5 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
-import { nutritionAnalysisPayloadSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
+import { nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
 import { mealPeriodQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
 import { weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
@@ -116,6 +116,7 @@ const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 500 | 50
       return 403;
     case "not_found":
       return 404;
+    case "nutrition_manual_calories":
     case "conflict":
       return 409;
     case "storage_error":
@@ -230,6 +231,9 @@ const _routes = app
   .get("/api/v1/strava/activities", zValidator("query", stravaActivityQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activities(context.req.valid("query"))))
   .delete("/api/v1/strava/connection", async (context) => respond(context, await createStravaHandlers(context.get("environment")).disconnect()))
   .get("/api/v1/nutrition", async (context) => respond(context, await createNutritionHandlers(context.get("environment")).list()))
+  .put("/api/v1/nutrition/:id/calories", zValidator("param", identifierParameterSchema), zValidator("json", saveMealCaloriesSchema), async (context) => {
+    return respond(context, await createNutritionHandlers(context.get("environment")).saveManualCalories(context.req.valid("param").id, context.req.valid("json").caloriesKcal));
+  })
   .post("/api/v1/nutrition/analyze", zValidator("json", nutritionAnalysisPayloadSchema), async (context) => respond(context, await createNutritionHandlers(context.get("environment")).generate(context.req.valid("json"))))
   .get("/api/v1/runner/nutrition/candidates", zValidator("query", nutritionAnalysisPayloadSchema), async (context) => respond(context, await createNutritionHandlers(context.get("environment")).candidates(context.req.valid("query"))))
   .post("/api/v1/runner/nutrition/estimates", zValidator("json", saveNutritionEstimateSchema), async (context) => respond(context, await createNutritionHandlers(context.get("environment")).save(context.req.valid("json"))))

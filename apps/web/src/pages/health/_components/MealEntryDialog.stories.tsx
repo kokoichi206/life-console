@@ -122,6 +122,7 @@ export const SavePhoto: Story = {
     await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
     await expect(uploadedPhoto).toHaveBeenCalledWith(expect.objectContaining({ contentType: "image/jpeg", signature: [255, 216] }));
     await expect(savedMeal).toHaveBeenCalledWith(expect.objectContaining({ photoId: "meal-photo", memo: "" }));
+    await expect(savedMeal.mock.calls[0]![0]).not.toHaveProperty("manualCaloriesKcal");
   },
 };
 export const RotatePhoto: Story = {
@@ -177,6 +178,7 @@ export const SaveFailure: Story = {
   play: async ({ canvasElement, userEvent }) => {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.type(await screen.findByLabelText("メモ"), "カレー");
+    await userEvent.type(screen.getByLabelText("カロリー（kcal・任意）"), "520");
     await userEvent.upload(screen.getByLabelText("保存済みの写真"), photoFile());
     await screen.findByRole("img", { name: "選択した食事の写真" });
     await userEvent.click(screen.getByRole("button", { name: "右に 90° 回転" }));
@@ -184,6 +186,7 @@ export const SaveFailure: Story = {
     await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
     await expect(await screen.findByRole("alert")).toHaveTextContent("保存できませんでした");
     await expect(screen.getByLabelText("メモ")).toHaveValue("カレー");
+    await expect(screen.getByLabelText("カロリー（kcal・任意）")).toHaveValue(520);
     await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["red", "red", "blue", "blue"] });
   },
 };
@@ -196,6 +199,7 @@ export const Saving: Story = {
   play: async ({ canvasElement, userEvent }) => {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.type(await screen.findByLabelText("メモ"), "カレー");
+    await userEvent.type(screen.getByLabelText("カロリー（kcal・任意）"), "520");
     await userEvent.upload(screen.getByLabelText("保存済みの写真"), photoFile());
     await screen.findByRole("img", { name: "選択した食事の写真" });
     await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
@@ -226,5 +230,20 @@ export const ReplacePhoto: Story = {
     await userEvent.upload(screen.getByLabelText("保存済みの写真"), photoFile());
     await expect(await screen.findByRole("img", { name: "選択した食事の写真" })).toBeVisible();
     await expect(screen.getByRole("button", { name: "食事を保存" })).toBeEnabled();
+  },
+};
+
+export const SavePhotoWithCalories: Story = {
+  name: "写真と手入力カロリーを保存",
+  play: async ({ canvasElement, userEvent, args }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.upload(await screen.findByLabelText("保存済みの写真"), photoFile());
+    await screen.findByRole("img", { name: "選択した食事の写真" });
+    await userEvent.type(screen.getByLabelText("カロリー（kcal・任意）"), "520");
+    await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
+    await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
+    await expect(savedMeal).toHaveBeenCalledWith(expect.objectContaining({ photoId: "meal-photo", manualCaloriesKcal: 520 }));
+    await userEvent.click(screen.getByRole("button", { name: "記録画面を開く" }));
+    await expect(await screen.findByLabelText("カロリー（kcal・任意）")).toHaveValue(null);
   },
 };

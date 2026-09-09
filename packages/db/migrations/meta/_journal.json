@@ -57,6 +57,13 @@
       "when": 1788882342441,
       "tag": "0007_hard_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788968973261,
+      "tag": "0008_shiny_strong_guy",
+      "breakpoints": true
     }
   ]
 }

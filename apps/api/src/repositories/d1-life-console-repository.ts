@@ -244,9 +244,9 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     const initialJob = this.#database.insert(jobs).select(this.#database.select(queuedJobSelection({
       id: initialJobId, kind: "nutrition_analysis", idempotencyKey: initialJobId,
       payloadJson: sql`json_object('mealId', ${meals.id})`, createdAt: now, updatedAt: now,
-    })).from(meals).where(and(eq(meals.clientId, input.clientId), isNotNull(meals.photoId), isNull(meals.deletedAt)))).onConflictDoNothing();
+    })).from(meals).where(and(eq(meals.clientId, input.clientId), isNotNull(meals.photoId), isNull(meals.manualCaloriesKcal), isNull(meals.deletedAt)))).onConflictDoNothing();
     const inserted = await safeTry(() => this.#database.batch([
-      this.#database.insert(meals).values({ id, clientId: input.clientId, photoId: input.photoId, memo: input.memo,
+      this.#database.insert(meals).values({ id, clientId: input.clientId, photoId: input.photoId, manualCaloriesKcal: input.manualCaloriesKcal, memo: input.memo,
         mealKind: input.mealKind, occurredAt: input.occurredAt, recordedAt: now, tagsJson: JSON.stringify(input.tags), deletedAt: null,
       }).onConflictDoNothing(), initialJob,
     ]));

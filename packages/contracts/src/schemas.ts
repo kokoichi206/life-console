@@ -112,6 +112,7 @@ export const createMealUploadSchema = z.object({
 export const createMealSchema = z.object({
   clientId: z.uuid(),
   photoId: identifierSchema.nullable().default(null),
+  manualCaloriesKcal: z.number().int().nonnegative().optional(),
   memo: z.string().trim().max(2_000).default(""),
   mealKind: mealKindSchema,
   occurredAt: isoDateTimeSchema,
