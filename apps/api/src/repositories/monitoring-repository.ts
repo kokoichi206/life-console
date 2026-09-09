@@ -1,120 +1,164 @@
 import { monitorTargetId, type MonitorHistory, type MonitorObservation, type MonitorStatus, type RegisterMonitorsInput } from "@life-console/contracts";
 import { err, ok, safeTry } from "@life-console/core";
+import { monitorDeliveryAttempts, monitorIncidents, monitorNotifications, monitorObservations, monitorTargets, pushSubscriptions, runners, systemState } from "@life-console/db";
+import type { MonitorNotificationKind, MonitorDeliveryOutcome } from "@life-console/domain";
+import { and, asc, count, desc, eq, exists, inArray, isNotNull, isNull, lt, lte, notExists, notInArray, or, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
+import { drizzle } from "drizzle-orm/d1";
+import { alias } from "drizzle-orm/sqlite-core";
 
 import { appError } from "../shared/app-error";
 
-const targetColumns = "id, runner_id AS runnerId, service, account, registered_at AS registeredAt, received_at AS receivedAt, outcome, failures, revision";
 export type MonitorDelivery = { readonly id: string; readonly endpoint: string; readonly body: string; readonly leaseToken: string; readonly attempts: number };
-export const createMonitoringRepository = (db: D1Database) => {
-  const batch = async (statements: D1PreparedStatement[]) => {
+export const createMonitoringRepository = (database: D1Database) => {
+  const db = drizzle(database);
+  const batch = async (statements: [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]) => {
     const result = await safeTry(() => db.batch(statements));
     return result.ok ? ok(undefined) : err(appError.storage(result.error));
   };
   return {
     async expectRunners(runnerIds: ReadonlyArray<string>, now: string) {
       if (runnerIds.length === 0) return ok(undefined);
-      return batch(runnerIds.map((runnerId) => db.prepare("INSERT INTO monitor_targets (id, runner_id, service, account, registered_at) VALUES (?, ?, 'runner', 'process', ?) ON CONFLICT(id) DO NOTHING")
-        .bind(monitorTargetId(runnerId, { service: "runner", account: "process" }), runnerId, now)));
+      const statements = runnerIds.map((runnerId) => db.insert(monitorTargets).values({
+        id: monitorTargetId(runnerId, { service: "runner", account: "process" }), runnerId, service: "runner", account: "process", registeredAt: now,
+      }).onConflictDoNothing({ target: monitorTargets.id }));
+      return batch([statements[0]!, ...statements.slice(1)]);
     },
     async maintenanceFinished(now: string) {
       return batch([
-        db.prepare("UPDATE monitor_notifications SET status = 'canceled' WHERE status IN ('pending', 'sending') AND endpoint NOT IN (SELECT endpoint FROM push_subscriptions)"),
-        db.prepare("INSERT INTO system_state (key, value, updated_at) VALUES ('monitoring_last_success', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").bind(now, now),
+        db.update(monitorNotifications).set({ status: "canceled" }).where(and(inArray(monitorNotifications.status, ["pending", "sending"]),
+          notInArray(monitorNotifications.endpoint, db.select({ endpoint: pushSubscriptions.endpoint }).from(pushSubscriptions)))),
+        db.insert(systemState).values({ key: "monitoring_last_success", value: now, updatedAt: now })
+          .onConflictDoUpdate({ target: systemState.key, set: { value: now, updatedAt: now } }),
       ]);
     },
     async register(input: RegisterMonitorsInput, now: string) {
       const ids = input.targets.map((target) => monitorTargetId(input.runnerId, target));
+      const registrations = input.targets.map((target) => db.insert(monitorTargets).values({
+        id: monitorTargetId(input.runnerId, target), runnerId: input.runnerId, service: target.service, account: target.account, registeredAt: now,
+      }).onConflictDoNothing({ target: monitorTargets.id }));
+      const missingTarget = notInArray(monitorIncidents.targetId, db.select({ id: monitorTargets.id }).from(monitorTargets));
       return batch([
-        ...input.targets.map((target) => db.prepare(`INSERT INTO monitor_targets (id, runner_id, service, account, registered_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`)
-          .bind(monitorTargetId(input.runnerId, target), input.runnerId, target.service, target.account, now)),
-        db.prepare(`DELETE FROM monitor_targets WHERE runner_id = ? AND id NOT IN (${ids.map(() => "?").join(",")})`).bind(input.runnerId, ...ids),
-        db.prepare("UPDATE monitor_incidents SET resolved_at = ? WHERE resolved_at IS NULL AND target_id NOT IN (SELECT id FROM monitor_targets)").bind(now),
-        db.prepare("UPDATE monitor_notifications SET status = 'canceled' WHERE status IN ('pending', 'sending') AND incident_id IN (SELECT id FROM monitor_incidents WHERE target_id NOT IN (SELECT id FROM monitor_targets))"),
+        registrations[0]!, ...registrations.slice(1),
+        db.delete(monitorTargets).where(and(eq(monitorTargets.runnerId, input.runnerId), notInArray(monitorTargets.id, ids))),
+        db.update(monitorIncidents).set({ resolvedAt: now }).where(and(isNull(monitorIncidents.resolvedAt), missingTarget)),
+        db.update(monitorNotifications).set({ status: "canceled" }).where(and(inArray(monitorNotifications.status, ["pending", "sending"]),
+          inArray(monitorNotifications.incidentId, db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(missingTarget)))),
       ]);
     },
     async record(observation: MonitorObservation, historical: boolean, now: string) {
       const targetId = monitorTargetId(observation.runnerId, observation);
-      const statements: D1PreparedStatement[] = [];
+      const updates: BatchItem<"sqlite">[] = [];
       if (!historical) {
-        const target = await safeTry(() => db.prepare("SELECT id FROM monitor_targets WHERE id = ?").bind(targetId).first());
+        const target = await safeTry(() => db.select({ id: monitorTargets.id }).from(monitorTargets).where(eq(monitorTargets.id, targetId)).get());
         if (!target.ok) return err(appError.storage(target.error));
-        if (target.value === null) return err(appError.notFound("監視対象が登録されていません。runner を再登録してください。"));
-        statements.push(db.prepare(`UPDATE monitor_targets SET received_at = ?, outcome = ?, failures = CASE WHEN ? = 'healthy' THEN 0 ELSE failures + 1 END, revision = revision + 1
-          WHERE id = ? AND NOT EXISTS (SELECT 1 FROM monitor_observations WHERE id = ?)`)
-          .bind(now, observation.outcome, observation.outcome, targetId, observation.id));
-        if (observation.service === "runner") statements.push(db.prepare(`UPDATE runners SET last_heartbeat_at = ?, updated_at = ? WHERE id = ?
-          AND NOT EXISTS (SELECT 1 FROM monitor_observations WHERE id = ?)`)
-          .bind(now, now, observation.runnerId, observation.id));
-        if (observation.service === "orca") statements.push(db.prepare("UPDATE runners SET orca_status = ?, updated_at = ? WHERE id = ?")
-          .bind(observation.outcome === "healthy" ? "healthy" : "unreachable", now, observation.runnerId));
+        if (target.value === undefined) return err(appError.notFound("監視対象が登録されていません。runner を再登録してください。"));
+        const unseenObservation = notExists(db.select({ id: monitorObservations.id }).from(monitorObservations).where(eq(monitorObservations.id, observation.id)));
+        updates.push(db.update(monitorTargets).set({ receivedAt: now, outcome: observation.outcome,
+          failures: observation.outcome === "healthy" ? 0 : sql`${monitorTargets.failures} + 1`, revision: sql`${monitorTargets.revision} + 1`,
+        }).where(and(eq(monitorTargets.id, targetId), unseenObservation)));
+        if (observation.service === "runner") updates.push(db.update(runners).set({ lastHeartbeatAt: now, updatedAt: now })
+          .where(and(eq(runners.id, observation.runnerId), unseenObservation)));
+        if (observation.service === "orca") updates.push(db.update(runners).set({ orcaStatus: observation.outcome === "healthy" ? "healthy" : "unreachable", updatedAt: now })
+          .where(eq(runners.id, observation.runnerId)));
       }
-      statements.push(db.prepare(`INSERT INTO monitor_observations (id, target_id, observed_at, received_at, outcome, historical) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`)
-        .bind(observation.id, targetId, observation.observedAt, now, observation.outcome, historical ? 1 : 0));
-      return batch(statements);
+      const saveObservation = db.insert(monitorObservations).values({ id: observation.id, targetId, observedAt: observation.observedAt,
+        receivedAt: now, outcome: observation.outcome, historical: historical ? 1 : 0,
+      }).onConflictDoNothing({ target: monitorObservations.id });
+      const statements = [...updates, saveObservation];
+      return batch([statements[0]!, ...statements.slice(1)]);
     },
     async list() {
-      const result = await safeTry(() => db.prepare(`SELECT ${targetColumns} FROM monitor_targets ORDER BY runner_id, service, account`).all<MonitorStatus>());
-      return result.ok ? ok(result.value.results) : err(appError.storage(result.error));
+      const result = await safeTry(() => db.select().from(monitorTargets)
+        .orderBy(asc(monitorTargets.runnerId), asc(monitorTargets.service), asc(monitorTargets.account)).all());
+      return result.ok ? ok(result.value) : err(appError.storage(result.error));
     },
     async history(targetId: string | undefined, before: number | undefined) {
-      const result = await safeTry(() => db.prepare(`SELECT sequence, target_id AS targetId, json_extract(target_id, '$[0]') AS runnerId, json_extract(target_id, '$[1]') AS service, json_extract(target_id, '$[2]') AS account, observed_at AS observedAt, received_at AS receivedAt, outcome, historical FROM monitor_observations
-        WHERE (? IS NULL OR target_id = ?) AND (? IS NULL OR sequence < ?) ORDER BY sequence DESC LIMIT 100`)
-        .bind(targetId ?? null, targetId ?? null, before ?? null, before ?? null).all<MonitorHistory>());
-      return result.ok ? ok(result.value.results) : err(appError.storage(result.error));
+      const result = await safeTry(() => db.select({ sequence: monitorObservations.sequence, targetId: monitorObservations.targetId,
+        runnerId: sql<string>`json_extract(${monitorObservations.targetId}, '$[0]')`.as("runnerId"),
+        service: sql<MonitorHistory["service"]>`json_extract(${monitorObservations.targetId}, '$[1]')`.as("service"),
+        account: sql<string>`json_extract(${monitorObservations.targetId}, '$[2]')`.as("account"),
+        observedAt: monitorObservations.observedAt, receivedAt: monitorObservations.receivedAt, outcome: monitorObservations.outcome, historical: monitorObservations.historical,
+      }).from(monitorObservations).where(and(targetId === undefined ? undefined : eq(monitorObservations.targetId, targetId),
+        before === undefined ? undefined : lt(monitorObservations.sequence, before),
+      )).orderBy(desc(monitorObservations.sequence)).limit(100).all());
+      return result.ok ? ok(result.value) : err(appError.storage(result.error));
     },
     async deliveryCounts() {
-      const result = await safeTry(() => db.prepare(`SELECT count(*) AS pendingNotifications, coalesce(sum(CASE WHEN attempts > 0 THEN 1 ELSE 0 END), 0) AS failedNotifications, (SELECT value FROM system_state WHERE key = 'monitoring_last_success') AS lastMaintenanceAt
-        FROM monitor_notifications WHERE status IN ('pending', 'sending') AND endpoint IN (SELECT endpoint FROM push_subscriptions)`).first<{ pendingNotifications: number; failedNotifications: number; lastMaintenanceAt: string | null }>());
+      const maintenance = db.select({ value: systemState.value }).from(systemState).where(eq(systemState.key, "monitoring_last_success"));
+      const result = await safeTry(() => db.select({ pendingNotifications: count(),
+        failedNotifications: sql<number>`coalesce(sum(case when ${monitorNotifications.attempts} > 0 then 1 else 0 end), 0)`.as("failedNotifications"),
+        lastMaintenanceAt: sql<string | null>`${maintenance}`.as("lastMaintenanceAt"),
+      }).from(monitorNotifications).where(and(inArray(monitorNotifications.status, ["pending", "sending"]),
+        inArray(monitorNotifications.endpoint, db.select({ endpoint: pushSubscriptions.endpoint }).from(pushSubscriptions)),
+      )).get());
       return result.ok ? ok(result.value!) : err(appError.storage(result.error));
     },
     async decide(target: MonitorStatus, decision: "open" | "recover" | "hold", reason: string, now: string) {
-      const statements: D1PreparedStatement[] = [];
-      const current = "EXISTS (SELECT 1 FROM monitor_targets WHERE id = ? AND revision = ?)";
+      const updates: BatchItem<"sqlite">[] = [];
+      const current = exists(db.select({ id: monitorTargets.id }).from(monitorTargets).where(and(eq(monitorTargets.id, target.id), eq(monitorTargets.revision, target.revision))));
+      const openIncident = and(eq(monitorIncidents.targetId, target.id), isNull(monitorIncidents.resolvedAt));
+      const slot = sql<number>`cast((unixepoch(${now}) - unixepoch(${monitorIncidents.openedAt})) / 1800 as integer)`;
+      const notificationSelection = (kind: MonitorNotificationKind, body: string) => ({
+        id: sql`lower(hex(randomblob(16)))`.as("id"), incidentId: monitorIncidents.id, endpoint: pushSubscriptions.endpoint,
+        kind: sql`${kind}`.as("kind"), slot: kind === "alert" ? slot.as("slot") : sql`0`.as("slot"), body: sql`${body}`.as("body"), status: sql`'pending'`.as("status"), attempts: sql`0`.as("attempts"),
+        nextAttemptAt: sql`${now}`.as("nextAttemptAt"), leaseToken: sql`null`.as("leaseToken"), leaseExpiresAt: sql`null`.as("leaseExpiresAt"), acceptedAt: sql`null`.as("acceptedAt"), createdAt: sql`${now}`.as("createdAt"),
+      });
       if (decision === "open") {
-        statements.push(db.prepare(`INSERT INTO monitor_incidents (id, target_id, opened_at, reason)
-          SELECT ?, ?, ?, ? WHERE ${current} ON CONFLICT DO NOTHING`).bind(crypto.randomUUID(), target.id, now, reason, target.id, target.revision));
+        updates.push(db.insert(monitorIncidents).select(db.select({ id: sql`${crypto.randomUUID()}`.as("id"), targetId: monitorTargets.id,
+          openedAt: sql`${now}`.as("openedAt"), resolvedAt: sql`null`.as("resolvedAt"), reason: sql`${reason}`.as("reason"),
+        }).from(monitorTargets).where(and(eq(monitorTargets.id, target.id), eq(monitorTargets.revision, target.revision)))).onConflictDoNothing());
         // 未送信の古い再通知を積み上げず、同じ通知枠は端末ごとに一意にする。
-        statements.push(db.prepare(`UPDATE monitor_notifications SET status = 'canceled' WHERE status = 'pending' AND kind = 'alert'
-          AND incident_id IN (SELECT id FROM monitor_incidents WHERE target_id = ? AND resolved_at IS NULL)
-          AND slot < (SELECT CAST((unixepoch(?) - unixepoch(opened_at)) / 1800 AS INTEGER) FROM monitor_incidents WHERE target_id = ? AND resolved_at IS NULL)
-          AND ${current}`).bind(target.id, now, target.id, target.id, target.revision));
-        statements.push(db.prepare(`INSERT INTO monitor_notifications (id, incident_id, endpoint, kind, slot, body, status, next_attempt_at, created_at)
-          SELECT lower(hex(randomblob(16))), i.id, p.endpoint, 'alert', CAST((unixepoch(?) - unixepoch(i.opened_at)) / 1800 AS INTEGER), ?, 'pending', ?, ?
-          FROM monitor_incidents i CROSS JOIN push_subscriptions p WHERE i.target_id = ? AND i.resolved_at IS NULL AND ${current} ON CONFLICT DO NOTHING`)
-          .bind(now, `${target.runnerId} / ${target.service} (${target.account}): ${reason}`, now, now, target.id, target.id, target.revision));
+        updates.push(db.update(monitorNotifications).set({ status: "canceled" }).where(and(eq(monitorNotifications.status, "pending"), eq(monitorNotifications.kind, "alert"),
+          inArray(monitorNotifications.incidentId, db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(openIncident)),
+          lt(monitorNotifications.slot, db.select({ slot }).from(monitorIncidents).where(openIncident)), current,
+        )));
+        updates.push(db.insert(monitorNotifications).select(db.select(notificationSelection("alert", `${target.runnerId} / ${target.service} (${target.account}): ${reason}`))
+          .from(monitorIncidents).innerJoin(pushSubscriptions, sql`1`).where(and(openIncident, current))).onConflictDoNothing());
       }
       if (decision === "recover") {
-        statements.push(db.prepare(`UPDATE monitor_incidents SET resolved_at = ? WHERE target_id = ? AND resolved_at IS NULL AND ${current}`).bind(now, target.id, target.id, target.revision));
-        statements.push(db.prepare(`UPDATE monitor_notifications SET status = 'canceled' WHERE status IN ('pending', 'sending') AND kind = 'alert'
-          AND incident_id IN (SELECT id FROM monitor_incidents WHERE target_id = ? AND resolved_at IS NOT NULL) AND ${current}`).bind(target.id, target.id, target.revision));
+        const resolvedIncident = and(eq(monitorIncidents.targetId, target.id), isNotNull(monitorIncidents.resolvedAt));
+        updates.push(db.update(monitorIncidents).set({ resolvedAt: now }).where(and(openIncident, current)));
+        updates.push(db.update(monitorNotifications).set({ status: "canceled" }).where(and(inArray(monitorNotifications.status, ["pending", "sending"]), eq(monitorNotifications.kind, "alert"),
+          inArray(monitorNotifications.incidentId, db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(resolvedIncident)), current,
+        )));
       }
       // 配送の完了と復旧判定が前後しても、受付済みの端末へ復旧を一度予約する。
-      statements.push(db.prepare(`INSERT INTO monitor_notifications (id, incident_id, endpoint, kind, slot, body, status, next_attempt_at, created_at)
-        SELECT lower(hex(randomblob(16))), i.id, p.endpoint, 'recovery', 0, ?, 'pending', ?, ? FROM monitor_incidents i CROSS JOIN push_subscriptions p
-        WHERE i.target_id = ? AND i.resolved_at IS NOT NULL AND EXISTS (SELECT 1 FROM monitor_notifications n WHERE n.incident_id = i.id AND n.endpoint = p.endpoint AND n.accepted_at IS NOT NULL AND n.kind = 'alert')
-        ON CONFLICT DO NOTHING`).bind(`${target.runnerId} / ${target.service} (${target.account}): 復旧しました。`, now, now, target.id));
-      return batch(statements);
+      const accepted = alias(monitorNotifications, "accepted_alert");
+      const recovery = db.insert(monitorNotifications).select(db.select(notificationSelection("recovery", `${target.runnerId} / ${target.service} (${target.account}): 復旧しました。`))
+        .from(monitorIncidents).innerJoin(pushSubscriptions, sql`1`).where(and(eq(monitorIncidents.targetId, target.id), isNotNull(monitorIncidents.resolvedAt),
+          exists(db.select({ id: accepted.id }).from(accepted).where(and(eq(accepted.incidentId, monitorIncidents.id), eq(accepted.endpoint, pushSubscriptions.endpoint),
+            isNotNull(accepted.acceptedAt), eq(accepted.kind, "alert")))),
+        ))).onConflictDoNothing();
+      const statements = [...updates, recovery];
+      return batch([statements[0]!, ...statements.slice(1)]);
     },
     async claim(now: string) {
       const token = crypto.randomUUID();
-      const result = await safeTry(() => db.prepare(`UPDATE monitor_notifications SET status = 'sending', lease_token = ?, lease_expires_at = ?, attempts = attempts + 1
-        WHERE id = (SELECT n.id FROM monitor_notifications n JOIN push_subscriptions p ON p.endpoint = n.endpoint
-          WHERE (n.status = 'pending' AND n.next_attempt_at <= ?) OR (n.status = 'sending' AND n.lease_expires_at <= ?) ORDER BY n.created_at LIMIT 1)
-        RETURNING id, endpoint, body, lease_token AS leaseToken, attempts`).bind(token, new Date(Date.parse(now) + 60_000).toISOString(), now, now).first<MonitorDelivery>());
+      const candidate = alias(monitorNotifications, "candidate");
+      const next = db.select({ id: candidate.id }).from(candidate).innerJoin(pushSubscriptions, eq(pushSubscriptions.endpoint, candidate.endpoint))
+        .where(or(and(eq(candidate.status, "pending"), lte(candidate.nextAttemptAt, now)), and(eq(candidate.status, "sending"), lte(candidate.leaseExpiresAt, now))))
+        .orderBy(asc(candidate.createdAt)).limit(1);
+      const result = await safeTry(() => db.update(monitorNotifications).set({ status: "sending", leaseToken: token,
+        leaseExpiresAt: new Date(Date.parse(now) + 60_000).toISOString(), attempts: sql`${monitorNotifications.attempts} + 1`,
+      }).where(eq(monitorNotifications.id, next)).returning({ id: monitorNotifications.id, endpoint: monitorNotifications.endpoint,
+        body: monitorNotifications.body, leaseToken: monitorNotifications.leaseToken, attempts: monitorNotifications.attempts,
+      }).get());
       if (!result.ok) return err(appError.storage(result.error));
-      if (result.value === null) return ok(null);
-      const started = await batch([db.prepare("INSERT INTO monitor_delivery_attempts (id, notification_id, started_at) VALUES (?, ?, ?)").bind(token, result.value.id, now)]);
-      return started.ok ? ok(result.value) : started;
+      if (result.value === undefined) return ok(null);
+      const delivery = { ...result.value, leaseToken: token };
+      const started = await batch([db.insert(monitorDeliveryAttempts).values({ id: token, notificationId: delivery.id, startedAt: now })]);
+      return started.ok ? ok(delivery) : started;
     },
-    async finish(delivery: MonitorDelivery, outcome: "accepted" | "expired" | "failed", now: string) {
+    async finish(delivery: MonitorDelivery, outcome: MonitorDeliveryOutcome, now: string) {
       const next = new Date(Date.parse(now) + Math.min(1800, 60 * 2 ** Math.min(delivery.attempts - 1, 5)) * 1000).toISOString();
-      const statements = [
-        db.prepare("UPDATE monitor_delivery_attempts SET finished_at = ?, outcome = ? WHERE id = ?").bind(now, outcome, delivery.leaseToken),
-        db.prepare(`UPDATE monitor_notifications SET status = CASE WHEN status = 'canceled' THEN status ELSE ? END,
-          accepted_at = CASE WHEN ? = 'accepted' THEN ? ELSE accepted_at END, next_attempt_at = ?, lease_token = NULL, lease_expires_at = NULL WHERE id = ? AND lease_token = ?`)
-          .bind(outcome === "failed" ? "pending" : outcome, outcome, now, next, delivery.id, delivery.leaseToken),
+      const statements: [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]] = [
+        db.update(monitorDeliveryAttempts).set({ finishedAt: now, outcome }).where(eq(monitorDeliveryAttempts.id, delivery.leaseToken)),
+        db.update(monitorNotifications).set({ status: sql`case when ${monitorNotifications.status} = 'canceled' then ${monitorNotifications.status} else ${outcome === "failed" ? "pending" : outcome} end`,
+          acceptedAt: outcome === "accepted" ? now : monitorNotifications.acceptedAt, nextAttemptAt: next, leaseToken: null, leaseExpiresAt: null,
+        }).where(and(eq(monitorNotifications.id, delivery.id), eq(monitorNotifications.leaseToken, delivery.leaseToken))),
       ];
-      if (outcome === "expired") statements.push(db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").bind(delivery.endpoint));
+      if (outcome === "expired") statements.push(db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, delivery.endpoint)));
       return batch(statements);
     },
   };

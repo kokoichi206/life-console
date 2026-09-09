@@ -32,6 +32,7 @@ import type {
   UpsertSourceRepositoryMappingInput,
   UpdateTaskInput,
 } from "@life-console/contracts";
+import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, MealPhotoContentType } from "@life-console/domain";
 
 type Dependencies = {
   readonly replyDrafts: ReplyDraftUsecase;
@@ -57,12 +58,12 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   createTask: (input: CreateTaskInput) => dependencies.tasks.create(input),
   updateTask: (id: string, input: UpdateTaskInput) => dependencies.tasks.update(id, input),
   listConversations: (input: ListConversationsInput) => dependencies.conversations.list(input),
-  classifyConversation: (id: string, classification: string) => dependencies.conversations.classify(id, classification),
+  classifyConversation: (id: string, classification: ConversationClassification) => dependencies.conversations.classify(id, classification),
   createTaskFromConversation: (id: string) => dependencies.conversations.createTask(id),
   importConversations: (input: ImportConversationsInput) => dependencies.conversations.import(input),
   listMeals: (period?: { readonly from: string; readonly to: string }) => dependencies.health.listMeals(period),
   createMeal: (input: CreateMealInput) => dependencies.health.createMeal(input),
-  createMealPhotoUpload: (clientId: string, contentType: string) => dependencies.mealPhotos.createUpload(clientId, contentType),
+  createMealPhotoUpload: (clientId: string, contentType: MealPhotoContentType) => dependencies.mealPhotos.createUpload(clientId, contentType),
   confirmMealPhotoUploaded: (photoId: string) => dependencies.mealPhotos.confirmUploaded(photoId),
   uploadMealPhoto: (photoId: string, token: string, contentType: string, body: ReadableStream) => dependencies.mealPhotos.uploadViaWorker(photoId, token, contentType, body),
   readMealPhoto: (photoId: string) => dependencies.mealPhotos.read(photoId),
@@ -82,15 +83,15 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   createRepository: (name: string, localPath: string) => dependencies.repositories.create(name, localPath),
   syncRepositories: (input: SyncRepositoriesInput) => dependencies.repositories.sync(input),
   upsertSourceRepositoryMapping: (input: UpsertSourceRepositoryMappingInput) => dependencies.repositories.upsertMapping(input),
-  assignRepository: (taskId: string, repositoryId: string, role: string) => dependencies.repositories.assign(taskId, repositoryId, role),
+  assignRepository: (taskId: string, repositoryId: string, role: RepositoryRole) => dependencies.repositories.assign(taskId, repositoryId, role),
   listJobs: () => dependencies.jobs.list(),
   listRunners: () => dependencies.jobs.listRunners(),
   registerRunner: (input: RegisterRunnerInput) => dependencies.jobs.registerRunner(input),
-  heartbeatRunner: (runnerId: string, orcaStatus: string) => dependencies.jobs.heartbeatRunner(runnerId, orcaStatus),
+  heartbeatRunner: (runnerId: string, orcaStatus: OrcaStatus) => dependencies.jobs.heartbeatRunner(runnerId, orcaStatus),
   claimJob: (runnerId: string) => dependencies.jobs.claim(runnerId),
   heartbeatJob: (jobId: string, input: JobHeartbeatInput) => dependencies.jobs.heartbeat(jobId, input),
   completeJob: (jobId: string, input: CompleteJobInput) => dependencies.jobs.complete(jobId, input),
-  reportJob: (jobId: string, leaseToken: string, input: { readonly outcome: string; readonly errorCode: string | null; readonly summary: string }) => dependencies.jobs.report(jobId, leaseToken, input),
+  reportJob: (jobId: string, leaseToken: string, input: { readonly outcome: JobCompletionOutcome; readonly errorCode: string | null; readonly summary: string }) => dependencies.jobs.report(jobId, leaseToken, input),
   validateLease: (jobId: string, leaseToken: string) => dependencies.jobs.validateLease(jobId, leaseToken),
   cancelJob: (jobId: string) => dependencies.jobs.cancel(jobId),
   createAgentJob: (input: CreateAgentJobInput) => dependencies.jobs.createAgentJob(input),

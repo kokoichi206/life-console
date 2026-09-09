@@ -2,6 +2,7 @@ import type { AgentJobContext, Job, LifeConsoleRepository, RunnerHealth } from "
 import type { CompleteJobInput, CreateAgentJobInput, CreateConnectorSyncInput, CreateConversationReplyInput, CreateScheduleInput, JobHeartbeatInput, RegisterRunnerInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import { err } from "@life-console/core";
+import type { OrcaStatus, JobCompletionOutcome } from "@life-console/domain";
 
 import type { AppError } from "../shared/app-error";
 import { appError } from "../shared/app-error";
@@ -14,11 +15,11 @@ export interface JobUsecase {
   list(): Promise<Result<ReadonlyArray<Job>, AppError>>;
   listRunners(): Promise<Result<ReadonlyArray<RunnerHealth>, AppError>>;
   registerRunner(input: RegisterRunnerInput): Promise<Result<void, AppError>>;
-  heartbeatRunner(runnerId: string, orcaStatus: string): Promise<Result<void, AppError>>;
+  heartbeatRunner(runnerId: string, orcaStatus: OrcaStatus): Promise<Result<void, AppError>>;
   claim(runnerId: string): Promise<Result<Job | null, AppError>>;
   heartbeat(jobId: string, input: JobHeartbeatInput): Promise<Result<{ readonly cancelRequested: boolean }, AppError>>;
   complete(jobId: string, input: CompleteJobInput): Promise<Result<void, AppError>>;
-  report(jobId: string, leaseToken: string, input: { readonly outcome: string; readonly errorCode: string | null; readonly summary: string }): Promise<Result<void, AppError>>;
+  report(jobId: string, leaseToken: string, input: { readonly outcome: JobCompletionOutcome; readonly errorCode: string | null; readonly summary: string }): Promise<Result<void, AppError>>;
   validateLease(jobId: string, leaseToken: string): Promise<Result<boolean, AppError>>;
   cancel(jobId: string): Promise<Result<void, AppError>>;
   createAgentJob(input: CreateAgentJobInput): Promise<Result<Job, AppError>>;

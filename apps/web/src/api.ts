@@ -63,6 +63,7 @@ export const api = {
   stravaActivities: async (from: string, to: string, page: number, signal: AbortSignal) => unwrap<StravaActivityPage>(await client.api.v1.strava.activities.$get({ query: { from, to, page: String(page) } }, { init: { signal } })),
   mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get({ query: { from, to } })),
   nutrition: async () => unwrap<ReadonlyArray<MealNutrition>>(await client.api.v1.nutrition.$get()),
+  saveMealCalories: async (input: { readonly mealId: string; readonly caloriesKcal: number }) => unwrap<void>(await client.api.v1.nutrition[":id"].calories.$put({ param: { id: input.mealId }, json: { caloriesKcal: input.caloriesKcal } })),
   analyzeNutrition: async (input: NutritionAnalysisPayload) => unwrap<Job>(await client.api.v1.nutrition.analyze.$post({ json: input })),
   monitoring: async () => unwrap<MonitoringSummary>(await client.api.v1.monitoring.$get()),
   monitoringHistory: async (targetId?: string, before?: number) => unwrap<MonitorHistory[]>(await client.api.v1.monitoring.history.$get({ query: {

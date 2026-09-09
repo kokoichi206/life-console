@@ -15,10 +15,11 @@
   },
   "dependencies": {
     "@life-console/contracts": "workspace:*",
-    "csv-parse": "^7.0.2",
-    "zod": "^4.5.4",
     "@life-console/core": "workspace:*",
-    "@life-console/env": "workspace:*"
+    "@life-console/env": "workspace:*",
+    "csv-parse": "^7.0.2",
+    "drizzle-orm": "0.45.2",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

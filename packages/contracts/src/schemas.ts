@@ -1,52 +1,22 @@
+import { taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, mealKinds, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
 import { z } from "zod";
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const identifierSchema = z.string().min(1).max(128);
 
-export const taskStatusSchema = z.enum(["inbox", "todo", "doing", "done", "canceled"]);
-export const conversationClassificationSchema = z.enum([
-  "unprocessed",
-  "task_candidate",
-  "reference",
-  "no_action",
-]);
-export const connectorKindSchema = z.enum(["slack", "chatwork", "talknote", "gmail"]);
-export const repositoryRoleSchema = z.enum(["work", "context", "default_work", "always_read"]);
-export const sourceScopeSchema = z.enum(["channel", "room"]);
-export const jobStatusSchema = z.enum([
-  "queued",
-  "claimed",
-  "running",
-  "waiting_for_user",
-  "succeeded",
-  "failed",
-  "canceled",
-  "lost",
-  "expired",
-  "skipped_precondition",
-]);
-export const jobKindSchema = z.enum([
-  "slack_sync",
-  "chatwork_sync",
-  "gmail_sync",
-  "talknote_sync",
-  "reply_drafts",
-  "conversation_reply",
-  "weight_import",
-  "weight_obsidian_export",
-  "finance_import",
-  "nutrition_analysis",
-  "agent",
-  "github_promotion",
-  "backup",
-  "repository_scan",
-]);
-export const agentProviderSchema = z.enum(["codex", "claude"]);
-export const scheduleIntervalSchema = z.enum(["hourly", "daily", "weekly"]);
-export const scheduleCoalescingSchema = z.enum(["skip_if_pending", "queue_all"]);
-export const mealKindSchema = z.enum(["breakfast", "lunch", "dinner", "snack"]);
-export const financeEntryKindSchema = z.enum(["income", "expense"]);
-export const assetKindSchema = z.enum(["cash", "investment", "debt"]);
+export const taskStatusSchema = z.enum(taskStatuses);
+export const conversationClassificationSchema = z.enum(conversationClassifications);
+export const connectorKindSchema = z.enum(connectorKinds);
+export const repositoryRoleSchema = z.enum(repositoryRoles);
+export const sourceScopeSchema = z.enum(sourceScopes);
+export const jobStatusSchema = z.enum(jobStatuses);
+export const jobKindSchema = z.enum(jobKinds);
+export const agentProviderSchema = z.enum(agentProviders);
+export const scheduleIntervalSchema = z.enum(scheduleIntervals);
+export const scheduleCoalescingSchema = z.enum(scheduleCoalescingModes);
+export const mealKindSchema = z.enum(mealKinds);
+export const financeEntryKindSchema = z.enum(financeEntryKinds);
+export const assetKindSchema = z.enum(assetKinds);
 
 export const createTaskSchema = z.object({
   title: z.string().trim().min(1).max(240),
@@ -109,7 +79,7 @@ export const createReplyDraftsSchema = z.object({
   calendar: replyCalendarRequestSchema.optional(),
 });
 export const replyDraftDecisionSchema = z.object({
-  status: z.enum(["ready", "replied", "no_action", "needs_review"]),
+  status: z.enum(replyDraftStatuses),
   body: z.string().max(5_000),
   reason: z.string().min(1).max(3_000),
   replyEvidenceId: z.string().nullable(),
@@ -136,12 +106,13 @@ export const createConversationReplySchema = z.object({
 
 export const createMealUploadSchema = z.object({
   clientId: z.uuid(),
-  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  contentType: z.enum(mealPhotoContentTypes),
 });
 
 export const createMealSchema = z.object({
   clientId: z.uuid(),
   photoId: identifierSchema.nullable().default(null),
+  manualCaloriesKcal: z.number().int().nonnegative().optional(),
   memo: z.string().trim().max(2_000).default(""),
   mealKind: mealKindSchema,
   occurredAt: isoDateTimeSchema,
@@ -162,7 +133,7 @@ export const createNutritionEstimateSchema = z.object({
 });
 
 export const createWeightSchema = z.object({
-  source: z.enum(["manual", "csv"]),
+  source: z.enum(weightSources),
   sourceKey: z.string().trim().min(1).max(240),
   weightKg: z.number().positive().max(500),
   occurredAt: isoDateTimeSchema,
@@ -206,12 +177,12 @@ export const registerRunnerSchema = z.object({
   runnerId: identifierSchema,
   name: z.string().trim().min(1).max(120),
   tokenExpiresAt: isoDateTimeSchema.nullable(),
-  orcaStatus: z.enum(["healthy", "unreachable", "unknown"]),
+  orcaStatus: z.enum(orcaStatuses),
 });
 
 export const runnerHeartbeatSchema = z.object({
   runnerId: identifierSchema,
-  orcaStatus: z.enum(["healthy", "unreachable", "unknown"]),
+  orcaStatus: z.enum(orcaStatuses),
 });
 
 export const claimJobSchema = z.object({
@@ -228,7 +199,7 @@ export const jobHeartbeatSchema = z.object({
 export const completeJobSchema = z.object({
   runnerId: identifierSchema,
   leaseToken: z.uuid(),
-  outcome: z.enum(["succeeded", "failed", "canceled", "skipped_precondition"]),
+  outcome: z.enum(jobCompletionOutcomes),
   errorCode: z.string().trim().max(80).nullable().default(null),
   summary: z.string().trim().max(240),
 });
@@ -242,7 +213,7 @@ export const createAgentJobSchema = z.object({
   taskId: identifierSchema,
   repositoryId: identifierSchema,
   provider: agentProviderSchema,
-  executionMode: z.enum(["main_checkout", "new_worktree"]),
+  executionMode: z.enum(agentExecutionModes),
 });
 
 export const createRepositorySchema = z.object({
@@ -255,7 +226,7 @@ export const syncRepositoriesSchema = z.object({
 });
 
 export const upsertSourceRepositoryMappingSchema = z.object({
-  connector: connectorKindSchema.extract(["slack", "chatwork"]),
+  connector: z.enum(sourceMappingConnectors),
   sourceScope: sourceScopeSchema,
   sourceId: identifierSchema,
   repositoryId: identifierSchema,
@@ -267,7 +238,7 @@ export const assignRepositorySchema = z.object({
 });
 
 export const promoteTaskSchema = z.object({
-  target: z.enum(["github_issue", "github_project"]),
+  target: z.enum(promotionTargets),
   repositoryId: identifierSchema,
 });
 
@@ -318,8 +289,7 @@ export type CreateConnectorSyncInput = z.infer<typeof createConnectorSyncSchema>
 export type CreateConversationReplyInput = z.infer<typeof createConversationReplySchema>;
 export type SyncRepositoriesInput = z.infer<typeof syncRepositoriesSchema>;
 export type UpsertSourceRepositoryMappingInput = z.infer<typeof upsertSourceRepositoryMappingSchema>;
-export type JobKind = z.infer<typeof jobKindSchema>;
-export type JobStatus = z.infer<typeof jobStatusSchema>;
+export type { JobKind, JobStatus } from "@life-console/domain";
 
 export const weightGoalSchema = z.object({
   startWeightKg: z.number().min(0.1).max(500),

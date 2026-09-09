@@ -1,0 +1,1 @@
+ALTER TABLE `meals` ADD `manual_calories_kcal` integer;

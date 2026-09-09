@@ -1,5 +1,5 @@
 {
-  "name": "@life-console/contracts",
+  "name": "@life-console/domain",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,10 +8,6 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "zod": "^4.5.4",
-    "@life-console/domain": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3"
