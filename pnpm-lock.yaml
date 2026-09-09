@@ -47,12 +47,21 @@ importers:
       '@life-console/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@life-console/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@life-console/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@life-console/env':
         specifier: workspace:*
         version: link:../../packages/env
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@5.20260901.1)
       hono:
         specifier: ^4.13.5
         version: 4.13.5
@@ -90,6 +99,9 @@ importers:
       csv-parse:
         specifier: ^7.0.2
         version: 7.0.2
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@cloudflare/workers-types@5.20260901.1)
       zod:
         specifier: ^4.5.4
         version: 4.5.4
@@ -212,6 +224,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@life-console/domain':
+        specifier: workspace:*
+        version: link:../domain
       zod:
         specifier: ^4.5.4
         version: 4.5.4
@@ -228,6 +243,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@life-console/domain':
+        specifier: workspace:*
+        version: link:../domain
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260901.1)
@@ -244,6 +262,12 @@ importers:
       wrangler:
         specifier: ^4.127.1
         version: 4.127.1(@cloudflare/workers-types@5.20260901.1)
+
+  packages/domain:
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/env:
     dependencies:

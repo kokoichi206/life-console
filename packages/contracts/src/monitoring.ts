@@ -1,7 +1,9 @@
+import { monitorServices, monitorOutcomes } from "@life-console/domain";
+import type { MonitorService, MonitorOutcome } from "@life-console/domain";
 import { z } from "zod";
 
-export const monitorServiceSchema = z.enum(["runner", "slack", "chatwork", "talknote", "gmail", "calendar", "orca"]);
-export const monitorOutcomeSchema = z.enum(["healthy", "auth_required", "permission_denied", "unavailable", "timeout", "invalid_response", "not_configured"]);
+export const monitorServiceSchema = z.enum(monitorServices);
+export const monitorOutcomeSchema = z.enum(monitorOutcomes);
 export const monitorTargetSchema = z.object({ service: monitorServiceSchema, account: z.string().min(1).max(200) });
 export const registerMonitorsSchema = z.object({ runnerId: z.string().min(1).max(200), targets: z.array(monitorTargetSchema).min(1).max(50).refine((targets) => targets.filter((target) => target.service === "runner" && target.account === "process").length === 1
   && targets.filter((target) => target.service === "runner").length === 1
@@ -14,8 +16,7 @@ export const monitoringSearchSchema = z.object({ monitorTarget: z.string().optio
 export const monitoringHistoryQuerySchema = z.object({
   targetId: z.string().optional(), before: z.coerce.number().int().positive().optional(),
 });
-export type MonitorService = z.infer<typeof monitorServiceSchema>;
-export type MonitorOutcome = z.infer<typeof monitorOutcomeSchema>;
+export type { MonitorService, MonitorOutcome } from "@life-console/domain";
 export type MonitorObservation = z.infer<typeof monitorObservationSchema>;
 export type MonitorTarget = z.infer<typeof monitorTargetSchema>;
 export type RegisterMonitorsInput = z.infer<typeof registerMonitorsSchema>;

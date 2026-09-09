@@ -85,8 +85,9 @@ life-console/
 │   ├── api/        Hono + Cloudflare Workers
 │   └── runner/     TypeScript + launchd
 └── packages/
+    ├── domain/     名前付きの候補値と共通の列挙型
     ├── contracts/  Zod schema と共有型
-    └── database/   Drizzle schema と migration
+    └── db/         Drizzle schema と migration
 ```
 
 | 領域 | 採用技術 |

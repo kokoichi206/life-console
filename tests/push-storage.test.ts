@@ -1,22 +1,12 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
-import { URL } from "node:url";
-
 import { describe, expect, it } from "vitest";
 
 import { app } from "../apps/api/src/app";
 import { createPushSubscriptionRepository } from "../apps/api/src/repositories/push-subscription-repository";
 
+import { createJobStorage } from "./support/d1-storage";
+
 const createStorage = () => {
-  const database = new DatabaseSync(":memory:");
-  const migrations = new URL("../packages/db/migrations/", import.meta.url);
-  for (const migration of readdirSync(migrations).filter((name) => name.endsWith(".sql")).sort()) database.exec(readFileSync(new URL(migration, migrations), "utf8"));
-  const statement = (sql: string, parameters: (string | number | null)[] = []) => ({
-    bind: (...bound: (string | number | null)[]) => statement(sql, bound),
-    run: async () => ({ meta: { changes: Number(database.prepare(sql).run(...parameters).changes) } }),
-    first: async () => database.prepare(sql).get(...parameters) ?? null,
-  });
-  const binding = { prepare: statement } as unknown as D1Database;
+  const { database, binding } = createJobStorage();
   return { database, binding, repository: createPushSubscriptionRepository(binding) };
 };
 const endpoint = "https://fcm.googleapis.com/fcm/send/example";
