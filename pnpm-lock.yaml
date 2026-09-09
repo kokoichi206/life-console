@@ -237,9 +237,6 @@ importers:
 
   packages/db:
     dependencies:
-      '@life-console/contracts':
-        specifier: workspace:*
-        version: link:../contracts
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260901.1)

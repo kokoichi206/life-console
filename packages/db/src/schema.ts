@@ -1,4 +1,3 @@
-import type { MonitorOutcome, MonitorService, ReplyDraft, UpsertSourceRepositoryMappingInput } from "@life-console/contracts";
 import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -36,7 +35,7 @@ export const conversations = sqliteTable("conversations", {
 
 export const replyDrafts = sqliteTable("reply_drafts", {
   conversationId: text("conversation_id").primaryKey().references(() => conversations.id),
-  status: text("status").$type<ReplyDraft["status"]>().notNull(),
+  status: text("status", { enum: ["ready", "replied", "no_action", "needs_review"] }).notNull(),
   body: text("body").notNull(),
   reason: text("reason").notNull(),
   replyEvidenceId: text("reply_evidence_id"),
@@ -72,8 +71,8 @@ export const taskRepositories = sqliteTable("task_repositories", {
 }, (table) => [primaryKey({ columns: [table.taskId, table.repositoryId, table.role] })]);
 
 export const sourceRepositoryMappings = sqliteTable("source_repository_mappings", {
-  connector: text("connector").$type<UpsertSourceRepositoryMappingInput["connector"]>().notNull(),
-  sourceScope: text("source_scope").$type<UpsertSourceRepositoryMappingInput["sourceScope"]>().notNull(),
+  connector: text("connector", { enum: ["slack", "chatwork"] }).notNull(),
+  sourceScope: text("source_scope", { enum: ["channel", "room"] }).notNull(),
   sourceId: text("source_id").notNull(),
   repositoryId: text("repository_id").notNull(),
   role: text("role").notNull(),
@@ -248,14 +247,16 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
   updatedAt: text("updated_at").notNull(),
 });
 
+const monitorOutcomes = ["healthy", "auth_required", "permission_denied", "unavailable", "timeout", "invalid_response", "not_configured"] as const;
+
 export const monitorTargets = sqliteTable("monitor_targets", {
-  id: text("id").primaryKey(), runnerId: text("runner_id").notNull(), service: text("service").$type<MonitorService>().notNull(), account: text("account").notNull(),
-  registeredAt: text("registered_at").notNull(), receivedAt: text("received_at"), outcome: text("outcome").$type<MonitorOutcome>(),
+  id: text("id").primaryKey(), runnerId: text("runner_id").notNull(), service: text("service", { enum: ["runner", "slack", "chatwork", "talknote", "gmail", "calendar", "orca"] }).notNull(), account: text("account").notNull(),
+  registeredAt: text("registered_at").notNull(), receivedAt: text("received_at"), outcome: text("outcome", { enum: monitorOutcomes }),
   failures: integer("failures").notNull().default(0), revision: integer("revision").notNull().default(0),
 });
 export const monitorObservations = sqliteTable("monitor_observations", {
   sequence: integer("sequence").primaryKey({ autoIncrement: true }), id: text("id").notNull(), targetId: text("target_id").notNull(),
-  observedAt: text("observed_at").notNull(), receivedAt: text("received_at").notNull(), outcome: text("outcome").$type<MonitorOutcome>().notNull(), historical: integer("historical").notNull(),
+  observedAt: text("observed_at").notNull(), receivedAt: text("received_at").notNull(), outcome: text("outcome", { enum: monitorOutcomes }).notNull(), historical: integer("historical").notNull(),
 }, (table) => [uniqueIndex("monitor_event_uidx").on(table.id), index("monitor_history_idx").on(table.targetId, table.sequence)]);
 export const monitorIncidents = sqliteTable("monitor_incidents", {
   id: text("id").primaryKey(), targetId: text("target_id").notNull(), openedAt: text("opened_at").notNull(), resolvedAt: text("resolved_at"),
