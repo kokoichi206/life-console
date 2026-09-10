@@ -13,6 +13,7 @@ import { financeQuery } from "./pages/finance/queries";
 import { parseHealthSearch } from "./pages/health/health-search";
 import { mealsQuery, weightsQuery, weightGoalQuery } from "./pages/health/queries";
 import { sourceRepositoryMappingsQuery } from "./pages/operations/queries";
+import { parseTodoSearch } from "./pages/todos/todo-search";
 import { parseWorkSearch } from "./pages/work/work-search";
 
 type RouterContext = {
@@ -45,6 +46,13 @@ const tasksRoute = createRoute({
   path: "/tasks",
   validateSearch: parseWorkSearch,
   component: lazyRouteComponent(() => import("./pages/work/TasksPage"), "TasksPage"),
+});
+
+const todosRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/todos",
+  validateSearch: parseTodoSearch,
+  component: lazyRouteComponent(() => import("./pages/todos/TodosPage"), "TodosPage"),
 });
 
 const healthRoute = createRoute({
@@ -92,6 +100,7 @@ const routeTree = rootRoute.addChildren([
   draftsRoute,
   dashboardRoute,
   tasksRoute,
+  todosRoute,
   healthRoute,
   financeRoute,
   operationsRoute,

@@ -32,6 +32,7 @@ import type {
 
 const taskColumns = {
   id: tasks.id, title: tasks.title, description: tasks.description, status: tasks.status,
+  area: tasks.area, scheduledAt: tasks.scheduledAt, sourceUrl: tasks.sourceUrl,
   dueAt: tasks.dueAt, completedAt: tasks.completedAt, conversationId: tasks.conversationId,
   repositoryId: repositories.id, repositoryName: repositories.name, createdAt: tasks.createdAt, updatedAt: tasks.updatedAt,
 };
@@ -131,7 +132,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
 
   async createTask(id: string, input: CreateTaskInput, now: string): Promise<Result<Task, AppError>> {
     const inserted = await safeTry(() => this.#database.insert(tasks).values({ id, title: input.title,
-      description: input.description, status: "todo", dueAt: input.dueAt, completedAt: null, conversationId: input.conversationId, createdAt: now, updatedAt: now,
+      description: input.description, area: input.area, scheduledAt: input.scheduledAt, sourceUrl: input.sourceUrl, status: "todo", dueAt: input.dueAt, completedAt: null, conversationId: input.conversationId, createdAt: now, updatedAt: now,
     }).run());
     if (!inserted.ok) return err(appError.storage(inserted.error));
     if (input.repositoryId !== null) {
@@ -148,6 +149,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     const status = input.status ?? task.status;
     const completedAt = status === "done" ? task.completedAt ?? now : null;
     const updated = await safeTry(() => this.#database.update(tasks).set({
+      area: input.area, scheduledAt: input.scheduledAt, sourceUrl: input.sourceUrl,
       title: input.title ?? task.title, description: input.description ?? task.description, status,
       dueAt: input.dueAt === undefined ? task.dueAt : input.dueAt, completedAt,
       conversationId: input.conversationId === undefined ? task.conversationId : input.conversationId, updatedAt: now,

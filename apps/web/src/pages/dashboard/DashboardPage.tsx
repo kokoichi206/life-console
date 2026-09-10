@@ -43,7 +43,7 @@ export const DashboardPage = () => {
         actions={<CountBadge>{new Intl.DateTimeFormat("ja-JP", { dateStyle: "long" }).format(new Date())}</CountBadge>}
       />
       <nav className="mb-5 flex flex-wrap gap-2" aria-label="クイック入力">
-        <Link className={buttonVariants()} to="/tasks" search={{ create: true }}>タスクを追加</Link>
+        <Link className={buttonVariants()} to="/todos" hash="task-entry">タスクを追加</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/health" search={{ entry: "meal" }}>食事を記録</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/health" search={{ entry: "weight" }}>体重を記録</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/finance" hash="expense-entry">支出を記録</Link>
@@ -75,7 +75,7 @@ export const DashboardPage = () => {
           <SectionHeading
             eyebrow="FOCUS"
             title="対応するタスク"
-            action={<Link className={buttonVariants({ variant: "link", size: "sm" })} to="/tasks" search={{ view: "tasks" }}>すべて見る</Link>}
+            action={<Link className={buttonVariants({ variant: "link", size: "sm" })} to="/todos">すべて見る</Link>}
           />
           <div className="px-5">
             {data.todayTasks.slice(0, 5).map((task) => (

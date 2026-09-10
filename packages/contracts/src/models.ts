@@ -1,9 +1,12 @@
-import type { TaskStatus, SourceMappingConnector, SourceScope, ReplyDraftStatus } from "@life-console/domain";
+import type { TaskArea, TaskStatus, SourceMappingConnector, SourceScope, ReplyDraftStatus } from "@life-console/domain";
 export type Task = {
   readonly id: string;
   readonly title: string;
   readonly description: string;
   readonly status: TaskStatus;
+  readonly area: TaskArea;
+  readonly scheduledAt: string | null;
+  readonly sourceUrl: string | null;
   readonly dueAt: string | null;
   readonly completedAt: string | null;
   readonly conversationId: string | null;
