@@ -46,7 +46,7 @@ const conversationColumns = {
   excerpt: conversations.excerpt, sourceUrl: conversations.sourceUrl, classification: conversations.classification, occurredAt: conversations.occurredAt,
 };
 const mealColumns = {
-  id: meals.id, photoId: meals.photoId, memo: meals.memo, mealKind: meals.mealKind,
+  id: meals.id, photoId: meals.photoId, memo: meals.memo,
   occurredAt: meals.occurredAt, recordedAt: meals.recordedAt, tagsJson: meals.tagsJson,
 };
 const sourceMappingColumns = {
@@ -247,7 +247,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     })).from(meals).where(and(eq(meals.clientId, input.clientId), isNotNull(meals.photoId), isNull(meals.manualCaloriesKcal), isNull(meals.deletedAt)))).onConflictDoNothing();
     const inserted = await safeTry(() => this.#database.batch([
       this.#database.insert(meals).values({ id, clientId: input.clientId, photoId: input.photoId, manualCaloriesKcal: input.manualCaloriesKcal, memo: input.memo,
-        mealKind: input.mealKind, occurredAt: input.occurredAt, recordedAt: now, tagsJson: JSON.stringify(input.tags), deletedAt: null,
+        occurredAt: input.occurredAt, recordedAt: now, tagsJson: JSON.stringify(input.tags), deletedAt: null,
       }).onConflictDoNothing(), initialJob,
     ]));
     if (!inserted.ok) return err(appError.storage(inserted.error));

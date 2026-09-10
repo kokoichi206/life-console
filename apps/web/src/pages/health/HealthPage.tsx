@@ -17,7 +17,7 @@ import { WeightGoalProgress } from "./_components/WeightGoalProgress";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
 import { exerciseWeeks } from "./exercise-weeks";
 import type { HealthSearch } from "./health-search";
-import { mealsForPeriodQuery, mealsQuery, weightsQuery, weightGoalQuery } from "./queries";
+import { mealsForPeriodQuery, weightsQuery, weightGoalQuery } from "./queries";
 import { useStravaActivities } from "./use-strava-activities";
 import { WEIGHT_DAY_MS, type WeightWindow } from "./weight-window";
 
@@ -46,7 +46,6 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, g
   const queryClient = useQueryClient();
   const { data: weights } = useSuspenseQuery(weightsQuery);
   const { data: weightGoal } = useSuspenseQuery(weightGoalQuery);
-  const { data: allMeals } = useSuspenseQuery(mealsQuery);
   const weightRange = search.from === undefined ? search.range ?? "d90" : "custom";
   const [showWeightTable, setShowWeightTable] = useState(false);
   const weightTrend = useMemo(() => calculate7DayMovingAverage(weights), [weights]);
@@ -104,7 +103,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, g
         <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => onMealEntryOpenChange(true)}>食事を記録</Button>
         <Button className="h-11 rounded-xl px-5" onClick={() => onWeightEntryOpenChange(true)}>体重を記録</Button>
       </div>
-      <MealEntryDialog meals={allMeals} open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />
+      <MealEntryDialog open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />
       <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />
       <WeightGoalDialog open={goalEntryOpen} onOpenChange={onGoalEntryOpenChange} goal={weightGoal} initialWeight={weightTrend[0]?.weightKg} />
       <WeightGoalProgress goal={weightGoal} latestWeight={latestWeight?.weightKg} onEdit={() => onGoalEntryOpenChange(true)} />

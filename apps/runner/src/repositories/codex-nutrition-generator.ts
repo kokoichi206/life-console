@@ -12,7 +12,6 @@ import type { CommandRepository } from "./command-repository";
 type CodexNutritionInput = {
   readonly photo: { readonly contentType: "image/jpeg" | "image/png" | "image/webp"; readonly base64: string };
   readonly memo: string;
-  readonly mealKind: string;
   readonly prompt: string;
   readonly schema: unknown;
   readonly model: string;
@@ -35,7 +34,7 @@ export const generateCodexNutrition = async (commands: CommandRepository, input:
       "-c", "project_doc_max_bytes=0", "-c", "skills.include_instructions=false", "-c", "memories.use_memories=false", "-c", "web_search=\"disabled\"",
       "--disable", "shell_tool", "--disable", "shell_snapshot", "--disable", "multi_agent", "--disable", "plugins", "--disable", "apps", "--disable", "hooks",
       "--model", input.model, "--image", imagePath, "--output-schema", schemaPath, "--output-last-message", outputPath, "--json", "-"], {
-      cwd: directory.value, signal, stdin: JSON.stringify({ memo: input.memo, mealKind: input.mealKind }),
+      cwd: directory.value, signal, stdin: JSON.stringify({ memo: input.memo }),
     });
     if (!generated.ok) return generated;
     const events = z.array(z.object({ type: z.string() })).safeParse(generated.value.stdout.trim().split(/\r?\n/u).map((line) => JSON.parse(line) as unknown));

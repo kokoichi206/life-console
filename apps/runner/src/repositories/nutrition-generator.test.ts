@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CommandRepository } from "./command-repository";
 import { createNutritionGenerator } from "./nutrition-generator";
 
-const meal = { id: "meal", photoId: "photo", mealKind: "lunch", memo: "ごはんは半分" };
+const meal = { id: "meal", photoId: "photo", memo: "ごはんは半分" };
 const estimate = { caloriesKcal: 600, proteinGrams: 25, fatGrams: 15, carbohydrateGrams: 90 };
 const reply = (value: unknown) => ok({ stdout: JSON.stringify({ type: "result", is_error: false, modelUsage: { "actual-model": {} }, structured_output: { estimate: value } }), stderr: "" });
 const signal = new AbortController().signal;
@@ -22,7 +22,7 @@ describe("写真からの栄養推定", () => {
     expect(args).toContain("--no-session-persistence");
     expect(args[args.indexOf("--tools") + 1]).toBe("");
     expect(JSON.parse(execute.mock.calls[0]![2]!.stdin!) as unknown).toMatchObject({ message: { content: [
-      { type: "image", source: { media_type: "image/jpeg", data: "aW1hZ2U=" } }, { type: "text", text: JSON.stringify({ memo: meal.memo, mealKind: meal.mealKind }) },
+      { type: "image", source: { media_type: "image/jpeg", data: "aW1hZ2U=" } }, { type: "text", text: JSON.stringify({ memo: meal.memo }) },
     ] } });
     const changedMemo = await generator.generate({ ...meal, memo: "全部食べた" }, signal);
     expect(result.ok && changedMemo.ok && result.value.inputHash !== changedMemo.value.inputHash).toBe(true);

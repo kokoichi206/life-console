@@ -29,8 +29,6 @@ export const scheduleIntervals = ["hourly", "daily", "weekly"] as const;
 
 export const scheduleCoalescingModes = ["skip_if_pending", "queue_all"] as const;
 
-export const mealKinds = ["breakfast", "lunch", "dinner", "snack"] as const;
-
 export const financeEntryKinds = ["income", "expense"] as const;
 
 export const assetKinds = ["cash", "investment", "debt"] as const;

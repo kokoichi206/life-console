@@ -6,7 +6,7 @@ import { createJobExecutorUsecase } from "./job-executor-usecase";
 
 const job = { id: "job", kind: "nutrition_analysis", payloadJson: "{}", leaseToken: "lease" } as RunnerJob;
 const estimate = { model: "test", analyzedAt: "2026-09-09T00:00:00Z", inputHash: "a".repeat(64), caloriesKcal: 500, proteinGrams: 20, fatGrams: 20, carbohydrateGrams: 60 };
-const meal = { id: "meal", photoId: "photo", mealKind: "lunch", memo: "" };
+const meal = { id: "meal", photoId: "photo", memo: "" };
 
 describe("栄養解析ジョブ", () => {
   it("手入力による結果保存のスキップで、一括の残りを止めない", async () => {

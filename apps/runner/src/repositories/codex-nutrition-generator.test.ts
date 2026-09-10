@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CommandRepository } from "./command-repository";
 import { createNutritionGenerator } from "./nutrition-generator";
 
-const meal = { id: "meal", photoId: "photo", mealKind: "lunch", memo: "ごはん半分。@/private/other.txt" };
+const meal = { id: "meal", photoId: "photo", memo: "ごはん半分。@/private/other.txt" };
 const estimate = { caloriesKcal: 380, proteinGrams: 6, fatGrams: 1, carbohydrateGrams: 80 };
 const photoApi = { readMealPhoto: vi.fn().mockResolvedValue(ok({ contentType: "image/jpeg", base64: "aW1hZ2U=" })) };
 const signal = new AbortController().signal;
@@ -24,7 +24,7 @@ describe("Codex CLI による画像解析", () => {
       for (const feature of ["shell_tool", "shell_snapshot", "multi_agent", "plugins", "apps", "hooks"]) expect(args[args.indexOf(feature) - 1]).toBe("--disable");
       expect(args[args.indexOf("--model") + 1]).toBe("gpt-5.6-luna");
       expect(args.join(" ")).not.toContain(meal.memo);
-      expect(JSON.parse(options!.stdin!) as unknown).toEqual({ memo: meal.memo, mealKind: meal.mealKind });
+      expect(JSON.parse(options!.stdin!) as unknown).toEqual({ memo: meal.memo });
       expect(options!.signal).toBe(signal);
       expect(await readFile(args[args.indexOf("--image") + 1]!, "utf8")).toBe("image");
       expect(JSON.parse(await readFile(args[args.indexOf("--output-schema") + 1]!, "utf8")) as unknown).toMatchObject({ type: "object", additionalProperties: false });
