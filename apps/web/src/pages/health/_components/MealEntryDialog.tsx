@@ -1,5 +1,4 @@
 import { Dialog } from "@base-ui/react/dialog";
-import type { CreateMealInput } from "@life-console/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, ImagePlus, RotateCw, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
@@ -8,7 +7,6 @@ import { api } from "../../../api";
 import { Field, FormError } from "../../../components/DesignSystem";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/input";
-import { NativeSelect } from "../../../components/ui/native-select";
 import { Textarea } from "../../../components/ui/textarea";
 import { normalizeMealPhoto } from "../meal-photo";
 
@@ -20,8 +18,8 @@ const currentLocalDateTime = (): string => {
 
 const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
   const queryClient = useQueryClient();
-  const [occurredAt, setOccurredAt] = useState(currentLocalDateTime);
-  const [mealKind, setMealKind] = useState<CreateMealInput["mealKind"]>("dinner");
+  const initialOccurredAt = currentLocalDateTime();
+  const [occurredAt, setOccurredAt] = useState(initialOccurredAt);
   const [caloriesKcal, setCaloriesKcal] = useState("");
   const [memo, setMemo] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
@@ -74,7 +72,7 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
         if (!response.ok) throw new Error("写真のアップロードに失敗しました。");
         photoId = upload.photoId;
       }
-      return api.createMeal({ clientId, photoId, ...(caloriesKcal === "" ? {} : { manualCaloriesKcal: Number(caloriesKcal) }), memo, mealKind, occurredAt: new Date(occurredAt).toISOString(), tags: [] });
+      return api.createMeal({ clientId, photoId, ...(caloriesKcal === "" ? {} : { manualCaloriesKcal: Number(caloriesKcal) }), memo, occurredAt: new Date(occurredAt).toISOString(), tags: [] });
     },
     onSuccess: async () => {
       await Promise.all([
@@ -125,14 +123,6 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
           <input ref={cameraInput} type="file" accept="image/*" capture="environment" aria-label="カメラで撮影する写真" className="hidden" onChange={selectPhoto} />
           {photo !== null && <p className="truncate text-xs text-muted-foreground">{photo.name}</p>}
         </div>
-        <Field label="食事区分">
-          <NativeSelect className="w-full" value={mealKind} onChange={(event) => setMealKind(event.target.value as CreateMealInput["mealKind"])}>
-            <option value="breakfast">朝食</option>
-            <option value="lunch">昼食</option>
-            <option value="dinner">夕食</option>
-            <option value="snack">間食</option>
-          </NativeSelect>
-        </Field>
         <Field label="食事の日時"><Input required type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></Field>
         <Field label="カロリー（kcal・任意）"><Input type="number" inputMode="numeric" min={0} step={1} value={caloriesKcal} onChange={(event) => setCaloriesKcal(event.target.value)} aria-describedby="meal-calories-help" /></Field>
         <p id="meal-calories-help" className="text-xs text-muted-foreground">入力した場合は画像解析しません。空欄なら写真から自動で推定します。</p>

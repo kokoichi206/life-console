@@ -11,7 +11,6 @@ import type { CommandOutput, CommandRepository } from "./command-repository";
 type GeminiNutritionInput = {
   readonly photo: { readonly contentType: "image/jpeg" | "image/png" | "image/webp"; readonly base64: string };
   readonly memo: string;
-  readonly mealKind: string;
   readonly prompt: string;
   readonly schema: unknown;
   readonly model: string | undefined;
@@ -37,7 +36,7 @@ export const generateGeminiNutrition = async (commands: CommandRepository, input
     const imageName = `meal.${input.photo.contentType.split("/")[1]}`;
     await writeFile(join(directory.value, imageName), Buffer.from(input.photo.base64, "base64"), { mode: 0o600 });
     // メモをプロンプトの @file 展開へ直接通すと、メモ内のパスまで読み込まれる。
-    await writeFile(join(directory.value, "meal.json"), JSON.stringify({ memo: input.memo, mealKind: input.mealKind }), { mode: 0o600 });
+    await writeFile(join(directory.value, "meal.json"), JSON.stringify({ memo: input.memo }), { mode: 0o600 });
     return commands.execute("env", [`GEMINI_CLI_HOME=${home}`, `GEMINI_SYSTEM_MD=${systemPrompt}`, "gemini", "--output-format", "json",
       ...(input.model === undefined ? [] : ["--model", input.model]), "--prompt", `@${imageName} @meal.json この食事の栄養を推定してください。`], { cwd: directory.value, signal });
   });

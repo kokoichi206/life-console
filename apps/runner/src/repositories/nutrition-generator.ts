@@ -36,15 +36,15 @@ export const createNutritionGenerator = (commands: CommandRepository, api: Pick<
     if (!photo.ok) return photo;
     const content = [
       { type: "image", source: { type: "base64", media_type: photo.value.contentType, data: photo.value.base64 } },
-      { type: "text", text: JSON.stringify({ memo: meal.memo, mealKind: meal.mealKind }) },
+      { type: "text", text: JSON.stringify({ memo: meal.memo }) },
     ];
     const generateDecision = async (): Promise<Result<{ decision: unknown; model: string }, RunnerError>> => {
       if (settings.provider === "codex") {
-        return generateCodexNutrition(commands, { photo: photo.value, memo: meal.memo, mealKind: meal.mealKind, prompt: nutritionPrompt,
+        return generateCodexNutrition(commands, { photo: photo.value, memo: meal.memo, prompt: nutritionPrompt,
           schema: z.toJSONSchema(decisionSchema), model: settings.model ?? "gpt-5.6-luna" }, signal);
       }
       const generated = settings.provider === "gemini"
-        ? await generateGeminiNutrition(commands, { photo: photo.value, memo: meal.memo, mealKind: meal.mealKind, prompt: nutritionPrompt,
+        ? await generateGeminiNutrition(commands, { photo: photo.value, memo: meal.memo, prompt: nutritionPrompt,
             schema: z.toJSONSchema(decisionSchema), model: settings.model, cliHome: settings.geminiCliHome, authType: settings.geminiAuth ?? "oauth-personal" }, signal)
         : await commands.execute("claude", [...(settings.model === undefined ? [] : ["--model", settings.model]), "--print", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
             "--json-schema", JSON.stringify(z.toJSONSchema(decisionSchema, { target: "draft-07" })),

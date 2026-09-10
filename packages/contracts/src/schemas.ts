@@ -1,4 +1,4 @@
-import { taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, mealKinds, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
+import { taskAreas, taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
 import { z } from "zod";
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
@@ -14,11 +14,13 @@ export const jobKindSchema = z.enum(jobKinds);
 export const agentProviderSchema = z.enum(agentProviders);
 export const scheduleIntervalSchema = z.enum(scheduleIntervals);
 export const scheduleCoalescingSchema = z.enum(scheduleCoalescingModes);
-export const mealKindSchema = z.enum(mealKinds);
 export const financeEntryKindSchema = z.enum(financeEntryKinds);
 export const assetKindSchema = z.enum(assetKinds);
 
 export const createTaskSchema = z.object({
+  area: z.enum(taskAreas).optional(),
+  scheduledAt: isoDateTimeSchema.nullable().optional(),
+  sourceUrl: z.url({ protocol: /^https?$/ }).max(2000).nullable().optional(),
   title: z.string().trim().min(1).max(240),
   description: z.string().trim().max(10_000).default(""),
   dueAt: isoDateTimeSchema.nullable().default(null),
@@ -26,7 +28,12 @@ export const createTaskSchema = z.object({
   repositoryId: identifierSchema.nullable().default(null),
 });
 
-export const updateTaskSchema = createTaskSchema.partial().extend({
+export const updateTaskSchema = createTaskSchema.extend({
+  description: createTaskSchema.shape.description.removeDefault(),
+  dueAt: createTaskSchema.shape.dueAt.removeDefault(),
+  conversationId: createTaskSchema.shape.conversationId.removeDefault(),
+  repositoryId: createTaskSchema.shape.repositoryId.removeDefault(),
+}).partial().extend({
   status: taskStatusSchema.optional(),
 });
 
@@ -114,7 +121,6 @@ export const createMealSchema = z.object({
   photoId: identifierSchema.nullable().default(null),
   manualCaloriesKcal: z.number().int().nonnegative().optional(),
   memo: z.string().trim().max(2_000).default(""),
-  mealKind: mealKindSchema,
   occurredAt: isoDateTimeSchema,
   tags: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
 }).refine((input) => input.photoId !== null || input.memo.length > 0, {

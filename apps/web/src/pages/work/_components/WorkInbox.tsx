@@ -11,8 +11,9 @@ import { Button } from "../../../components/ui/Button";
 import { NativeSelect } from "../../../components/ui/native-select";
 import { activeJobStatuses, JobProgress } from "../../../features/jobs/JobProgress";
 import { jobsQuery } from "../../../features/jobs/queries";
+import { tasksQuery } from "../../../features/tasks/queries";
 import { cn } from "../../../lib/class-names";
-import { conversationsQuery, replyDraftsQuery, tasksQuery } from "../queries";
+import { conversationsQuery, replyDraftsQuery } from "../queries";
 import { matchesWorkStatus, replyStatusLabels, serviceLabels, type WorkSearch } from "../work-search";
 
 import { ConversationDetail } from "./ConversationDetail";

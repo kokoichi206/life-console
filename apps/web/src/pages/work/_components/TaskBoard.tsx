@@ -11,7 +11,7 @@ import { Textarea } from "../../../components/ui/textarea";
 import { JobProgress } from "../../../features/jobs/JobProgress";
 import { jobsQuery } from "../../../features/jobs/queries";
 import { repositoriesQuery } from "../../../features/repositories/queries";
-import { tasksQuery } from "../queries";
+import { tasksQuery } from "../../../features/tasks/queries";
 
 const statusOptions = [
   { value: "inbox", label: "受信箱" },
@@ -33,7 +33,7 @@ export const TaskBoard = () => {
   const { data: tasks } = useSuspenseQuery(tasksQuery);
   const { data: repositories } = useSuspenseQuery(repositoriesQuery);
   const { data: jobs } = useSuspenseQuery(jobsQuery);
-  const visibleTasks = search.taskId === undefined ? tasks : tasks.filter((task) => task.id === search.taskId);
+  const visibleTasks = search.taskId === undefined ? tasks.filter((task) => task.area === "work") : tasks.filter((task) => task.id === search.taskId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueAt, setDueAt] = useState("");
@@ -153,6 +153,7 @@ export const TaskBoard = () => {
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">{task.description}</p>
                       <small className="mt-1 block text-[0.7rem] text-muted-foreground">
                         {task.repositoryName ?? "リポジトリ未選択"}
+                        {task.scheduledAt !== null && ` · 実施 ${new Date(task.scheduledAt).toLocaleString("ja-JP")}`}
                         {task.dueAt === null ? "" : ` · 期限 ${new Date(task.dueAt).toLocaleString("ja-JP")}`}
                       </small>
                     </div>
@@ -162,6 +163,7 @@ export const TaskBoard = () => {
                       {statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </NativeSelect>
                     <Button variant="outline" size="sm" type="button" onClick={() => startEditing(task)}>編集</Button>
+                    <Link to="/todos" search={{ taskId: task.id }} className={buttonVariants({ variant: "outline", size: "sm" })}>日時・参照リンクを編集</Link>
                     {task.conversationId !== null && <Link to="/tasks" search={{ view: "inbox", conversationId: task.conversationId, period: "all", status: "all" }} className={buttonVariants({ variant: "outline", size: "sm" })}>元の会話・返信案</Link>}
                     {workRepositoryId !== null && task.status !== "done" && (
                       <Button variant="outline" size="sm" type="button" onClick={() => launchAgent.mutate({ taskId: task.id, taskRepositoryId: workRepositoryId })}>agent 起動</Button>

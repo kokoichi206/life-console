@@ -71,7 +71,7 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
     },
     async candidates(input) {
       const candidatesQuery = db.select({
-        id: meals.id, photoId: meals.photoId, memo: meals.memo, mealKind: meals.mealKind, manualCaloriesKcal: meals.manualCaloriesKcal,
+        id: meals.id, photoId: meals.photoId, memo: meals.memo, manualCaloriesKcal: meals.manualCaloriesKcal,
       }).from(meals).where(and(
         isNull(meals.deletedAt), isNotNull(meals.photoId),
         input.mealId !== undefined

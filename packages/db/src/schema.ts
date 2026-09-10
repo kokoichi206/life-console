@@ -1,4 +1,4 @@
-import { agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealKinds, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, taskStatuses, weightSources } from "@life-console/domain";
+import { taskAreas, agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, taskStatuses, weightSources } from "@life-console/domain";
 import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -12,6 +12,9 @@ export const tasks = sqliteTable("tasks", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   status: text("status", { enum: taskStatuses }).notNull(),
+  area: text("area", { enum: taskAreas }).notNull().default("work"),
+  scheduledAt: text("scheduled_at"),
+  sourceUrl: text("source_url"),
   dueAt: text("due_at"),
   completedAt: text("completed_at"),
   conversationId: text("conversation_id"),
@@ -98,7 +101,6 @@ export const meals = sqliteTable("meals", {
   photoId: text("photo_id"),
   manualCaloriesKcal: integer("manual_calories_kcal"),
   memo: text("memo").notNull(),
-  mealKind: text("meal_kind", { enum: mealKinds }).notNull(),
   occurredAt: text("occurred_at").notNull(),
   recordedAt: text("recorded_at").notNull(),
   tagsJson: text("tags_json").notNull(),
@@ -291,3 +293,24 @@ export const stravaConnection = sqliteTable("strava_connection", {
   leaseToken: text("lease_token"),
   leaseExpiresAt: integer("lease_expires_at"),
 });
+
+export const shoppingPlaces = sqliteTable("shopping_places", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  ...timestamps,
+});
+
+export const shoppingItems = sqliteTable("shopping_items", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  purchasedAt: text("purchased_at"),
+  ...timestamps,
+});
+
+export const shoppingItemPlaces = sqliteTable("shopping_item_places", {
+  itemId: text("item_id").notNull().references(() => shoppingItems.id, { onDelete: "cascade" }),
+  placeId: text("place_id").notNull().references(() => shoppingPlaces.id, { onDelete: "cascade" }),
+}, (table) => [
+  primaryKey({ columns: [table.itemId, table.placeId] }),
+  index("shopping_item_places_place_idx").on(table.placeId),
+]);

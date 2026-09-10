@@ -5,3 +5,4 @@ export * from "./push";
 export * from "./monitoring";
 export * from "./strava";
 export * from "./nutrition";
+export * from "./shopping";

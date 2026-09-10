@@ -229,8 +229,8 @@ export const WeeklyExerciseAndMeals: Story = {
     http.get("*/api/v1/meals", ({ request }) => {
       const from = new URL(request.url).searchParams.get("from")!;
       return HttpResponse.json({ data: [
-        { id: "current-meal", photoId: null, memo: "架空の食事メモ・今週", mealKind: "lunch", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
-        { id: "previous-meal", photoId: null, memo: "架空の食事メモ・前週", mealKind: "lunch", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
+        { id: "current-meal", photoId: null, memo: "架空の食事メモ・今週", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
+        { id: "previous-meal", photoId: null, memo: "架空の食事メモ・前週", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
       ].filter((meal) => meal.occurredAt.slice(0, 10) >= from) });
     }),
     ...handlers(weights),
@@ -245,7 +245,7 @@ export const WeeklyExerciseAndMeals: Story = {
     await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-09-07");
     await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-13");
     await expect(await canvas.findByText("架空の朝ラン")).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "2026/9/7 12:00 の昼食を開く" }));
+    await userEvent.click(canvas.getByRole("button", { name: "2026/9/7 12:00 の食事を開く" }));
   },
 };
 

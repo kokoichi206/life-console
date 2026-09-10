@@ -98,16 +98,16 @@ export const Empty: Story = {
   },
 };
 export const Dark: Story = { name: "ダーク", globals: { theme: "dark" } };
+
 export const SaveMemo: Story = {
   name: "メモと日時を保存",
   play: async ({ canvasElement, userEvent, args }) => {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.type(await screen.findByLabelText("メモ"), "おにぎりと味噌汁");
-    await userEvent.selectOptions(screen.getByLabelText("食事区分"), "breakfast");
     await fireEvent.change(screen.getByLabelText("食事の日時"), { target: { value: "2026-09-08T07:30" } });
     await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
     await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
-    await expect(savedMeal).toHaveBeenCalledWith(expect.objectContaining({ memo: "おにぎりと味噌汁", mealKind: "breakfast", photoId: null, occurredAt: new Date("2026-09-08T07:30").toISOString() }));
+    await expect(savedMeal).toHaveBeenCalledWith(expect.objectContaining({ memo: "おにぎりと味噌汁", photoId: null, occurredAt: new Date("2026-09-08T07:30").toISOString() }));
     await userEvent.click(screen.getByRole("button", { name: "記録画面を開く" }));
     await expect(await screen.findByLabelText("メモ")).toHaveValue("");
   },
@@ -208,7 +208,6 @@ export const Saving: Story = {
     await expect(screen.getByRole("button", { name: "写真を選ぶ" })).toBeDisabled();
     await expect(screen.getByRole("button", { name: "カメラで撮る" })).toBeDisabled();
     await expect(screen.getByRole("button", { name: "右に 90° 回転" })).toBeDisabled();
-    await expect(screen.getByLabelText("食事区分")).toBeDisabled();
     await expect(screen.getByLabelText("メモ")).toBeDisabled();
   },
 };

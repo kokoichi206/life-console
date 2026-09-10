@@ -28,7 +28,7 @@ describe("栄養解析の HTTP と runner の経路", () => {
       const now = new Date().toISOString();
       await repository.createMealPhoto({ id: "photo", clientId: "photo-client", contentType: "image/jpeg", objectKey: "meals/test.jpg", tokenHash: "hash", expiresAt: now, now });
       const response = await app.request("/api/v1/meals", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId: "11111111-1111-4111-8111-111111111111", photoId: "photo", memo: "写真の食事", mealKind: "lunch", occurredAt: now, tags: [] }) }, environment);
+        body: JSON.stringify({ clientId: "11111111-1111-4111-8111-111111111111", photoId: "photo", memo: "写真の食事", occurredAt: now, tags: [] }) }, environment);
       expect(response.status).toBe(200);
       expect(database.prepare("SELECT status, kind FROM jobs").get()).toMatchObject({ status: "queued", kind: "nutrition_analysis" });
       vi.stubGlobal("fetch", (url: string, init: RequestInit) => app.request(url, init, environment));
@@ -60,7 +60,7 @@ describe("手入力カロリーの HTTP 経路", () => {
     try {
       const now = new Date().toISOString();
       await repository.createMealPhoto({ id: "photo", clientId: "photo-client", contentType: "image/jpeg", objectKey: "meals/test.jpg", tokenHash: "hash", expiresAt: now, now });
-      const input = { clientId: "11111111-1111-4111-8111-111111111111", photoId: "photo", mealKind: "lunch", occurredAt: now, manualCaloriesKcal: 520 };
+      const input = { clientId: "11111111-1111-4111-8111-111111111111", photoId: "photo", occurredAt: now, manualCaloriesKcal: 520 };
       expect((await app.request("/api/v1/meals", { method: "POST", headers, body: JSON.stringify(input) }, environment)).status).toBe(200);
       const meal = database.prepare("SELECT id FROM meals").get()!;
       expect(database.prepare("SELECT count(*) AS count FROM jobs").get()?.count).toBe(0);
@@ -83,7 +83,7 @@ describe("解析予約後の手入力", () => {
     const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
     const now = new Date().toISOString();
     try {
-      expect((await repository.createMealAndQueueNutrition("meal", { clientId: "client", photoId: "photo", memo: "", mealKind: "lunch", occurredAt: now, tags: [] }, now)).ok).toBe(true);
+      expect((await repository.createMealAndQueueNutrition("meal", { clientId: "client", photoId: "photo", memo: "", occurredAt: now, tags: [] }, now)).ok).toBe(true);
       vi.stubGlobal("fetch", (url: string, init: RequestInit) => app.request(url, init, environment));
       const api = createApiRepository({ apiUrl: "http://localhost", runnerId: "test-runner", runnerName: "Test runner", runnerToken: "local-runner-token" } as RunnerConfig);
       const generate = vi.fn().mockImplementation(async () => {

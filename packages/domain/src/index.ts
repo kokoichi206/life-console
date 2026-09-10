@@ -1,3 +1,6 @@
+export const taskAreas = ["work", "personal"] as const;
+export type TaskArea = typeof taskAreas[number];
+
 export const taskStatuses = ["inbox", "todo", "doing", "done", "canceled"] as const;
 export type TaskStatus = typeof taskStatuses[number];
 
@@ -28,8 +31,6 @@ export type AgentProvider = typeof agentProviders[number];
 export const scheduleIntervals = ["hourly", "daily", "weekly"] as const;
 
 export const scheduleCoalescingModes = ["skip_if_pending", "queue_all"] as const;
-
-export const mealKinds = ["breakfast", "lunch", "dinner", "snack"] as const;
 
 export const financeEntryKinds = ["income", "expense"] as const;
 

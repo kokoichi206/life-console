@@ -64,6 +64,20 @@
       "when": 1788968973261,
       "tag": "0008_shiny_strong_guy",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789049188368,
+      "tag": "0009_fast_thundra",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789066057637,
+      "tag": "0010_broken_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }
