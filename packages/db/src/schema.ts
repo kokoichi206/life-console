@@ -1,4 +1,4 @@
-import { agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealKinds, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, taskStatuses, weightSources } from "@life-console/domain";
+import { agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, taskStatuses, weightSources } from "@life-console/domain";
 import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -98,7 +98,6 @@ export const meals = sqliteTable("meals", {
   photoId: text("photo_id"),
   manualCaloriesKcal: integer("manual_calories_kcal"),
   memo: text("memo").notNull(),
-  mealKind: text("meal_kind", { enum: mealKinds }).notNull(),
   occurredAt: text("occurred_at").notNull(),
   recordedAt: text("recorded_at").notNull(),
   tagsJson: text("tags_json").notNull(),

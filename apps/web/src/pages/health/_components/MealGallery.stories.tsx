@@ -8,7 +8,7 @@ import { MealGallery } from "./MealGallery";
 
 const meals: Meal[] = Array.from({ length: 9 }, (_, index) => ({
   id: `meal-${index}`, photoId: index === 1 ? null : `photo-${index}`, memo: index === 0 ? "ごはんと焼き魚\n味噌汁" : index === 1 ? "おにぎりとお茶" : "",
-  mealKind: index % 2 === 0 ? "dinner" : "lunch", occurredAt: `2026-09-0${9 - index}T09:00:00Z`, recordedAt: "2026-09-09T09:00:00Z", tags: [],
+  occurredAt: `2026-09-0${9 - index}T09:00:00Z`, recordedAt: "2026-09-09T09:00:00Z", tags: [],
 }));
 const nutrition: MealNutrition[] = meals.map((meal, index) => ({ mealId: meal.id, photoId: meal.photoId, occurredAt: meal.occurredAt,
   estimate: index === 0
@@ -50,16 +50,16 @@ export const Photos: Story = {
     await expect(canvas.getAllByRole("button", { name: /を開く$/ })).toHaveLength(9);
     await expect(canvas.getByText("メモのみ")).toBeVisible();
     const screen = within(canvasElement.ownerDocument.body);
-    const mealButton = canvas.getByRole("button", { name: "2026/9/9 18:00 の夕食を開く" });
+    const mealButton = canvas.getByRole("button", { name: "2026/9/9 18:00 の食事を開く" });
     await userEvent.click(mealButton);
-    const detail = within(await screen.findByRole("dialog", { name: "夕食" }));
+    const detail = within(await screen.findByRole("dialog", { name: "食事の記録" }));
     await expect(detail.getByText(/ごはんと焼き魚/)).toHaveTextContent("味噌汁");
-    await expect(detail.getByRole("img", { name: "夕食の写真" })).toBeVisible();
+    await expect(detail.getByRole("img", { name: "食事の写真" })).toBeVisible();
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(mealButton).toHaveFocus());
-    await userEvent.click(canvas.getByRole("button", { name: "2026/9/8 18:00 の昼食を開く" }));
-    const memoDetail = within(await screen.findByRole("dialog", { name: "昼食" }));
+    await userEvent.click(canvas.getByRole("button", { name: "2026/9/8 18:00 の食事を開く" }));
+    const memoDetail = within(await screen.findByRole("dialog", { name: "食事の記録" }));
     await expect(memoDetail.getByText("おにぎりとお茶")).toBeVisible();
     await expect(memoDetail.queryByRole("img")).not.toBeInTheDocument();
     await userEvent.click(memoDetail.getByRole("button", { name: "食事の詳細を閉じる" }));
@@ -83,7 +83,7 @@ export const Estimated: Story = {
   name: "推定カロリーと日別合計", args: { selectedMealId: "meal-0" },
   play: async ({ canvas, canvasElement }) => {
     await expect(await canvas.findByText("650 kcal", { selector: "td" })).toBeVisible();
-    const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "夕食" }));
+    const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "食事の記録" }));
     await expect(await detail.findByText("推定 約 650 kcal")).toBeVisible();
     await expect(detail.getByText(/炭水化物 87.5 g/)).toBeVisible();
   },
@@ -92,7 +92,7 @@ export const AnalysisPending: Story = {
   name: "runner の解析待ち", args: { selectedMealId: "meal-0" },
   parameters: { msw: { handlers: [photoHandler, http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: nutrition.map((entry) => ({ ...entry, analysisStatus: "queued" })) }))] } },
   play: async ({ canvasElement }) => {
-    const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "夕食" }));
+    const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "食事の記録" }));
     await expect(await detail.findByRole("button", { name: "解析待ち・解析中" })).toBeDisabled();
   },
 };
@@ -101,7 +101,7 @@ export const AnalysisFailure: Story = {
   parameters: { msw: { handlers: [photoHandler, http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: nutrition.map((entry) => ({ ...entry, analysisStatus: "failed", analysisSummary: "写真から食品や分量を判断できませんでした。" })) })),
     http.post("*/api/v1/nutrition/analyze", () => HttpResponse.json({ error: { message: "解析を予約できませんでした。" } }, { status: 503 }))] } },
   play: async ({ canvasElement, userEvent }) => {
-    const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "夕食" }));
+    const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "食事の記録" }));
     await expect(await detail.findByText("写真から食品や分量を判断できませんでした。")).toBeVisible();
     await userEvent.click(await detail.findByRole("button", { name: "カロリーを再解析" }));
     await expect(await detail.findByText("解析を予約できませんでした。")).toBeVisible();
@@ -141,7 +141,7 @@ export const EditCalories: Story = {
   },
   play: async ({ canvas, canvasElement, userEvent }) => {
     const screen = within(canvasElement.ownerDocument.body);
-    await userEvent.click(canvas.getByRole("button", { name: "2026/9/9 18:00 の夕食を開く" }));
+    await userEvent.click(canvas.getByRole("button", { name: "2026/9/9 18:00 の食事を開く" }));
     const detail = within(await screen.findByRole("dialog"));
     const input = await detail.findByLabelText("カロリー（kcal）");
     await expect(input).toHaveValue(650);
@@ -152,7 +152,7 @@ export const EditCalories: Story = {
     await expect(detail.queryByRole("button", { name: "カロリーを再解析" })).not.toBeInTheDocument();
     await userEvent.click(detail.getByRole("button", { name: "食事の詳細を閉じる" }));
     await expect(await canvas.findByText("0 kcal", { selector: "td" })).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "2026/9/9 18:00 の夕食を開く" }));
+    await userEvent.click(canvas.getByRole("button", { name: "2026/9/9 18:00 の食事を開く" }));
     await expect(await within(await screen.findByRole("dialog")).findByLabelText("カロリー（kcal）")).toHaveValue(0);
   },
 };

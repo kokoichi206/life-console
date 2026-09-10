@@ -108,7 +108,6 @@ export type Meal = {
   readonly id: string;
   readonly photoId: string | null;
   readonly memo: string;
-  readonly mealKind: string;
   readonly occurredAt: string;
   readonly recordedAt: string;
   readonly tags: ReadonlyArray<string>;

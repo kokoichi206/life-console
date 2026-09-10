@@ -6,13 +6,11 @@ import { useState, type FormEvent } from "react";
 
 import { api } from "../../../api";
 import { Field, FormError, EmptyState, Panel, SectionHeading } from "../../../components/DesignSystem";
-import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/input";
 import { nutritionIsPending, summarizeDailyNutrition } from "../nutrition-summary";
 import { nutritionQuery } from "../queries";
 
-const mealKindLabel = (kind: string): string => ({ breakfast: "朝食", lunch: "昼食", dinner: "夕食", snack: "間食" }[kind] ?? kind);
 const mealDateTime = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
 }).format(new Date(occurredAt));
@@ -126,7 +124,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
           : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                 {meals.map((meal) => (
-                  <button key={meal.id} type="button" className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => onSelectMeal(meal.id)} aria-label={`${mealDateTime(meal.occurredAt)} の${mealKindLabel(meal.mealKind)}を開く`}>
+                  <button key={meal.id} type="button" className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => onSelectMeal(meal.id)} aria-label={`${mealDateTime(meal.occurredAt)} の食事を開く`}>
                     <div className="aspect-square w-full shrink-0 overflow-hidden bg-muted">
                       {meal.photoId === null
                         ? (
@@ -135,10 +133,9 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
                               <span className="text-xs">メモのみ</span>
                             </div>
                           )
-                        : <MealPhoto photoId={meal.photoId} alt={`${mealKindLabel(meal.mealKind)}の写真`} className="size-full object-cover" />}
+                        : <MealPhoto photoId={meal.photoId} alt="食事の写真" className="size-full object-cover" />}
                     </div>
                     <div className="grid w-full gap-2 p-3">
-                      <Badge variant="secondary">{mealKindLabel(meal.mealKind)}</Badge>
                       <time dateTime={meal.occurredAt} className="text-xs text-muted-foreground">{mealDateTime(meal.occurredAt)}</time>
                       <p className="text-sm font-medium tabular-nums">{mealCaloriesLabel(nutritionByMeal.get(meal.id))}</p>
                       {nutritionIsPending(nutritionByMeal.get(meal.id)?.analysisStatus ?? null) && <p className="text-xs text-muted-foreground">{nutritionByMeal.get(meal.id)?.manualCaloriesKcal != null ? "解析の中止待ち" : "解析待ち・解析中"}</p>}
@@ -154,13 +151,13 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
           <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
           <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-card p-4 text-foreground shadow-2xl outline-none sm:p-6">
             <header className="mb-4 flex items-center justify-between gap-3">
-              <Dialog.Title className="text-lg font-semibold">{selectedMeal === undefined ? "食事の記録" : mealKindLabel(selectedMeal.mealKind)}</Dialog.Title>
+              <Dialog.Title className="text-lg font-semibold">食事の記録</Dialog.Title>
               <Dialog.Close render={<Button variant="ghost" size="icon" aria-label="食事の詳細を閉じる" />}><X /></Dialog.Close>
             </header>
             <Dialog.Description className="mb-4 text-sm text-muted-foreground">{selectedMeal === undefined ? "この食事記録は一覧にありません。" : mealDateTime(selectedMeal.occurredAt)}</Dialog.Description>
             {selectedMeal !== undefined && (
               <div className="grid gap-4">
-                {selectedMeal.photoId !== null && <div className="overflow-hidden rounded-xl bg-muted"><MealPhoto key={selectedMeal.photoId} photoId={selectedMeal.photoId} alt={`${mealKindLabel(selectedMeal.mealKind)}の写真`} className="max-h-[60dvh] w-full object-contain" /></div>}
+                {selectedMeal.photoId !== null && <div className="overflow-hidden rounded-xl bg-muted"><MealPhoto key={selectedMeal.photoId} photoId={selectedMeal.photoId} alt="食事の写真" className="max-h-[60dvh] w-full object-contain" /></div>}
                 {selectedMeal.memo !== "" && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{selectedMeal.memo}</p>}
                 {selectedNutrition !== undefined && selectedNutrition.manualCaloriesKcal !== null && <p className="text-xl font-semibold">{mealCaloriesLabel(selectedNutrition)}</p>}
                 {selectedNutrition?.manualCaloriesKcal === null && selectedNutrition.estimate !== null && (

@@ -1,4 +1,4 @@
-import { taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, mealKinds, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
+import { taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
 import { z } from "zod";
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
@@ -14,7 +14,6 @@ export const jobKindSchema = z.enum(jobKinds);
 export const agentProviderSchema = z.enum(agentProviders);
 export const scheduleIntervalSchema = z.enum(scheduleIntervals);
 export const scheduleCoalescingSchema = z.enum(scheduleCoalescingModes);
-export const mealKindSchema = z.enum(mealKinds);
 export const financeEntryKindSchema = z.enum(financeEntryKinds);
 export const assetKindSchema = z.enum(assetKinds);
 
@@ -114,7 +113,6 @@ export const createMealSchema = z.object({
   photoId: identifierSchema.nullable().default(null),
   manualCaloriesKcal: z.number().int().nonnegative().optional(),
   memo: z.string().trim().max(2_000).default(""),
-  mealKind: mealKindSchema,
   occurredAt: isoDateTimeSchema,
   tags: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
 }).refine((input) => input.photoId !== null || input.memo.length > 0, {

@@ -7,7 +7,7 @@ import { createJobStorage } from "./support/d1-storage";
 it("食事の期間指定は日本時間の境界で絞り、100 件を超えても欠落させない", async () => {
   const { binding, database } = createJobStorage();
   try {
-    const insert = database.prepare("INSERT INTO meals (id, client_id, memo, meal_kind, occurred_at, recorded_at, tags_json) VALUES (?, ?, '', 'snack', ?, ?, '[]')");
+    const insert = database.prepare("INSERT INTO meals (id, client_id, memo, occurred_at, recorded_at, tags_json) VALUES (?, ?, '', ?, ?, '[]')");
     for (let index = 0; index < 101; index++) insert.run(String(index), String(index), "2026-09-06T15:00:00Z", "2026-09-07T00:00:00Z");
     insert.run("before", "before", "2026-09-06T14:59:59Z", "2026-09-07T00:00:00Z");
     insert.run("after", "after", "2026-09-07T15:00:00Z", "2026-09-07T00:00:00Z");
