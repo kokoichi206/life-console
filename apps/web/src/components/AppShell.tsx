@@ -1,6 +1,7 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import {
   Activity,
+  CheckCheck,
   HeartPulse,
   Home,
   ListTodo,
@@ -21,6 +22,7 @@ import { Button } from "./ui/Button";
 
 const navigation = [
   { to: "/", label: "ホーム", icon: Home },
+  { to: "/todos", label: "やること", icon: CheckCheck },
   { to: "/tasks", label: "仕事", icon: ListTodo },
   { to: "/health", label: "健康", icon: HeartPulse },
   { to: "/finance", label: "お金", icon: WalletCards },

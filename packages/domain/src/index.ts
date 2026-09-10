@@ -1,3 +1,6 @@
+export const taskAreas = ["work", "personal"] as const;
+export type TaskArea = typeof taskAreas[number];
+
 export const taskStatuses = ["inbox", "todo", "doing", "done", "canceled"] as const;
 export type TaskStatus = typeof taskStatuses[number];
 

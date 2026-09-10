@@ -1,4 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
+import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from "@life-console/contracts";
 import { nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
 import { mealPeriodQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
 import { weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
@@ -13,6 +14,7 @@ import { D1LifeConsoleRepository } from "./repositories/d1-life-console-reposito
 import { createMonitoringRepository } from "./repositories/monitoring-repository";
 import { createNutritionRepository } from "./repositories/nutrition-repository";
 import { createPushSubscriptionRepository } from "./repositories/push-subscription-repository";
+import { createShoppingRepository } from "./repositories/shopping-repository";
 import { createStravaApiRepository } from "./repositories/strava-api-repository";
 import { createStravaConnectionRepository } from "./repositories/strava-connection-repository";
 import { createWebPushRepository } from "./repositories/web-push-repository";
@@ -34,6 +36,7 @@ import { createNutritionUsecase } from "./usecases/nutrition-usecase";
 import { createPushNotificationUsecase } from "./usecases/push-notification-usecase";
 import { createReplyDraftUsecase } from "./usecases/reply-draft-usecase";
 import { createRepositoryUsecase } from "./usecases/repository-usecase";
+import { createShoppingUsecase } from "./usecases/shopping-usecase";
 import { createStravaUsecase } from "./usecases/strava-usecase";
 import { createTaskUsecase } from "./usecases/task-usecase";
 
@@ -80,6 +83,9 @@ const createHandlers = (environment: ApiEnvironment) => {
     tasks: createTaskUsecase(repository, systemClock, cryptoIdGenerator),
   });
 };
+
+const createShoppingHandlers = (environment: ApiEnvironment) => createShoppingUsecase(createShoppingRepository(environment.DB), systemClock, cryptoIdGenerator);
+const shoppingLinkParameters = identifierParameterSchema.extend({ placeId: z.string().min(1).max(128) });
 
 const createNutritionHandlers = (environment: ApiEnvironment) => createNutritionUsecase(
   createNutritionRepository(environment.DB), new D1LifeConsoleRepository(environment.DB), systemClock, cryptoIdGenerator,
@@ -272,6 +278,16 @@ const _routes = app
   ))
   .get("/api/v1/health", (context) => context.json({ data: { status: "ok" as const } }))
   .get("/api/v1/dashboard", async (context) => respond(context, await createHandlers(context.get("environment")).dashboard()))
+  .get("/api/v1/shopping", async (context) => respond(context, await createShoppingHandlers(context.get("environment")).list()))
+  .post("/api/v1/shopping/places", zValidator("json", shoppingNameSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).createPlace(context.req.valid("json"))))
+  .patch("/api/v1/shopping/places/:id", zValidator("param", identifierParameterSchema), zValidator("json", shoppingNameSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).renamePlace(context.req.valid("param").id, context.req.valid("json"))))
+  .post("/api/v1/shopping/places/:id/items", zValidator("param", identifierParameterSchema), zValidator("json", shoppingNameSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).createItem(context.req.valid("param").id, context.req.valid("json"))))
+  .patch("/api/v1/shopping/items/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateShoppingItemSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).updateItem(context.req.valid("param").id, context.req.valid("json"))))
+  .delete("/api/v1/shopping/items/:id", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).deleteItem(context.req.valid("param").id)))
+  .put("/api/v1/shopping/items/:id/places/:placeId", zValidator("param", shoppingLinkParameters), zValidator("json", shoppingLinkSchema), async (context) => {
+    const { id, placeId } = context.req.valid("param");
+    return respond(context, await createShoppingHandlers(context.get("environment")).setPlace(id, placeId, context.req.valid("json").linked));
+  })
   .get("/api/v1/tasks", async (context) => respond(context, await createHandlers(context.get("environment")).listTasks()))
   .post("/api/v1/tasks", zValidator("json", createTaskSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createTask(context.req.valid("json")));

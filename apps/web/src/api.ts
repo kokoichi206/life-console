@@ -1,4 +1,5 @@
 import type { AppType } from "@life-console/api";
+import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contracts";
 import type { MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
 import type { StravaActivityPage, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
@@ -57,6 +58,13 @@ const unwrap = async <T>(response: HttpResponse): Promise<T> => {
 };
 
 export const api = {
+  shopping: async () => unwrap<ShoppingList>(await client.api.v1.shopping.$get()),
+  createShoppingPlace: async (name: string) => unwrap<null>(await client.api.v1.shopping.places.$post({ json: { name } })),
+  renameShoppingPlace: async (id: string, name: string) => unwrap<null>(await client.api.v1.shopping.places[":id"].$patch({ param: { id }, json: { name } })),
+  createShoppingItem: async (placeId: string, name: string) => unwrap<null>(await client.api.v1.shopping.places[":id"].items.$post({ param: { id: placeId }, json: { name } })),
+  updateShoppingItem: async (id: string, input: UpdateShoppingItemInput) => unwrap<null>(await client.api.v1.shopping.items[":id"].$patch({ param: { id }, json: input })),
+  deleteShoppingItem: async (id: string) => unwrap<null>(await client.api.v1.shopping.items[":id"].$delete({ param: { id } })),
+  setShoppingPlace: async (id: string, placeId: string, linked: boolean) => unwrap<null>(await client.api.v1.shopping.items[":id"].places[":placeId"].$put({ param: { id, placeId }, json: { linked } })),
   stravaStatus: async () => unwrap<StravaStatus>(await client.api.v1.strava.status.$get()),
   authorizeStrava: async () => unwrap<string>(await client.api.v1.strava.authorize.$post()),
   disconnectStrava: async () => unwrap<null>(await client.api.v1.strava.connection.$delete()),

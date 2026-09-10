@@ -1,6 +1,6 @@
 import type { WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
-import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType, ConnectorKind, TaskStatus, SourceMappingConnector, SourceScope } from "@life-console/domain";
+import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType, ConnectorKind, TaskArea, TaskStatus, SourceMappingConnector, SourceScope } from "@life-console/domain";
 
 import type { AppError } from "../shared/app-error";
 
@@ -9,6 +9,9 @@ export type Task = {
   readonly title: string;
   readonly description: string;
   readonly status: TaskStatus;
+  readonly area: TaskArea;
+  readonly scheduledAt: string | null;
+  readonly sourceUrl: string | null;
   readonly dueAt: string | null;
   readonly completedAt: string | null;
   readonly conversationId: string | null;
