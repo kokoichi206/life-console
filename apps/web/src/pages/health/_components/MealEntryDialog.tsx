@@ -1,5 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog";
-import type { CreateMealInput } from "@life-console/contracts";
+import type { CreateMealInput, Meal } from "@life-console/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, ImagePlus, RotateCw, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
@@ -10,6 +10,7 @@ import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/input";
 import { NativeSelect } from "../../../components/ui/native-select";
 import { Textarea } from "../../../components/ui/textarea";
+import { defaultMealKindFor } from "../meal-kind";
 import { normalizeMealPhoto } from "../meal-photo";
 
 const currentLocalDateTime = (): string => {
@@ -18,16 +19,21 @@ const currentLocalDateTime = (): string => {
   return date.toISOString().slice(0, 16);
 };
 
-const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
+const MealEntryForm = ({ meals, onSaved }: { readonly meals: ReadonlyArray<Meal>; readonly onSaved: () => void }) => {
   const queryClient = useQueryClient();
-  const [occurredAt, setOccurredAt] = useState(currentLocalDateTime);
-  const [mealKind, setMealKind] = useState<CreateMealInput["mealKind"]>("dinner");
+  const initialOccurredAt = currentLocalDateTime();
+  const [occurredAt, setOccurredAt] = useState(initialOccurredAt);
+  const [mealKind, setMealKind] = useState<CreateMealInput["mealKind"]>(() => defaultMealKindFor(initialOccurredAt, meals));
+  const [mealKindTouched, setMealKindTouched] = useState(false);
   const [caloriesKcal, setCaloriesKcal] = useState("");
   const [memo, setMemo] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [quarterTurns, setQuarterTurns] = useState(0);
   const [preparedPhoto, setPreparedPhoto] = useState<{ source: File; quarterTurns: number; blob: Blob; url: string }>();
   const [photoError, setPhotoError] = useState<string>();
+  useEffect(() => {
+    if (!mealKindTouched) setMealKind(defaultMealKindFor(occurredAt, meals));
+  }, [occurredAt, mealKindTouched, meals]);
   const photoPreview = preparedPhoto?.source === photo && preparedPhoto.quarterTurns === quarterTurns ? preparedPhoto : undefined;
   const photoLibraryInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -126,7 +132,14 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
           {photo !== null && <p className="truncate text-xs text-muted-foreground">{photo.name}</p>}
         </div>
         <Field label="食事区分">
-          <NativeSelect className="w-full" value={mealKind} onChange={(event) => setMealKind(event.target.value as CreateMealInput["mealKind"])}>
+          <NativeSelect
+            className="w-full"
+            value={mealKind}
+            onChange={(event) => {
+              setMealKind(event.target.value as CreateMealInput["mealKind"]);
+              setMealKindTouched(true);
+            }}
+          >
             <option value="breakfast">朝食</option>
             <option value="lunch">昼食</option>
             <option value="dinner">夕食</option>
@@ -146,7 +159,8 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
   );
 };
 
-export const MealEntryDialog = ({ open, onOpenChange }: {
+export const MealEntryDialog = ({ meals, open, onOpenChange }: {
+  readonly meals: ReadonlyArray<Meal>;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }) => (
@@ -162,7 +176,7 @@ export const MealEntryDialog = ({ open, onOpenChange }: {
           </div>
           <Dialog.Close render={<Button variant="ghost" size="icon" aria-label="食事の記録を閉じる" />}><X /></Dialog.Close>
         </header>
-        {open && <MealEntryForm onSaved={() => onOpenChange(false)} />}
+        {open && <MealEntryForm meals={meals} onSaved={() => onOpenChange(false)} />}
       </Dialog.Popup>
     </Dialog.Portal>
   </Dialog.Root>

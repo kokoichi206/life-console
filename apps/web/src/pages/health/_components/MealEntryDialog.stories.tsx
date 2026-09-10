@@ -1,3 +1,4 @@
+import type { Meal } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { delay, http, HttpResponse } from "msw";
 import { useState } from "react";
@@ -44,7 +45,7 @@ const expectPhotoPreview = async (canvasElement: HTMLElement, expected: Awaited<
 const meta = {
   title: "Health/食事を記録",
   component: MealEntryDialog,
-  args: { open: true, onOpenChange: fn() },
+  args: { meals: [], open: true, onOpenChange: fn() },
   render: function MealEntryPreview(args) {
     const [open, setOpen] = useState(args.open);
     return (
@@ -98,6 +99,35 @@ export const Empty: Story = {
   },
 };
 export const Dark: Story = { name: "ダーク", globals: { theme: "dark" } };
+
+export const DefaultMealKind: Story = {
+  name: "日時に応じた食事区分の初期値",
+  play: async ({ canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    const occurredAt = screen.getByLabelText("食事の日時");
+    await fireEvent.change(occurredAt, { target: { value: "2026-09-08T07:30" } });
+    await expect(screen.getByLabelText("食事区分")).toHaveValue("breakfast");
+    await fireEvent.change(occurredAt, { target: { value: "2026-09-08T12:30" } });
+    await expect(screen.getByLabelText("食事区分")).toHaveValue("lunch");
+    await fireEvent.change(occurredAt, { target: { value: "2026-09-08T18:30" } });
+    await expect(screen.getByLabelText("食事区分")).toHaveValue("dinner");
+    await userEvent.selectOptions(screen.getByLabelText("食事区分"), "breakfast");
+    await fireEvent.change(occurredAt, { target: { value: "2026-09-08T12:30" } });
+    await expect(screen.getByLabelText("食事区分")).toHaveValue("breakfast");
+  },
+};
+
+export const ExistingDefaultMeal: Story = {
+  name: "同じ時間帯に記録済みなら間食",
+  args: {
+    meals: [{ id: "existing-breakfast", photoId: null, memo: "朝食", mealKind: "breakfast", occurredAt: "2026-09-08T07:00:00+09:00", recordedAt: "2026-09-08T07:00:00+09:00", tags: [] } satisfies Meal],
+  },
+  play: async ({ canvasElement }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await fireEvent.change(screen.getByLabelText("食事の日時"), { target: { value: "2026-09-08T08:30" } });
+    await expect(screen.getByLabelText("食事区分")).toHaveValue("snack");
+  },
+};
 export const SaveMemo: Story = {
   name: "メモと日時を保存",
   play: async ({ canvasElement, userEvent, args }) => {
