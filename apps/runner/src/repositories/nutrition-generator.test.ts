@@ -92,3 +92,28 @@ describe("Gemini による画像解析", () => {
     expect(execute).toHaveBeenCalledOnce();
   });
 });
+
+describe("メモだけの栄養推定", () => {
+  it.each(["codex", "claude", "gemini"] as const)("%s に写真なしでメモを渡す", async (provider) => {
+    const { readFile, writeFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const readMealPhoto = vi.fn();
+    const execute = vi.fn<CommandRepository["execute"]>().mockImplementation(async (_command, args, options) => {
+      if (provider === "codex") {
+        expect(args).not.toContain("--image");
+        expect(JSON.parse(options!.stdin!) as unknown).toEqual({ memo: meal.memo });
+        await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({ estimate }));
+        return ok({ stdout: JSON.stringify({ type: "turn.completed" }), stderr: "" });
+      }
+      if (provider === "gemini") {
+        expect(args[args.indexOf("--prompt") + 1]).toBe("@meal.json この食事の栄養を推定してください。");
+        expect(JSON.parse(await readFile(join(options!.cwd!, "meal.json"), "utf8")) as unknown).toEqual({ memo: meal.memo });
+        return ok({ stdout: JSON.stringify({ response: JSON.stringify({ estimate }), stats: { models: { test: {} } } }), stderr: "" });
+      }
+      expect(JSON.parse(options!.stdin!) as unknown).toMatchObject({ message: { content: [{ type: "text", text: JSON.stringify({ memo: meal.memo }) }] } });
+      return reply(estimate);
+    });
+    expect(await createNutritionGenerator({ execute }, { readMealPhoto }, { provider, geminiAuth: "gemini-api-key" }).generate({ ...meal, photoId: null }, signal)).toMatchObject({ ok: true, value: estimate });
+    expect(readMealPhoto).not.toHaveBeenCalled();
+  });
+});
