@@ -38,6 +38,7 @@ const slackSearchSchema = z.object({
     text: z.string(),
     ts: z.string(),
     username: z.string(),
+    user: z.string().min(1),
   })),
 });
 
@@ -130,7 +131,8 @@ export const createSlackConnector = (
         watermark: last.ts,
         conversations: sorted.map((match) => ({
           externalMessageId: match.ts,
-          authorLabel: match.username,
+          // Slack の検索結果では表示名が空でも投稿者 ID は返る。
+          authorLabel: (match.username.trim() === "" ? match.user : match.username.trim()).slice(0, 120),
           excerpt: match.text.trim().slice(0, 2_000),
           sourceUrl: match.permalink,
           occurredAt: new Date(Number(match.ts) * 1_000).toISOString(),

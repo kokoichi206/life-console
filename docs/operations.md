@@ -34,6 +34,8 @@ runner は起動すると API を poll し、実際の同期や job を実行し
 
 日程候補の生成には、Gmail 用アカウントの Calendar 認証権限も必要です。アカウント未指定時に自動選択するのは、Gmail 対応アカウントが 1 件の場合だけです。
 
+Slack の検索結果で表示名が空の場合は、投稿者 ID を表示します。Calendar の空き時間は、gog が予定なしの `busy` 配列を省略する応答にも対応します。カレンダー単位の取得エラーは、予定なしとは扱いません。
+
 外部サービスで返信した後は、会話の下書きを再作成すると履歴と返信判定を更新できます。送信 job が `lost` になった場合は、再度送信する前に元のサービスで投稿の有無を確認します。
 
 体重 CSV の列は `date,weight_kg,ma7_kg,window_samples`。家計 CSV は [サンプル](../apps/runner/examples/finance.csv)、体重の Obsidian 連携は [書き出し設定](weight-obsidian-export.md) を参照します。実データ・資格情報・agent transcript はリポジトリへ含めず、設定例と検証資料には架空データを使います。

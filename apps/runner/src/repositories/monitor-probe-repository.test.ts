@@ -5,6 +5,10 @@ import { classifyProbeFailure, createMonitorProbeRepository } from "./monitor-pr
 
 const configuration = { gmailAccount: "test@example.com", slackWorkspace: "work", chatworkAccount: "work", talknoteAccount: "work" };
 describe("CLI の軽量接続確認", () => {
+  it("gog が空の busy を省略しても Calendar の接続を正常と判定する", async () => {
+    const execute = vi.fn().mockResolvedValue(ok({ stdout: JSON.stringify({ calendars: { primary: {} } }), stderr: "" }));
+    expect(await createMonitorProbeRepository({ execute }, configuration).probe({ service: "calendar", account: "test@example.com" })).toBe("healthy");
+  });
   it("Slack は auth.test を実行する CLI を workspace 指定で呼ぶ", async () => {
     const execute = vi.fn().mockResolvedValue(ok({ stdout: "{\"user\":\"test\"}", stderr: "" }));
     const probes = createMonitorProbeRepository({ execute }, configuration);

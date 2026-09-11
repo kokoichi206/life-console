@@ -33,7 +33,11 @@ describe("返信用の空き時間", () => {
     expect(result.ok && result.value.account).toBe("owner@example.com");
     expect(execute.mock.calls[0]![1]).toEqual(["calendar", "freebusy", "primary", "--account", "owner@example.com", "--from", "2026-09-07T00:00:00+09:00", "--to", "2026-09-07T15:00:00.000Z", "--json", "--no-input", "--gmail-no-send", "--enable-commands-exact", "calendar.freebusy"]);
   });
-  it.each([{ errors: [{ reason: "forbidden" }] }, { busy: [], errors: [{ reason: "notFound" }] }, {}])("カレンダー単位の失敗を空きとみなさない", async (primary) => {
+  it("gog が空の busy を省略した応答を受け取れる", async () => {
+    const execute = vi.fn<CommandRepository["execute"]>().mockResolvedValue(ok({ stdout: JSON.stringify({ calendars: { primary: {} } }), stderr: "" }));
+    expect((await createReplyCalendarRepository({ execute }, "owner@example.com").read(request, new AbortController().signal)).ok).toBe(true);
+  });
+  it.each([{ errors: [{ reason: "forbidden" }] }, { busy: [], errors: [{ reason: "notFound" }] }])("カレンダー単位の失敗を空きとみなさない", async (primary) => {
     const execute = vi.fn<CommandRepository["execute"]>().mockResolvedValue(ok({ stdout: JSON.stringify({ calendars: { primary } }), stderr: "" }));
     expect((await createReplyCalendarRepository({ execute }, "owner@example.com").read(request, new AbortController().signal)).ok).toBe(false);
   });
