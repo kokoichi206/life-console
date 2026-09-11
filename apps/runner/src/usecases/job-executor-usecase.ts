@@ -292,7 +292,6 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
           const candidates = await dependencies.api.nutritionCandidates(payload.value, signal);
           if (!candidates.ok) return failed(candidates.error);
           let analyzedCount = 0;
-          let manualCount = 0;
           const failures: RunnerError[] = [];
           for (const meal of candidates.value) {
             if (signal.aborted) return { outcome: "canceled", errorCode: null, reportedExternally: false, summary: "栄養解析を中止しました。" };
@@ -304,16 +303,11 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
             }
             const saved = await dependencies.api.saveNutritionEstimate({ ...estimate.value, mealId: meal.id, jobId: job.id, leaseToken: job.leaseToken }, signal);
             if (signal.aborted) return { outcome: "canceled", errorCode: null, reportedExternally: false, summary: "栄養解析を中止しました。" };
-            if (!saved.ok) {
-              if (saved.error.code !== "nutrition_manual_calories") return failed(saved.error);
-              manualCount += 1;
-              continue;
-            }
+            if (!saved.ok) return failed(saved.error);
             analyzedCount += 1;
           }
           if (failures.length > 0) return failed(runnerError("nutrition_analysis_partial", `${String(analyzedCount)} 件を保存、${String(failures.length)} 件の解析に失敗しました。${failures[0]!.summary}`));
-          if (payload.value.mealId !== undefined && analyzedCount === 0) return { outcome: "skipped_precondition", errorCode: null, reportedExternally: false, summary: "カロリーが手入力されたため、解析をスキップしました。" };
-          return succeeded(`${String(analyzedCount)} 件の食事に推定カロリーと栄養素を保存しました。${manualCount === 0 ? "" : `手入力済みの ${String(manualCount)} 件は保存しませんでした。`}`);
+          return succeeded(`${String(analyzedCount)} 件の食事に推定カロリーと栄養素を保存しました。`);
         }
         default:
           return failed(runnerError("unknown_job_kind", `未対応の job kind: ${job.kind}`));

@@ -138,7 +138,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
                     <div className="grid w-full gap-2 p-3">
                       <time dateTime={meal.occurredAt} className="text-xs text-muted-foreground">{mealDateTime(meal.occurredAt)}</time>
                       <p className="text-sm font-medium tabular-nums">{mealCaloriesLabel(nutritionByMeal.get(meal.id))}</p>
-                      {nutritionIsPending(nutritionByMeal.get(meal.id)?.analysisStatus ?? null) && <p className="text-xs text-muted-foreground">{nutritionByMeal.get(meal.id)?.manualCaloriesKcal != null ? "解析の中止待ち" : "解析待ち・解析中"}</p>}
+                      {nutritionIsPending(nutritionByMeal.get(meal.id)?.analysisStatus ?? null) && <p className="text-xs text-muted-foreground">解析待ち・解析中</p>}
                       {meal.memo !== "" && <p className="line-clamp-2 text-sm break-words whitespace-pre-wrap">{meal.memo}</p>}
                     </div>
                   </button>
@@ -160,17 +160,18 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
                 {selectedMeal.photoId !== null && <div className="overflow-hidden rounded-xl bg-muted"><MealPhoto key={selectedMeal.photoId} photoId={selectedMeal.photoId} alt="食事の写真" className="max-h-[60dvh] w-full object-contain" /></div>}
                 {selectedMeal.memo !== "" && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{selectedMeal.memo}</p>}
                 {selectedNutrition !== undefined && selectedNutrition.manualCaloriesKcal !== null && <p className="text-xl font-semibold">{mealCaloriesLabel(selectedNutrition)}</p>}
-                {selectedNutrition?.manualCaloriesKcal === null && selectedNutrition.estimate !== null && (
+                {selectedNutrition !== undefined && selectedNutrition.estimate !== null && (
                   <div className="space-y-2 rounded-xl bg-muted/50 p-4">
-                    <p className="text-xl font-semibold">{`推定 約 ${selectedNutrition.estimate.caloriesKcal} kcal`}</p>
+                    {selectedNutrition.manualCaloriesKcal === null && <p className="text-xl font-semibold">{`推定 約 ${selectedNutrition.estimate.caloriesKcal} kcal`}</p>}
                     <p className="text-sm">{`たんぱく質 ${selectedNutrition.estimate.proteinGrams} g ・ 脂質 ${selectedNutrition.estimate.fatGrams} g ・ 炭水化物 ${selectedNutrition.estimate.carbohydrateGrams} g`}</p>
                     <p className="text-xs text-muted-foreground">{`${selectedNutrition.estimate.model} ・ ${mealDateTime(selectedNutrition.estimate.analyzedAt)} に解析`}</p>
-                    <p className="text-xs text-muted-foreground">写真からの推定値です。実際の分量や調理方法で変わります。</p>
+                    <p className="text-xs text-muted-foreground">栄養素は写真・メモからの推定値です。実際の分量や調理方法で変わります。</p>
                   </div>
                 )}
                 {selectedNutrition !== undefined && <MealCaloriesForm key={selectedMeal.id} nutrition={selectedNutrition} />}
-                {selectedMeal.photoId !== null && selectedNutrition?.manualCaloriesKcal === null && <Button disabled={analyze.isPending || pending || nutrition.data === undefined} onClick={() => analyze.mutate({ mealId: selectedMeal.id })}>{pending ? "解析待ち・解析中" : selectedNutrition?.estimate == null ? "カロリーを解析" : "カロリーを再解析"}</Button>}
-                {pending && <p role="status" className="text-sm text-muted-foreground">{selectedNutrition?.manualCaloriesKcal != null ? "画像解析の中止を待っています。" : "Mac の runner で順番に解析します。結果は自動で更新されます。"}</p>}
+                {(selectedMeal.photoId !== null || selectedMeal.memo.trim() !== "") && <Button disabled={analyze.isPending || pending || nutrition.data === undefined} onClick={() => analyze.mutate({ mealId: selectedMeal.id })}>{pending ? "解析待ち・解析中" : selectedNutrition?.estimate == null ? "栄養を解析" : "栄養を再解析"}</Button>}
+                {selectedNutrition?.manualCaloriesKcal != null && <p className="text-xs text-muted-foreground">解析しても手入力したカロリーは変わりません。</p>}
+                {pending && <p role="status" className="text-sm text-muted-foreground">Mac の runner で順番に解析します。結果は自動で更新されます。</p>}
                 {selectedNutrition?.analysisStatus === "failed" && <FormError>{selectedNutrition.analysisSummary ?? "解析に失敗しました。再解析できます。"}</FormError>}
                 {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}
               </div>

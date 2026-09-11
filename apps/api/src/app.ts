@@ -126,7 +126,6 @@ const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 500 | 50
       return 403;
     case "not_found":
       return 404;
-    case "nutrition_manual_calories":
     case "conflict":
       return 409;
     case "storage_error":

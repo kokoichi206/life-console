@@ -9,7 +9,7 @@ import { runnerError, type RunnerError } from "../errors";
 import type { CommandOutput, CommandRepository } from "./command-repository";
 
 type GeminiNutritionInput = {
-  readonly photo: { readonly contentType: "image/jpeg" | "image/png" | "image/webp"; readonly base64: string };
+  readonly photo: { readonly contentType: "image/jpeg" | "image/png" | "image/webp"; readonly base64: string } | null;
   readonly memo: string;
   readonly prompt: string;
   readonly schema: unknown;
@@ -33,12 +33,12 @@ export const generateGeminiNutrition = async (commands: CommandRepository, input
     }), { mode: 0o600 });
     const systemPrompt = join(directory.value, "system.md");
     await writeFile(systemPrompt, `${input.prompt}\n次の JSON Schema に従う JSON オブジェクトだけを出力してください。Markdown の囲みや説明文は不要です。\n${JSON.stringify(input.schema)}`, { mode: 0o600 });
-    const imageName = `meal.${input.photo.contentType.split("/")[1]}`;
-    await writeFile(join(directory.value, imageName), Buffer.from(input.photo.base64, "base64"), { mode: 0o600 });
+    const imageName = input.photo === null ? null : `meal.${input.photo.contentType.split("/")[1]}`;
+    if (input.photo !== null && imageName !== null) await writeFile(join(directory.value, imageName), Buffer.from(input.photo.base64, "base64"), { mode: 0o600 });
     // メモをプロンプトの @file 展開へ直接通すと、メモ内のパスまで読み込まれる。
     await writeFile(join(directory.value, "meal.json"), JSON.stringify({ memo: input.memo }), { mode: 0o600 });
     return commands.execute("env", [`GEMINI_CLI_HOME=${home}`, `GEMINI_SYSTEM_MD=${systemPrompt}`, "gemini", "--output-format", "json",
-      ...(input.model === undefined ? [] : ["--model", input.model]), "--prompt", `@${imageName} @meal.json この食事の栄養を推定してください。`], { cwd: directory.value, signal });
+      ...(input.model === undefined ? [] : ["--model", input.model]), "--prompt", `${imageName === null ? "" : `@${imageName} `}@meal.json この食事の栄養を推定してください。`], { cwd: directory.value, signal });
   });
   const cleaned = await safeTry(() => rm(directory.value, { recursive: true, force: true }));
   if (!cleaned.ok) return err(runnerError("nutrition_cleanup_failed", "画像解析の一時ファイルを削除できませんでした。", cleaned.error));
