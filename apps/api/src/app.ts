@@ -1,4 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
+import { createConnectorScheduleSchema, updateConnectorScheduleSchema } from "@life-console/contracts";
 import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from "@life-console/contracts";
 import { nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
 import { mealPeriodQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
@@ -10,6 +11,7 @@ import { createMiddleware } from "hono/factory";
 import { z } from "zod";
 
 import { createLifeConsoleHandlers } from "./handlers/life-console-handlers";
+import { createConnectorScheduleRepository } from "./repositories/connector-schedule-repository";
 import { D1LifeConsoleRepository } from "./repositories/d1-life-console-repository";
 import { createMonitoringRepository } from "./repositories/monitoring-repository";
 import { createNutritionRepository } from "./repositories/nutrition-repository";
@@ -24,6 +26,7 @@ import { systemClock } from "./shared/clock";
 import { parseApiEnvironment, type ApiEnvironment } from "./shared/environment";
 import { cryptoIdGenerator } from "./shared/id-generator";
 import { cloudLogger } from "./shared/logger";
+import { createConnectorScheduleUsecase } from "./usecases/connector-schedule-usecase";
 import { createConversationUsecase } from "./usecases/conversation-usecase";
 import { createDashboardUsecase } from "./usecases/dashboard-usecase";
 import { createFinanceUsecase } from "./usecases/finance-usecase";
@@ -85,6 +88,7 @@ const createHandlers = (environment: ApiEnvironment) => {
 };
 
 const createShoppingHandlers = (environment: ApiEnvironment) => createShoppingUsecase(createShoppingRepository(environment.DB), systemClock, cryptoIdGenerator);
+const createConnectorScheduleHandlers = (environment: ApiEnvironment) => createConnectorScheduleUsecase(createConnectorScheduleRepository(environment.DB), systemClock, cryptoIdGenerator);
 const shoppingLinkParameters = identifierParameterSchema.extend({ placeId: z.string().min(1).max(128) });
 
 const createNutritionHandlers = (environment: ApiEnvironment) => createNutritionUsecase(
@@ -434,6 +438,9 @@ const _routes = app
   .post("/api/v1/schedules", zValidator("json", createScheduleSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createSchedule(context.req.valid("json")));
   })
+  .get("/api/v1/connector-schedules", async (context) => respond(context, await createConnectorScheduleHandlers(context.get("environment")).list()))
+  .post("/api/v1/connector-schedules", zValidator("json", createConnectorScheduleSchema), async (context) => respond(context, await createConnectorScheduleHandlers(context.get("environment")).create(context.req.valid("json"))))
+  .patch("/api/v1/connector-schedules/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateConnectorScheduleSchema), async (context) => respond(context, await createConnectorScheduleHandlers(context.get("environment")).update(context.req.valid("param").id, context.req.valid("json"))))
   .get("/api/v1/runner/weights/export", async (context) => respond(context, await createHandlers(context.get("environment")).listWeightsForExport()))
   .get("/api/v1/runner/runners", async (context) => respond(context, await createHandlers(context.get("environment")).listRunners()))
   .post("/api/v1/runner/register", zValidator("json", registerRunnerSchema), async (context) => {

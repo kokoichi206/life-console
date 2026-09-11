@@ -519,6 +519,8 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   async createJob(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: AgentProvider }): Promise<Result<Job, AppError>> {
+    const connectorSync = ["slack_sync", "chatwork_sync", "gmail_sync", "talknote_sync"].includes(input.kind);
+    const pendingSync = this.#database.select({ id: jobs.id }).from(jobs).where(and(eq(jobs.kind, input.kind), inArray(jobs.status, pendingJobStatuses)));
     const pendingReply = this.#database.select({ id: jobs.id }).from(jobs).where(and(
       eq(jobs.kind, "conversation_reply"), inArray(jobs.status, pendingJobStatuses),
       eq(sql`json_extract(${jobs.payloadJson}, '$.conversationId')`, sql`json_extract(${input.payloadJson}, '$.conversationId')`),
@@ -533,9 +535,11 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
       .from(sql`(select 1)`).where(and(
         input.kind === "conversation_reply" ? notExists(pendingReply) : sql`1`,
         input.kind === "nutrition_analysis" ? notExists(pendingNutrition) : sql`1`,
+        connectorSync ? notExists(pendingSync) : sql`1`,
       ));
     const result = await safeTry(() => this.#database.insert(jobs).select(selection).onConflictDoNothing().run());
     if (!result.ok) return err(appError.storage(result.error));
+    if (connectorSync && result.value.meta.changes === 0) return err(appError.conflict("このサービスは既に同期を待機・実行中です。"));
     if (input.kind === "conversation_reply" && result.value.meta.changes === 0) return err(appError.conflict("この会話への返信は既に実行待ち、または送信中です。"));
     if (input.kind === "nutrition_analysis" && result.value.meta.changes === 0) return err(appError.conflict("対象の食事は既に解析待ち、または解析中です。"));
     return this.getJobByIdempotencyKey(input.idempotencyKey);

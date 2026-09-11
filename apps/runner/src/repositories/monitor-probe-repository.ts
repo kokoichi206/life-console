@@ -58,7 +58,7 @@ export const createMonitorProbeRepository = (commands: CommandRepository, config
         } else {
           const now = Date.now();
           args = ["calendar", "freebusy", "primary", "--from", new Date(now).toISOString(), "--to", new Date(now + 60_000).toISOString(), ...flags];
-          schema = z.object({ calendars: z.object({ primary: z.object({ busy: z.array(z.unknown()), errors: z.array(z.unknown()).max(0).optional() }) }) });
+          schema = z.object({ calendars: z.object({ primary: z.object({ busy: z.array(z.unknown()).optional(), errors: z.array(z.unknown()).max(0).optional() }) }) });
         }
         break;
       }

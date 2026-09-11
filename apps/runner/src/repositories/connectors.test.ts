@@ -36,6 +36,14 @@ const configuration: RunnerConfig = {
 };
 
 describe("createSlackConnector", () => {
+  it("表示名が空の投稿者も ID を使って API の入力条件を満たす", async () => {
+    const execute = vi.fn<CommandRepository["execute"]>().mockResolvedValue(ok({ stdout: JSON.stringify({
+      paging: { pages: 1 }, matches: [{ channel: { id: "C1", name: "room" },
+        permalink: "https://example.slack.com/archives/C1/p123", text: "確認依頼", ts: "123.456", username: "", user: "U123" }],
+    }), stderr: "" }));
+    const result = await createSlackConnector({ execute }, configuration).fetch(new AbortController().signal);
+    expect(result.ok && result.value[0]?.conversations[0]?.authorLabel).toBe("U123");
+  });
   it("現在の Slack ユーザーへの mention をチャンネル別に取り込む", async () => {
     const execute = vi.fn<CommandRepository["execute"]>().mockImplementation((_command, arguments_) => {
       if (arguments_[0] === "auth") {
