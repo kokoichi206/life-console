@@ -64,6 +64,8 @@ flowchart TB
 
 同期・送信・agent 起動は job として処理し、実行経過と結果を Web で確認できます。定期実行は D1 のスケジュールと Cloudflare Cron で管理。runner や外部 CLI の異常・復旧は Web Push で通知します。
 
+『同期・実行状況』の『連絡の定期実行』で、Gmail・Slack・Chatwork・Talknote の未設定・有効・停止中、次回実行、直近の同期結果を確認できます。1 時間・1 日・1 週間ごとの登録、頻度変更、一時停止・再開、今すぐ同期に対応します。初回を登録直後に実行するかも選べます。取得元と範囲は Mac の既存設定を使い、返信送信や agent 起動は予約しません。
+
 ## ライセンス
 
 [MIT License](LICENSE)

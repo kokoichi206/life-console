@@ -1,4 +1,5 @@
 import type { AppType } from "@life-console/api";
+import type { ConnectorScheduleStatus, CreateConnectorScheduleInput, UpdateConnectorScheduleInput } from "@life-console/contracts";
 import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contracts";
 import type { MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
 import type { StravaActivityPage, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
@@ -58,6 +59,9 @@ const unwrap = async <T>(response: HttpResponse): Promise<T> => {
 };
 
 export const api = {
+  connectorSchedules: async () => unwrap<ReadonlyArray<ConnectorScheduleStatus>>(await client.api.v1["connector-schedules"].$get()),
+  createConnectorSchedule: async (input: CreateConnectorScheduleInput) => unwrap<null>(await client.api.v1["connector-schedules"].$post({ json: input })),
+  updateConnectorSchedule: async (id: string, input: UpdateConnectorScheduleInput) => unwrap<null>(await client.api.v1["connector-schedules"][":id"].$patch({ param: { id }, json: input })),
   shopping: async () => unwrap<ShoppingList>(await client.api.v1.shopping.$get()),
   createShoppingPlace: async (name: string) => unwrap<null>(await client.api.v1.shopping.places.$post({ json: { name } })),
   renameShoppingPlace: async (id: string, name: string) => unwrap<null>(await client.api.v1.shopping.places[":id"].$patch({ param: { id }, json: { name } })),
