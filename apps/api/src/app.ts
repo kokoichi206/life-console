@@ -1,4 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
+import { createAgentQuestionSchema, answerAgentQuestionSchema } from "@life-console/contracts";
 import { createConnectorScheduleSchema, updateConnectorScheduleSchema } from "@life-console/contracts";
 import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from "@life-console/contracts";
 import { nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
@@ -11,6 +12,7 @@ import { createMiddleware } from "hono/factory";
 import { z } from "zod";
 
 import { createLifeConsoleHandlers } from "./handlers/life-console-handlers";
+import { createAgentQuestionRepository } from "./repositories/agent-question-repository";
 import { createConnectorScheduleRepository } from "./repositories/connector-schedule-repository";
 import { D1LifeConsoleRepository } from "./repositories/d1-life-console-repository";
 import { createMonitoringRepository } from "./repositories/monitoring-repository";
@@ -26,6 +28,7 @@ import { systemClock } from "./shared/clock";
 import { parseApiEnvironment, type ApiEnvironment } from "./shared/environment";
 import { cryptoIdGenerator } from "./shared/id-generator";
 import { cloudLogger } from "./shared/logger";
+import { createAgentQuestionUsecase } from "./usecases/agent-question-usecase";
 import { createConnectorScheduleUsecase } from "./usecases/connector-schedule-usecase";
 import { createConversationUsecase } from "./usecases/conversation-usecase";
 import { createDashboardUsecase } from "./usecases/dashboard-usecase";
@@ -58,6 +61,10 @@ const jobReportParameterSchema = z.object({
   id: z.string().min(1).max(128),
   token: z.string().uuid(),
 });
+
+const createAgentQuestionHandlers = (environment: ApiEnvironment) => createAgentQuestionUsecase(
+  createAgentQuestionRepository(environment.DB), systemClock, cryptoIdGenerator,
+);
 
 const createHandlers = (environment: ApiEnvironment) => {
   const repository = new D1LifeConsoleRepository(environment.DB);
@@ -421,6 +428,18 @@ const _routes = app
       input.repositoryId,
       input.target,
     ));
+  })
+  .get("/api/v1/agent-questions", async (context) => respond(context, await createAgentQuestionHandlers(context.get("environment")).listPending()))
+  .post("/api/v1/agent-questions/:id/answer", zValidator("param", identifierParameterSchema), zValidator("json", answerAgentQuestionSchema), async (context) => {
+    return respond(context, await createAgentQuestionHandlers(context.get("environment")).answer(context.req.valid("param").id, context.req.valid("json").answer));
+  })
+  .post("/api/v1/job-reports/:id/:token/questions", zValidator("param", jobReportParameterSchema), zValidator("json", createAgentQuestionSchema), async (context) => {
+    const { id, token } = context.req.valid("param");
+    return respond(context, await createAgentQuestionHandlers(context.get("environment")).create(id, token, context.req.valid("json").question));
+  })
+  .get("/api/v1/job-reports/:id/:token/questions/:questionId", zValidator("param", jobReportParameterSchema.extend({ questionId: z.uuid() })), async (context) => {
+    const { id, token, questionId } = context.req.valid("param");
+    return respond(context, await createAgentQuestionHandlers(context.get("environment")).get(questionId, id, token));
   })
   .get("/api/v1/jobs", async (context) => respond(context, await createHandlers(context.get("environment")).listJobs()))
   .post("/api/v1/jobs/:id/cancel", zValidator("param", identifierParameterSchema), async (context) => {

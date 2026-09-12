@@ -78,6 +78,13 @@
       "when": 1789066057637,
       "tag": "0010_broken_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1789175734576,
+      "tag": "0011_smiling_rictor",
+      "breakpoints": true
     }
   ]
 }

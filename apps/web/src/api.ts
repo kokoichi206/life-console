@@ -1,4 +1,5 @@
 import type { AppType } from "@life-console/api";
+import type { AgentQuestion } from "@life-console/contracts";
 import type { ConnectorScheduleStatus, CreateConnectorScheduleInput, UpdateConnectorScheduleInput } from "@life-console/contracts";
 import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contracts";
 import type { MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
@@ -59,6 +60,8 @@ const unwrap = async <T>(response: HttpResponse): Promise<T> => {
 };
 
 export const api = {
+  agentQuestions: async () => unwrap<ReadonlyArray<AgentQuestion>>(await client.api.v1["agent-questions"].$get()),
+  answerAgentQuestion: async (id: string, answer: string) => unwrap<null>(await client.api.v1["agent-questions"][":id"].answer.$post({ param: { id }, json: { answer } })),
   connectorSchedules: async () => unwrap<ReadonlyArray<ConnectorScheduleStatus>>(await client.api.v1["connector-schedules"].$get()),
   createConnectorSchedule: async (input: CreateConnectorScheduleInput) => unwrap<null>(await client.api.v1["connector-schedules"].$post({ json: input })),
   updateConnectorSchedule: async (id: string, input: UpdateConnectorScheduleInput) => unwrap<null>(await client.api.v1["connector-schedules"][":id"].$patch({ param: { id }, json: input })),

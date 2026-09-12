@@ -2,7 +2,7 @@ import type { WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinan
 import { calculate7DayMovingAverage } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import { err, ok, safeTry } from "@life-console/core";
-import { assetBalances, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
+import { agentQuestions, assetBalances, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
 import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType } from "@life-console/domain";
 import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -560,13 +560,17 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   async heartbeatJob(jobId: string, input: JobHeartbeatInput, leaseExpiresAt: string, now: string): Promise<Result<{ readonly cancelRequested: boolean }, AppError>> {
     const validLease = and(eq(jobs.id, jobId), eq(jobs.runnerId, input.runnerId), eq(jobs.leaseToken, input.leaseToken),
       inArray(jobs.status, activeJobStatuses), gt(sql`julianday(${jobs.leaseExpiresAt})`, sql`julianday(${now})`));
+    const pendingQuestion = exists(this.#database.select({ id: agentQuestions.id }).from(agentQuestions)
+      .where(and(eq(agentQuestions.jobId, jobs.id), eq(agentQuestions.leaseToken, jobs.leaseToken), isNull(agentQuestions.answer))));
     const result = await safeTry(() => this.#database.batch([
       this.#database.insert(jobHeartbeatObservations).values({ jobId, runnerId: input.runnerId, receivedAt: now,
         accepted: exists(this.#database.select({ id: jobs.id }).from(jobs).where(validLease)),
       }),
-      this.#database.update(jobs).set({ status: input.waitingForUser ? "waiting_for_user" : "running", leaseExpiresAt, lastHeartbeatAt: now,
-        progressUpdatedAt: input.progressSummary === null ? jobs.progressUpdatedAt : now,
-        summary: input.progressSummary === null ? jobs.summary : input.progressSummary, updatedAt: now,
+      this.#database.update(jobs).set({ status: sql`case when ${inArray(jobs.kind, ["agent", "github_promotion"])}
+          then case when ${pendingQuestion} then 'waiting_for_user' else 'running' end
+          else ${input.waitingForUser ? "waiting_for_user" : "running"} end`, leaseExpiresAt, lastHeartbeatAt: now,
+      progressUpdatedAt: input.progressSummary === null ? jobs.progressUpdatedAt : now,
+      summary: input.progressSummary === null ? jobs.summary : input.progressSummary, updatedAt: now,
       }).where(validLease).returning({ cancelRequestedAt: jobs.cancelRequestedAt }),
     ]));
     if (!result.ok) return err(appError.storage(result.error));
