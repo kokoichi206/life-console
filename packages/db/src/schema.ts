@@ -314,3 +314,15 @@ export const shoppingItemPlaces = sqliteTable("shopping_item_places", {
   primaryKey({ columns: [table.itemId, table.placeId] }),
   index("shopping_item_places_place_idx").on(table.placeId),
 ]);
+
+export const agentQuestions = sqliteTable("agent_questions", {
+  id: text("id").primaryKey(),
+  jobId: text("job_id").notNull().references(() => jobs.id),
+  leaseToken: text("lease_token").notNull(),
+  question: text("question").notNull(),
+  answer: text("answer"),
+  createdAt: text("created_at").notNull(),
+  answeredAt: text("answered_at"),
+}, (table) => [
+  uniqueIndex("agent_questions_pending_uidx").on(table.jobId, table.leaseToken).where(sql`${table.answer} IS NULL`),
+]);
