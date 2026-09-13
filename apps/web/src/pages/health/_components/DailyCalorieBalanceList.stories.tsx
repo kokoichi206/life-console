@@ -2,7 +2,7 @@ import type { MealNutrition } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
-import { calorieBalanceRows, type ExerciseInput } from "../calorie-balance";
+import { calorieBalanceRows, recentBalanceWindow, type ExerciseInput } from "../calorie-balance";
 import type { ExerciseDayCalories } from "../exercise-calories";
 
 import { DailyCalorieBalanceList } from "./DailyCalorieBalanceList";
@@ -25,7 +25,12 @@ const sampleExercise = tracked({
   "2026-09-13": exercise(320), "2026-09-12": exercise(0, 1), "2026-09-11": exercise(0, 0, 1),
   "2026-09-10": exercise(180), "2026-09-09": exercise(410), "2026-09-08": exercise(500),
 });
-const sampleRows = calorieBalanceRows(PERIOD.from, PERIOD.to, sampleMeals, sampleExercise, 1500);
+const RECENT = recentBalanceWindow(PERIOD.from, PERIOD.to);
+const recentRows = calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, sampleExercise, 1500);
+const wholePeriodRows = calorieBalanceRows(PERIOD.from, PERIOD.to, sampleMeals, sampleExercise, 1500);
+
+/** 表を包むスクロール枠。折りたたみ時は role を持たないので、表からたどる。 */
+const scrollBox = (canvas: { getByRole: (role: string) => HTMLElement }): HTMLElement => canvas.getByRole("table").parentElement!;
 
 /** 棒は `aria-hidden` なので、その日の行から唯一の inline style を持つ要素として引く。 */
 const barWidth = (canvas: { getByRole: (role: string, options: { name: string }) => HTMLElement }, date: string): number => {
@@ -37,13 +42,16 @@ const meta = {
   title: "Health/カロリー収支",
   component: DailyCalorieBalanceList,
   args: {
-    rows: sampleRows,
+    rows: recentRows,
     baselineKcal: 1500,
     exerciseState: "tracked",
     pendingActivities: 1,
     nutritionPending: false,
     nutritionErrorMessage: null,
     onEditBaseline: fn(),
+    expanded: false,
+    hiddenDays: RECENT.hiddenDays,
+    onExpandedChange: fn(),
   },
 } satisfies Meta<typeof DailyCalorieBalanceList>;
 export default meta;
@@ -66,9 +74,30 @@ export const SavingAndOverrun: Story = {
   },
 };
 
+export const RecentDaysByDefault: Story = {
+  name: "既定は直近 7 日だけ出す",
+  play: async ({ canvas, userEvent, args }) => {
+    await expect(canvas.getAllByRole("rowheader").map((header) => header.textContent)).toEqual(["9/13", "9/12", "9/11", "9/10", "9/9", "9/8", "9/7"]);
+    await expect(canvas.queryByText(/9\/2〜9\/7/)).not.toBeInTheDocument();
+    const expand = canvas.getByRole("button", { name: "すべて表示（他 5 日）", expanded: false });
+    await userEvent.click(expand);
+    await expect(args.onExpandedChange).toHaveBeenCalledWith(true);
+  },
+};
+
+export const WithoutHiddenDays: Story = {
+  name: "期間が 7 日以下ならボタンを出さない",
+  args: { hiddenDays: 0 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("+117")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: /すべて表示/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: /直近/ })).not.toBeInTheDocument();
+  },
+};
+
 export const BaselineUnset: Story = {
   name: "基準消費量が未設定",
-  args: { rows: calorieBalanceRows(PERIOD.from, PERIOD.to, sampleMeals, sampleExercise, null), baselineKcal: null },
+  args: { rows: calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, sampleExercise, null), baselineKcal: null },
   play: async ({ canvas, userEvent, args }) => {
     await expect(canvas.getByText("基準消費量が未設定・体重と同じ期間・日本時間")).toBeVisible();
     await expect(canvas.queryByText("+117")).not.toBeInTheDocument();
@@ -86,6 +115,7 @@ export const BaselineUnset: Story = {
 export const SignOnlyConfirmed: Story = {
   name: "符号だけ確定した日",
   args: {
+    hiddenDays: 0,
     rows: calorieBalanceRows("2026-09-10", "2026-09-11", [
       meal("10-a", "2026-09-10", 1902), meal("10-b", "2026-09-10", null),
       meal("11-a", "2026-09-11", 1345),
@@ -105,6 +135,7 @@ export const SignOnlyConfirmed: Story = {
 export const SignUnknown: Story = {
   name: "符号も未確定の日",
   args: {
+    hiddenDays: 0,
     rows: calorieBalanceRows("2026-09-12", "2026-09-12", [meal("12-a", "2026-09-12", 1082), meal("12-b", "2026-09-12", null)], tracked({}), 1500),
     pendingActivities: 0,
   },
@@ -119,6 +150,7 @@ export const SignUnknown: Story = {
 export const AllMealsUnrecorded: Story = {
   name: "全件が未記録の日",
   args: {
+    hiddenDays: 0,
     rows: calorieBalanceRows("2026-09-12", "2026-09-12", [meal("12-a", "2026-09-12", null), meal("12-b", "2026-09-12", null)], tracked({}), 1500),
     pendingActivities: 0,
   },
@@ -133,7 +165,7 @@ export const AllMealsUnrecorded: Story = {
 
 export const UnavailableExercise: Story = {
   name: "算入外の運動がある日",
-  args: { rows: calorieBalanceRows("2026-09-11", "2026-09-11", [meal("11-a", "2026-09-11", 1345)], tracked({ "2026-09-11": exercise(0, 0, 1) }), 1500), pendingActivities: 0 },
+  args: { hiddenDays: 0, rows: calorieBalanceRows("2026-09-11", "2026-09-11", [meal("11-a", "2026-09-11", 1345)], tracked({ "2026-09-11": exercise(0, 0, 1) }), 1500), pendingActivities: 0 },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("+155")).toBeVisible();
     await expect(canvas.getByText("1,345")).toBeVisible();
@@ -150,8 +182,12 @@ export const PendingCalories: Story = {
 };
 
 export const GapDays: Story = {
-  name: "記録なしの日と空白期間",
+  name: "すべて表示で記録なしの日と空白期間を出す",
+  args: { rows: wholePeriodRows, expanded: true },
   play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "直近 7 日だけ表示", expanded: true })).toBeVisible();
+    // 展開時は行が増えるので、高さを制限してキーボードで送れるようにする。
+    await expect(canvas.getByRole("region", { name: "日別の収支" })).toBeVisible();
     await expect(canvas.getByText("9/2〜9/7 食事と運動の記録なし（6 日）")).toBeVisible();
     await expect(canvas.getByText("食事の記録なし")).toBeVisible();
     await expect(canvas.getByText("+410")).toBeVisible();
@@ -163,7 +199,7 @@ export const GapDays: Story = {
 export const WithoutStrava: Story = {
   name: "運動を含めない収支",
   args: {
-    rows: calorieBalanceRows(PERIOD.from, PERIOD.to, sampleMeals, { mode: "untracked" }, 1500),
+    rows: calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, { mode: "untracked" }, 1500),
     exerciseState: "untracked",
     pendingActivities: 0,
   },
@@ -180,7 +216,7 @@ export const WithoutStrava: Story = {
 export const ActivitiesLoading: Story = {
   name: "運動の一覧を取得中",
   args: {
-    rows: calorieBalanceRows(PERIOD.from, PERIOD.to, sampleMeals, undefined, 1500),
+    rows: calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, undefined, 1500),
     exerciseState: "loading",
     pendingActivities: 0,
   },
@@ -203,7 +239,7 @@ export const ActivitiesFailed: Story = {
 export const NutritionLoading: Story = {
   // 食事が未取得の間は行を組まない。空配列で組むと期間全体が「記録なし」の表になる。
   name: "カロリーの読み込み中",
-  args: { rows: [], pendingActivities: 0, nutritionPending: true },
+  args: { rows: [], pendingActivities: 0, nutritionPending: true, hiddenDays: 0 },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("status")).toHaveTextContent("カロリーを読み込んでいます。");
     await expect(canvas.queryByText(/記録なし/)).not.toBeInTheDocument();
@@ -232,5 +268,9 @@ export const Mobile: Story = {
     await expect(canvas.getByText("+180")).toBeVisible();
     // 狭い画面でも収支の棒が視認できる幅を持つこと。
     await expect(barWidth(canvas, "9/10")).toBeGreaterThan(12);
+    // 既定の 7 行は狭い画面でもスクロールさせない。スクロールしない枠は tab 止まりにもしない。
+    const box = scrollBox(canvas);
+    await expect(box.scrollHeight).toBeLessThanOrEqual(box.clientHeight);
+    await expect(canvas.queryByRole("region", { name: "日別の収支" })).not.toBeInTheDocument();
   },
 };

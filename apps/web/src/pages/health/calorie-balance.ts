@@ -5,6 +5,17 @@ import { summarizeDailyNutrition } from "./nutrition-summary";
 
 const ONE_DAY_MILLISECONDS = 86_400_000;
 
+/** 既定で表示する日数。表示期間が長くても直近だけを出し、残りは操作で広げる。 */
+export const RECENT_BALANCE_DAYS = 7;
+
+/** 終端 `to` から数えた直近 {@link RECENT_BALANCE_DAYS} 日の窓と、そこから外れる日数。 */
+export const recentBalanceWindow = (from: string, to: string): { readonly from: string; readonly hiddenDays: number } => {
+  const recentStart = Date.parse(`${to}T00:00:00Z`) - (RECENT_BALANCE_DAYS - 1) * ONE_DAY_MILLISECONDS;
+  const hiddenDays = Math.round((recentStart - Date.parse(`${from}T00:00:00Z`)) / ONE_DAY_MILLISECONDS);
+  if (hiddenDays <= 0) return { from, hiddenDays: 0 };
+  return { from: new Date(recentStart).toISOString().slice(0, 10), hiddenDays };
+};
+
 export type ExerciseInput
   = | { readonly mode: "untracked" }
     | { readonly mode: "tracked"; readonly byDay: ReadonlyMap<string, ExerciseDayCalories> };

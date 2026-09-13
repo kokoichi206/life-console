@@ -17,7 +17,7 @@ describe("体重の記録頻度", () => {
     client.setQueryData(mealsQuery.queryKey, []);
     client.setQueryData(weightGoalQuery.queryKey, null);
     client.setQueryData(calorieBaselineQuery.queryKey, null);
-    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { search: {}, onRangeChange: () => undefined, onRunningVisibilityChange: () => undefined, goalEntryOpen: false, onGoalEntryOpenChange: () => undefined, baselineEntryOpen: false, onBaselineEntryOpenChange: () => undefined, selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
+    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { search: {}, onRangeChange: () => undefined, onRunningVisibilityChange: () => undefined, caloriesExpanded: false, onCaloriesExpandedChange: () => undefined, goalEntryOpen: false, onGoalEntryOpenChange: () => undefined, baselineEntryOpen: false, onBaselineEntryOpenChange: () => undefined, selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
     expect(html.replace(/<[^>]*>/g, "").replace(/\s+/g, "")).toContain("記録頻度2/8日25%");
     client.clear();
   });

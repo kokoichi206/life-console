@@ -14,6 +14,10 @@ export const HealthRoutePage = () => {
       onRunningVisibilityChange={(show) => {
         void navigate({ search: { ...search, running: show ? "show" : undefined }, replace: true, resetScroll: false });
       }}
+      caloriesExpanded={search.calories === "all"}
+      onCaloriesExpandedChange={(expanded) => {
+        void navigate({ search: { ...search, calories: expanded ? "all" : undefined }, replace: true, resetScroll: false });
+      }}
       goalEntryOpen={search.entry === "goal"}
       onGoalEntryOpenChange={(open) => {
         void navigate({ search: { ...search, entry: open ? "goal" : undefined, meal: undefined }, replace: !open, resetScroll: false });
