@@ -7,6 +7,7 @@ export type HealthSearch = {
   readonly meal?: string | undefined;
   readonly range?: WeightRange | undefined;
   readonly running?: "show" | undefined;
+  readonly calories?: "all" | undefined;
   readonly from?: string | undefined;
   readonly to?: string | undefined;
 };
@@ -20,6 +21,7 @@ export const parseHealthSearch = (search: Record<string, unknown>): HealthSearch
     ...(search.entry === "weight" || search.entry === "meal" || search.entry === "goal" || search.entry === "baseline" ? { entry: search.entry } : {}),
     ...(typeof search.meal === "string" && search.meal.length > 0 ? { meal: search.meal } : {}),
     ...(search.running === "show" ? { running: search.running } : {}),
+    ...(search.calories === "all" ? { calories: search.calories } : {}),
     ...(range === undefined ? {} : { range }),
     ...(from.success && to.success && from.data < to.data ? { from: from.data, to: to.data } : {}),
   };

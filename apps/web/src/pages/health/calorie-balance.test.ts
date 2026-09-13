@@ -1,7 +1,7 @@
 import type { MealNutrition } from "@life-console/contracts";
 import { describe, expect, it } from "vitest";
 
-import { calorieBalanceRows, type CalorieBalanceRow, type ExerciseInput } from "./calorie-balance";
+import { calorieBalanceRows, recentBalanceWindow, type CalorieBalanceRow, type ExerciseInput } from "./calorie-balance";
 import type { ExerciseDayCalories } from "./exercise-calories";
 
 const meal = (mealId: string, occurredAt: string, caloriesKcal: number | null): MealNutrition => ({
@@ -72,6 +72,12 @@ describe("日別のカロリー収支", () => {
     expect(days(calorieBalanceRows("2026-09-08", "2026-09-08", meals, undefined, 1500))[0]).toMatchObject({ intakeKcal: 1900, balanceKcal: null, signKnown: false, amountKnown: false });
     expect(days(calorieBalanceRows("2026-09-08", "2026-09-08", meals, { mode: "untracked" }, null))[0]).toMatchObject({ balanceKcal: null });
     expect(days(calorieBalanceRows("2026-09-08", "2026-09-08", [], tracked({ "2026-09-08": day(410) }), 1500))[0]).toMatchObject({ totalMeals: 0, balanceKcal: null });
+  });
+  it("直近 7 日の窓を終端から数え、期間が短ければ切り詰めない", () => {
+    expect(recentBalanceWindow("2026-09-02", "2026-09-13")).toEqual({ from: "2026-09-07", hiddenDays: 5 });
+    expect(recentBalanceWindow("2026-09-07", "2026-09-13")).toEqual({ from: "2026-09-07", hiddenDays: 0 });
+    expect(recentBalanceWindow("2026-09-08", "2026-09-13")).toEqual({ from: "2026-09-08", hiddenDays: 0 });
+    expect(recentBalanceWindow("2026-09-13", "2026-09-13")).toEqual({ from: "2026-09-13", hiddenDays: 0 });
   });
   it("表示期間の外の食事を集計に含めない", () => {
     const rows = calorieBalanceRows("2026-09-08", "2026-09-08", [
