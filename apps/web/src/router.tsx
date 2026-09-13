@@ -11,7 +11,7 @@ import { dashboardQuery } from "./features/overview/queries";
 import { repositoriesQuery } from "./features/repositories/queries";
 import { financeQuery } from "./pages/finance/queries";
 import { parseHealthSearch } from "./pages/health/health-search";
-import { mealsQuery, weightsQuery, weightGoalQuery } from "./pages/health/queries";
+import { calorieBaselineQuery, mealsQuery, weightsQuery, weightGoalQuery } from "./pages/health/queries";
 import { sourceRepositoryMappingsQuery } from "./pages/operations/queries";
 import { parseTodoSearch } from "./pages/todos/todo-search";
 import { parseWorkSearch } from "./pages/work/work-search";
@@ -62,6 +62,7 @@ const healthRoute = createRoute({
   loader: async ({ context }) => Promise.all([
     context.queryClient.ensureQueryData(weightsQuery),
     context.queryClient.ensureQueryData(weightGoalQuery),
+    context.queryClient.ensureQueryData(calorieBaselineQuery),
     context.queryClient.ensureQueryData(mealsQuery),
   ]),
   component: lazyRouteComponent(() => import("./pages/health/HealthRoutePage"), "HealthRoutePage"),

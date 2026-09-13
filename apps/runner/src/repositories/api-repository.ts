@@ -1,5 +1,6 @@
 import type { MonitorObservation, MonitorTarget } from "@life-console/contracts";
 import { nutritionCandidateSchema, type NutritionAnalysisPayload, type NutritionCandidate, type SaveNutritionEstimateInput } from "@life-console/contracts";
+import { stravaCaloriesFetchResultSchema, stravaCaloriesReconcileResultSchema, type StravaCaloriesFetchInput, type StravaCaloriesFetchResult, type StravaCaloriesReconcileInput, type StravaCaloriesReconcileResult } from "@life-console/contracts";
 import { type WeightPoint, type Conversation, type CreateReplyDraftsInput, type SaveReplyDraftInput } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
 import { z } from "zod";
@@ -46,6 +47,8 @@ export interface ApiRepository {
   nutritionCandidates(input: NutritionAnalysisPayload, signal: AbortSignal): Promise<Result<NutritionCandidate[], RunnerError>>;
   readMealPhoto(photoId: string, signal: AbortSignal): Promise<Result<{ readonly contentType: "image/jpeg" | "image/png" | "image/webp"; readonly base64: string }, RunnerError>>;
   saveNutritionEstimate(input: SaveNutritionEstimateInput, signal: AbortSignal): Promise<Result<null, RunnerError>>;
+  reconcileStravaCalories(input: StravaCaloriesReconcileInput, signal: AbortSignal): Promise<Result<StravaCaloriesReconcileResult, RunnerError>>;
+  fetchStravaCalories(input: StravaCaloriesFetchInput, signal: AbortSignal): Promise<Result<StravaCaloriesFetchResult, RunnerError>>;
   registerMonitors(targets: ReadonlyArray<MonitorTarget>): Promise<Result<null, RunnerError>>;
   reportObservation(observation: MonitorObservation, historical: boolean): Promise<Result<null, RunnerError>>;
   replyCandidates(input: CreateReplyDraftsInput): Promise<Result<Conversation[], RunnerError>>;
@@ -114,6 +117,12 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
   return {
     nutritionCandidates: (input, signal) => request(`/api/v1/runner/nutrition/candidates?${new URLSearchParams(input.mealId === undefined ? {} : { mealId: input.mealId }).toString()}`, z.array(nutritionCandidateSchema), { signal }),
     saveNutritionEstimate: (input, signal) => request("/api/v1/runner/nutrition/estimates", z.null(), {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal,
+    }),
+    reconcileStravaCalories: (input, signal) => request("/api/v1/runner/strava/calories/reconcile", stravaCaloriesReconcileResultSchema, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal,
+    }),
+    fetchStravaCalories: (input, signal) => request("/api/v1/runner/strava/calories/fetch", stravaCaloriesFetchResultSchema, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal,
     }),
     async readMealPhoto(photoId, signal) {

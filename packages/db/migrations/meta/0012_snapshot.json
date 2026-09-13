@@ -1,9 +1,92 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "bbc43da3-92f3-42da-8a18-da3c42c06336",
-  "prevId": "a5d4293b-d91f-4b54-ae09-c45790b016f0",
+  "id": "52edeee5-8849-4999-b09d-8fe883fc7ab2",
+  "prevId": "bbc43da3-92f3-42da-8a18-da3c42c06336",
   "tables": {
+    "agent_questions": {
+      "name": "agent_questions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "question": {
+          "name": "question",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "answer": {
+          "name": "answer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "answered_at": {
+          "name": "answered_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "agent_questions_pending_uidx": {
+          "name": "agent_questions_pending_uidx",
+          "columns": [
+            "job_id",
+            "lease_token"
+          ],
+          "isUnique": true,
+          "where": "\"agent_questions\".\"answer\" IS NULL"
+        }
+      },
+      "foreignKeys": {
+        "agent_questions_job_id_jobs_id_fk": {
+          "name": "agent_questions_job_id_jobs_id_fk",
+          "tableFrom": "agent_questions",
+          "tableTo": "jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "asset_balances": {
       "name": "asset_balances",
       "columns": {

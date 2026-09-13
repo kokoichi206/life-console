@@ -1,4 +1,4 @@
-import { taskAreas, agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, taskStatuses, weightSources } from "@life-console/domain";
+import { taskAreas, agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, stravaCaloriesStatuses, taskStatuses, weightSources } from "@life-console/domain";
 import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -293,6 +293,21 @@ export const stravaConnection = sqliteTable("strava_connection", {
   leaseToken: text("lease_token"),
   leaseExpiresAt: integer("lease_expires_at"),
 });
+
+export const calorieBaseline = sqliteTable("calorie_baseline", {
+  id: integer("id").primaryKey(),
+  dailyExpenditureKcal: integer("daily_expenditure_kcal").notNull(),
+});
+
+export const stravaActivityCalories = sqliteTable("strava_activity_calories", {
+  activityId: text("activity_id").primaryKey(),
+  occurredAt: text("occurred_at").notNull(),
+  status: text("status", { enum: stravaCaloriesStatuses }).notNull(),
+  caloriesKcal: integer("calories_kcal"),
+  registeredAt: text("registered_at").notNull(),
+  seenAt: text("seen_at").notNull(),
+  fetchedAt: text("fetched_at"),
+}, (table) => [index("strava_activity_calories_pending_idx").on(table.status, table.occurredAt)]);
 
 export const shoppingPlaces = sqliteTable("shopping_places", {
   id: text("id").primaryKey(),
