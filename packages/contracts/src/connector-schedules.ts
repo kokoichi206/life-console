@@ -1,4 +1,4 @@
-import { connectorKinds, scheduleIntervals } from "@life-console/domain";
+import { connectorKinds, scheduleIntervals, type JobStatus } from "@life-console/domain";
 import { z } from "zod";
 
 export const createConnectorScheduleSchema = z.object({
@@ -24,5 +24,5 @@ export type ConnectorScheduleStatus = {
   readonly connector: typeof connectorKinds[number];
   readonly schedules: ReadonlyArray<ConnectorSchedule>;
   readonly active: boolean;
-  readonly latestJob: { readonly status: string; readonly summary: string | null; readonly errorCode: string | null; readonly createdAt: string } | null;
+  readonly latestJob: { readonly status: JobStatus; readonly summary: string | null; readonly errorCode: string | null; readonly createdAt: string } | null;
 };

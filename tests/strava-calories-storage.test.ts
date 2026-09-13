@@ -63,12 +63,20 @@ const startSyncJob = async ({ repository }: Storage, jobId: string) => {
 
 const environmentFor = (storage: Storage) => ({ ...settings, DB: storage.binding });
 const listActivities = (storage: Storage, page = 1) => app.request(`/api/v1/strava/activities?from=${period.from}&to=${period.to}&page=${String(page)}`, {}, environmentFor(storage));
-const reconcile = (storage: Storage, jobId: string, page = 1) => app.request("/api/v1/runner/strava/calories/reconcile", {
-  method: "POST", headers: runnerHeaders, body: JSON.stringify({ jobId, leaseToken, ...period, page }),
+const reconcile = (storage: Storage, jobId: string, page = 1, window: { from: string; to: string } = period, backfill = false) => app.request("/api/v1/runner/strava/calories/reconcile", {
+  method: "POST", headers: runnerHeaders, body: JSON.stringify({ jobId, leaseToken, ...window, page, backfill }),
 }, environmentFor(storage));
+const plan = (storage: Storage, jobId: string, phase: "recent" | "backfill") => app.request("/api/v1/runner/strava/calories/plan", {
+  method: "POST", headers: runnerHeaders, body: JSON.stringify({ jobId, leaseToken, phase }),
+}, environmentFor(storage));
+/** plan の窓はジョブの開始時刻から決まるので、テストでは固定する。 */
+const setStartedAt = ({ database }: Storage, jobId: string, startedAt: string) => database.prepare("UPDATE jobs SET started_at = ? WHERE id = ?").run(startedAt, jobId);
+const backfillRow = ({ database }: Storage) => database.prepare("SELECT cursor_to, completed_at FROM strava_calories_backfill WHERE id = 1").get() ?? null;
+const detailCalls = (calls: string[]) => calls.filter((path) => path.startsWith("/api/v3/activities/"));
 const fetchCalories = (storage: Storage, jobId: string, token = leaseToken) => app.request("/api/v1/runner/strava/calories/fetch", {
   method: "POST", headers: runnerHeaders, body: JSON.stringify({ jobId, leaseToken: token }),
 }, environmentFor(storage));
+const syncStatus = (storage: Storage) => app.request("/api/v1/strava/calories/sync-status", {}, environmentFor(storage));
 const storedCalories = (storage: Storage) => app.request(`/api/v1/strava/calories?from=${period.from}&to=${period.to}`, {}, environmentFor(storage));
 const jobIds = ({ database }: Storage) => database.prepare("SELECT id FROM jobs WHERE kind = 'strava_calories_sync' ORDER BY created_at").all().map((row) => String(row.id));
 const storedRows = ({ database }: Storage) => database.prepare("SELECT activity_id, status, calories_kcal FROM strava_activity_calories ORDER BY occurred_at DESC").all();
@@ -197,8 +205,7 @@ describe("Strava の消費カロリーの保存と同期", () => {
       await startSyncJob(storage, jobId);
       const first = await (await fetchCalories(storage, jobId)).json() as { data: Record<string, unknown> };
       expect(first.data).toEqual({ fetched: 8, unavailable: 1, deleted: 1, failed: 0, remaining: 2, retryAfterSeconds: null, dailyLimitReached: false });
-      const detailCalls = calls.filter((path) => path.startsWith("/api/v3/activities/"));
-      expect(detailCalls).toEqual(["12", "11", "10", "9", "8", "7", "6", "5", "4", "3"].map((id) => `/api/v3/activities/${id}`));
+      expect(detailCalls(calls)).toEqual(["12", "11", "10", "9", "8", "7", "6", "5", "4", "3"].map((id) => `/api/v3/activities/${id}`));
       const second = await (await fetchCalories(storage, jobId)).json() as { data: Record<string, unknown> };
       expect(second.data).toMatchObject({ fetched: 2, unavailable: 0, deleted: 0, failed: 0, remaining: 0 });
       expect(calls.filter((path) => path === "/api/v3/activities/10")).toHaveLength(1);
@@ -282,6 +289,150 @@ describe("Strava の消費カロリーの保存と同期", () => {
     } finally { storage.database.close(); }
   });
 
+  it("同じ活動を何度同期しても詳細取得は 1 回だけで、再取得の対象にもならない", async () => {
+    const storage = createJobStorage();
+    const calls = stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")], detail: () => detailResponse({ calories: 320, moving_time: 1800 }) });
+    try {
+      await connect(storage);
+      await listActivities(storage);
+      const jobId = jobIds(storage)[0]!;
+      await startSyncJob(storage, jobId);
+      await reconcile(storage, jobId, 1);
+      await reconcile(storage, jobId, 2);
+      expect(await (await fetchCalories(storage, jobId)).json()).toMatchObject({ data: { fetched: 1, remaining: 0 } });
+      const measured = storage.database.prepare("SELECT status, calories_kcal, fetched_at, seen_at FROM strava_activity_calories WHERE activity_id = '1'").get()!;
+      // 2 周目: 画面契機の登録と定期の reconcile が同じ活動を見ても、取得済みの行は seen_at だけ進む。
+      await listActivities(storage);
+      await reconcile(storage, jobId, 1);
+      await reconcile(storage, jobId, 2);
+      expect(await (await fetchCalories(storage, jobId)).json()).toMatchObject({ data: { fetched: 0, unavailable: 0, remaining: 0 } });
+      const after = storage.database.prepare("SELECT status, calories_kcal, fetched_at, seen_at FROM strava_activity_calories WHERE activity_id = '1'").get()!;
+      expect({ status: after.status, calories_kcal: after.calories_kcal, fetched_at: after.fetched_at })
+        .toEqual({ status: measured.status, calories_kcal: measured.calories_kcal, fetched_at: measured.fetched_at });
+      expect(String(after.seen_at) >= String(measured.seen_at)).toBe(true);
+      expect(detailCalls(calls)).toEqual(["/api/v3/activities/1"]);
+    } finally { storage.database.close(); }
+  });
+
+  it("遡りのチャンクを途中で打ち切って再実行しても、取得済みの活動を取り直さない", async () => {
+    const storage = createJobStorage();
+    const chunk = { from: "2026-05-18", to: "2026-08-15" };
+    const calls = stubStrava({ activities: [activity("1", "2026-06-01T00:00:00Z")], detail: () => detailResponse({ calories: 500, moving_time: 3600 }) });
+    try {
+      await connect(storage);
+      expect(await storage.repository.createJobUnlessActive({ id: "sync-job", kind: "strava_calories_sync", idempotencyKey: "sync-job", payloadJson: "{}", now: new Date().toISOString() })).toMatchObject({ ok: true });
+      await startSyncJob(storage, "sync-job");
+      setStartedAt(storage, "sync-job", "2026-09-14T01:00:00.000Z");
+      expect(await (await plan(storage, "sync-job", "backfill")).json()).toEqual({ data: chunk });
+      // 1 ページ目だけ処理して打ち切る。cursor は進まない。
+      await reconcile(storage, "sync-job", 1, chunk, true);
+      await fetchCalories(storage, "sync-job");
+      expect(backfillRow(storage)).toMatchObject({ cursor_to: "2026-08-15", completed_at: null });
+      // 同じチャンクを最初からやり直す。
+      expect(await (await plan(storage, "sync-job", "backfill")).json()).toEqual({ data: chunk });
+      await reconcile(storage, "sync-job", 1, chunk, true);
+      await reconcile(storage, "sync-job", 2, chunk, true);
+      expect(await (await fetchCalories(storage, "sync-job")).json()).toMatchObject({ data: { fetched: 0, remaining: 0 } });
+      expect(detailCalls(calls)).toEqual(["/api/v3/activities/1"]);
+      expect(backfillRow(storage)).toMatchObject({ cursor_to: "2026-05-17", completed_at: null });
+    } finally { storage.database.close(); }
+  });
+
+  it("plan は API の時計で直近 30 日を決め、遡りは状態行を作って 90 日ずつ古い方へ進める", async () => {
+    const storage = createJobStorage();
+    stubStrava({ activities: [] });
+    try {
+      await connect(storage);
+      expect(await storage.repository.createJobUnlessActive({ id: "sync-job", kind: "strava_calories_sync", idempotencyKey: "sync-job", payloadJson: "{}", now: new Date().toISOString() })).toMatchObject({ ok: true });
+      await startSyncJob(storage, "sync-job");
+      setStartedAt(storage, "sync-job", "2026-09-14T01:00:00.000Z");
+      expect(await (await plan(storage, "sync-job", "recent")).json()).toEqual({ data: { from: "2026-08-16", to: "2026-09-14" } });
+      expect(backfillRow(storage)).toBeNull();
+      expect(await (await plan(storage, "sync-job", "backfill")).json()).toEqual({ data: { from: "2026-05-18", to: "2026-08-15" } });
+      expect(backfillRow(storage)).toMatchObject({ cursor_to: "2026-08-15", completed_at: null });
+    } finally { storage.database.close(); }
+  });
+
+  it("遡りの進捗は最終ページでだけ進み、窓が違う reconcile は拒否する", async () => {
+    const storage = createJobStorage();
+    stubStrava({ activities: [activity("1", "2026-06-01T00:00:00Z")] });
+    try {
+      await connect(storage);
+      expect(await storage.repository.createJobUnlessActive({ id: "sync-job", kind: "strava_calories_sync", idempotencyKey: "sync-job", payloadJson: "{}", now: new Date().toISOString() })).toMatchObject({ ok: true });
+      await startSyncJob(storage, "sync-job");
+      setStartedAt(storage, "sync-job", "2026-09-14T01:00:00.000Z");
+      const chunk = { from: "2026-05-18", to: "2026-08-15" };
+      await plan(storage, "sync-job", "backfill");
+      await reconcile(storage, "sync-job", 1, chunk, true);
+      expect(backfillRow(storage)).toMatchObject({ cursor_to: "2026-08-15" });
+      expect((await reconcile(storage, "sync-job", 1, { from: "2026-01-01", to: "2026-03-31" }, true)).status).toBe(409);
+      await reconcile(storage, "sync-job", 2, chunk, true);
+      expect(backfillRow(storage)).toMatchObject({ cursor_to: "2026-05-17", completed_at: null });
+    } finally { storage.database.close(); }
+  });
+
+  it("下限まで遡ったら完了にし、以後の plan は窓を返さない", async () => {
+    const storage = createJobStorage();
+    stubStrava({ activities: [] });
+    try {
+      await connect(storage);
+      expect(await storage.repository.createJobUnlessActive({ id: "sync-job", kind: "strava_calories_sync", idempotencyKey: "sync-job", payloadJson: "{}", now: new Date().toISOString() })).toMatchObject({ ok: true });
+      await startSyncJob(storage, "sync-job");
+      setStartedAt(storage, "sync-job", "2026-09-14T01:00:00.000Z");
+      await plan(storage, "sync-job", "backfill");
+      storage.database.prepare("UPDATE strava_calories_backfill SET cursor_to = '2009-03-01' WHERE id = 1").run();
+      const chunk = await (await plan(storage, "sync-job", "backfill")).json() as { data: { from: string; to: string } };
+      expect(chunk.data).toEqual({ from: "2009-01-01", to: "2009-03-01" });
+      await reconcile(storage, "sync-job", 1, chunk.data, true);
+      expect(backfillRow(storage)).toMatchObject({ cursor_to: "2009-03-01" });
+      expect(String(backfillRow(storage)!.completed_at)).not.toBe("null");
+      expect(await (await plan(storage, "sync-job", "backfill")).json()).toEqual({ data: null });
+    } finally { storage.database.close(); }
+  });
+
+  it("同期の状態は消費カロリーの job だけを見て返し、Strava を呼ばない", async () => {
+    const storage = createJobStorage();
+    const calls = stubStrava({ activities: [] });
+    try {
+      await connect(storage);
+      expect(await (await syncStatus(storage)).json()).toEqual({ data: { lastJob: null, backfill: null } });
+      // 別種別の job は拾わない。拾うと同期していない状態を「成功」と誤って出す。
+      expect(await storage.repository.createJob({ id: "other", kind: "backup", idempotencyKey: "other", payloadJson: "{}", now: "2026-09-14T09:00:00.000Z" })).toMatchObject({ ok: true });
+      expect(await (await syncStatus(storage)).json()).toEqual({ data: { lastJob: null, backfill: null } });
+      expect(await storage.repository.createJob({ id: "sync", kind: "strava_calories_sync", idempotencyKey: "sync", payloadJson: "{}", now: "2026-09-14T10:00:00.000Z" })).toMatchObject({ ok: true });
+      storage.database.prepare("UPDATE jobs SET status = 'expired', finished_at = '2026-09-14T12:00:00.000Z' WHERE id = 'sync'").run();
+      storage.database.prepare("INSERT INTO strava_calories_backfill (id, cursor_to, started_at, completed_at, updated_at) VALUES (1, '2026-08-15', '2026-09-14T10:00:00.000Z', NULL, '2026-09-14T10:00:00.000Z')").run();
+      expect(await (await syncStatus(storage)).json()).toEqual({
+        data: { lastJob: { status: "expired", at: "2026-09-14T12:00:00.000Z", errorCode: null }, backfill: { cursorTo: "2026-08-15", completedAt: null } },
+      });
+      expect(calls).toEqual([]);
+    } finally { storage.database.close(); }
+  });
+
+  it("定期の job が実行待ちの間は、画面契機の予約を重ねない", async () => {
+    const storage = createJobStorage();
+    stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")] });
+    try {
+      await connect(storage);
+      expect(await storage.repository.createJobUnlessActive({ id: "scheduled", kind: "strava_calories_sync", idempotencyKey: "scheduled", payloadJson: "{}", now: new Date().toISOString() })).toMatchObject({ ok: true });
+      await listActivities(storage);
+      expect(jobIds(storage)).toEqual(["scheduled"]);
+    } finally { storage.database.close(); }
+  });
+
+  it("Strava 未接続の plan は Strava を呼ばずに見送りを返す", async () => {
+    const storage = createJobStorage();
+    const calls = stubStrava({ activities: [] });
+    try {
+      expect(await storage.repository.createJobUnlessActive({ id: "sync-job", kind: "strava_calories_sync", idempotencyKey: "sync-job", payloadJson: "{}", now: new Date().toISOString() })).toMatchObject({ ok: true });
+      await startSyncJob(storage, "sync-job");
+      const response = await plan(storage, "sync-job", "recent");
+      expect(response.status).toBe(412);
+      expect(await response.json()).toMatchObject({ error: { code: "skipped_precondition" } });
+      expect(calls).toEqual([]);
+    } finally { storage.database.close(); }
+  });
+
   it("接続の解除は revoke に成功したときだけ保存済みの消費カロリーを消す", async () => {
     const storage = createJobStorage();
     stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")], revokeStatus: 503 });
@@ -289,13 +440,17 @@ describe("Strava の消費カロリーの保存と同期", () => {
     try {
       await connect(storage);
       await listActivities(storage);
+      storage.database.prepare("INSERT INTO strava_calories_backfill (id, cursor_to, started_at, completed_at, updated_at) VALUES (1, '2026-08-15', '2026-09-14T00:00:00.000Z', NULL, '2026-09-14T00:00:00.000Z')").run();
       expect(storedRows(storage)).toHaveLength(1);
       expect((await disconnect()).status).toBe(502);
       expect(storedRows(storage)).toHaveLength(1);
+      expect(backfillRow(storage)).not.toBeNull();
       vi.unstubAllGlobals();
       stubStrava({ activities: [] });
       expect((await disconnect()).status).toBe(200);
       expect(storedRows(storage)).toEqual([]);
+      // 遡りの状態も消す。再接続後は初回からやり直す。
+      expect(backfillRow(storage)).toBeNull();
     } finally { storage.database.close(); }
   });
 

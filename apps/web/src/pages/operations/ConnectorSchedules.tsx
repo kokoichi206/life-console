@@ -12,7 +12,7 @@ import { serviceLabels } from "../work/work-search";
 
 import { connectorSchedulesQuery } from "./queries";
 
-const intervalLabels = { hourly: "1 時間ごと", daily: "1 日ごと", weekly: "1 週間ごと" } as const;
+const intervalLabels = { hourly: "1 時間ごと", every_2_hours: "2 時間ごと", daily: "1 日ごと", weekly: "1 週間ごと" } as const;
 type ScheduleActions = {
   readonly pending: boolean;
   readonly onCreate: (input: CreateConnectorScheduleInput) => void;
@@ -77,7 +77,7 @@ export const ConnectorSchedulesView = ({ statuses, loading, error, notice, pendi
             </div>
             {status.schedules.length === 0 ? <ScheduleForm connector={status.connector} pending={pending} onCreate={onCreate} onUpdate={onUpdate} /> : status.schedules.map((schedule) => <ScheduleForm key={`${schedule.id}:${schedule.interval}:${String(schedule.enabled)}`} connector={status.connector} schedule={schedule} pending={pending} onCreate={onCreate} onUpdate={onUpdate} />)}
             <div className="border-t pt-3 text-sm">
-              <p>{status.latestJob === null ? "同期の実行履歴はありません。" : `直近の実行: ${jobStatusLabels[status.latestJob.status] ?? status.latestJob.status} · ${new Date(status.latestJob.createdAt).toLocaleString("ja-JP")}`}</p>
+              <p>{status.latestJob === null ? "同期の実行履歴はありません。" : `直近の実行: ${jobStatusLabels[status.latestJob.status]} · ${new Date(status.latestJob.createdAt).toLocaleString("ja-JP")}`}</p>
               {status.latestJob?.summary != null && <p className="mt-1 break-words text-xs text-muted-foreground">{status.latestJob.summary}</p>}
               {status.latestJob?.errorCode != null && <p className="mt-1 break-words text-xs text-destructive">{status.latestJob.errorCode}</p>}
             </div>

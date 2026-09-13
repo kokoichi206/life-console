@@ -8,6 +8,7 @@ const job = { id: "job", kind: "strava_calories_sync", payloadJson: JSON.stringi
 const fetchResult = (overrides: Partial<{ fetched: number; unavailable: number; deleted: number; failed: number; remaining: number; retryAfterSeconds: number | null; dailyLimitReached: boolean }>) => ({
   fetched: 0, unavailable: 0, deleted: 0, failed: 0, remaining: 0, retryAfterSeconds: null, dailyLimitReached: false, ...overrides,
 });
+const scheduledJob = { ...job, payloadJson: "{}" } as RunnerJob;
 const reconcileResult = (overrides: Partial<{ nextPage: number | null; registered: number; deleted: number; retryAfterSeconds: number | null; dailyLimitReached: boolean }>) => ({
   nextPage: null, registered: 0, deleted: 0, retryAfterSeconds: null, dailyLimitReached: false, ...overrides,
 });
@@ -24,8 +25,8 @@ describe("消費カロリーの同期ジョブ", () => {
     const result = await executor({ reconcileStravaCalories, fetchStravaCalories }).execute(job, new AbortController().signal);
     expect(result).toMatchObject({ outcome: "succeeded", errorCode: null, summary: "取得 2 件・値なし 1 件・削除 2 件。" });
     expect(reconcileStravaCalories.mock.calls.map(([input]) => input)).toEqual([
-      { jobId: "job", leaseToken: "lease", from: "2026-09-07", to: "2026-09-13", page: 1 },
-      { jobId: "job", leaseToken: "lease", from: "2026-09-07", to: "2026-09-13", page: 2 },
+      { jobId: "job", leaseToken: "lease", from: "2026-09-07", to: "2026-09-13", page: 1, backfill: false },
+      { jobId: "job", leaseToken: "lease", from: "2026-09-07", to: "2026-09-13", page: 2, backfill: false },
     ]);
     expect(fetchStravaCalories).toHaveBeenCalledTimes(2);
   });
@@ -55,7 +56,7 @@ describe("消費カロリーの同期ジョブ", () => {
       fetchStravaCalories,
     }).execute(job, new AbortController().signal);
     expect(result).toMatchObject({ outcome: "succeeded", errorCode: null });
-    expect(result.summary).toContain("1 日の上限に達したため、一覧の同期を中断しました。");
+    expect(result.summary).toContain("1 日の上限に達したため中断しました。次回の表示か『運動を更新』で再開します。");
     expect(fetchStravaCalories).not.toHaveBeenCalled();
   });
 
@@ -102,9 +103,66 @@ describe("消費カロリーの同期ジョブ", () => {
     expect(reconcileStravaCalories).toHaveBeenCalledTimes(1);
   });
 
-  it("期間のない payload を実行しない", async () => {
+  it("定期の payload は plan で窓を受け取り、直近と遡りを順に同期して遡りの進捗を報告する", async () => {
+    const planStravaCalories = vi.fn()
+      .mockResolvedValueOnce(ok({ from: "2026-08-16", to: "2026-09-14" }))
+      .mockResolvedValueOnce(ok({ from: "2026-05-19", to: "2026-08-15" }))
+      .mockResolvedValueOnce(ok(null));
+    const reconcileStravaCalories = vi.fn().mockResolvedValue(ok(reconcileResult({ registered: 2 })));
+    const fetchStravaCalories = vi.fn().mockResolvedValue(ok(fetchResult({ fetched: 1 })));
+    const result = await executor({ planStravaCalories, reconcileStravaCalories, fetchStravaCalories }).execute(scheduledJob, new AbortController().signal);
+    expect(result).toMatchObject({ outcome: "succeeded", errorCode: null, summary: "取得 2 件・値なし 0 件・削除 0 件。遡り: 完了。" });
+    expect(planStravaCalories.mock.calls.map(([input]) => input.phase)).toEqual(["recent", "backfill", "backfill"]);
+    expect(reconcileStravaCalories.mock.calls.map(([input]) => [input.from, input.to, input.backfill])).toEqual([
+      ["2026-08-16", "2026-09-14", false],
+      ["2026-05-19", "2026-08-15", true],
+    ]);
+    // 活動名や kcal は summary に入れない。
+    expect(result.summary).not.toMatch(/kcal|ラン/);
+  });
+
+  it("遡りが途中なら到達した日付を報告する", async () => {
+    const planStravaCalories = vi.fn()
+      .mockResolvedValueOnce(ok({ from: "2026-08-16", to: "2026-09-14" }))
+      .mockResolvedValueOnce(ok({ from: "2026-05-19", to: "2026-08-15" }))
+      .mockResolvedValueOnce(ok({ from: "2026-02-18", to: "2026-05-18" }));
+    const reconcileStravaCalories = vi.fn()
+      .mockResolvedValueOnce(ok(reconcileResult({})))
+      .mockResolvedValueOnce(ok(reconcileResult({})))
+      .mockResolvedValueOnce(ok(reconcileResult({ dailyLimitReached: true })));
+    const result = await executor({ planStravaCalories, reconcileStravaCalories, fetchStravaCalories: vi.fn().mockResolvedValue(ok(fetchResult({}))) })
+      .execute(scheduledJob, new AbortController().signal);
+    expect(result).toMatchObject({ outcome: "succeeded" });
+    expect(result.summary).toBe("取得 0 件・値なし 0 件・削除 0 件。遡り: 2026-05-19 まで完了。1 日の上限に達したため中断しました。次の定期同期で再開します。");
+  });
+
+  it("定期の job は 15 分の上限で待たずに終える", async () => {
+    const wait = vi.spyOn(globalThis, "setTimeout");
+    try {
+      const planStravaCalories = vi.fn().mockResolvedValue(ok({ from: "2026-08-16", to: "2026-09-14" }));
+      const fetchStravaCalories = vi.fn().mockResolvedValue(ok(fetchResult({ fetched: 3, remaining: 20, retryAfterSeconds: 600 })));
+      const result = await executor({ planStravaCalories, reconcileStravaCalories: vi.fn().mockResolvedValue(ok(reconcileResult({}))), fetchStravaCalories })
+        .execute(scheduledJob, new AbortController().signal);
+      expect(result).toMatchObject({ outcome: "succeeded" });
+      expect(result.summary).toContain("次の定期同期で再開します。");
+      expect(fetchStravaCalories).toHaveBeenCalledTimes(1);
+      expect(wait).not.toHaveBeenCalled();
+    } finally {
+      wait.mockRestore();
+    }
+  });
+
+  it("Strava 未接続の plan は失敗ではなく見送りにする", async () => {
     const reconcileStravaCalories = vi.fn();
-    const result = await executor({ reconcileStravaCalories }).execute({ ...job, payloadJson: "{}" }, new AbortController().signal);
+    const planStravaCalories = vi.fn().mockResolvedValue(err({ code: "skipped_precondition", summary: "Strava に接続していないため、消費カロリーの同期を見送りました。" }));
+    const result = await executor({ planStravaCalories, reconcileStravaCalories }).execute(scheduledJob, new AbortController().signal);
+    expect(result).toMatchObject({ outcome: "skipped_precondition", errorCode: "skipped_precondition" });
+    expect(reconcileStravaCalories).not.toHaveBeenCalled();
+  });
+
+  it("期間の片方しかない payload を実行しない", async () => {
+    const reconcileStravaCalories = vi.fn();
+    const result = await executor({ reconcileStravaCalories }).execute({ ...job, payloadJson: JSON.stringify({ from: "2026-09-07" }) }, new AbortController().signal);
     expect(result).toMatchObject({ outcome: "failed", errorCode: "invalid_job_payload" });
     expect(reconcileStravaCalories).not.toHaveBeenCalled();
   });

@@ -4,7 +4,7 @@ import { createConnectorScheduleSchema, updateConnectorScheduleSchema } from "@l
 import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from "@life-console/contracts";
 import { calorieBaselineSchema, nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
 import { mealPeriodQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
-import { stravaCaloriesQuerySchema, stravaCaloriesReconcileSchema, stravaCaloriesFetchSchema } from "@life-console/contracts";
+import { stravaCaloriesQuerySchema, stravaCaloriesReconcileSchema, stravaCaloriesFetchSchema, stravaCaloriesPlanSchema } from "@life-console/contracts";
 import { weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
@@ -127,7 +127,7 @@ const createStravaHandlers = (environment: ApiEnvironment) => {
 };
 const stravaCallbackSchema = z.object({ state: z.string().max(200), code: z.string().min(1).max(2000).optional(), scope: z.string().max(1000).optional(), error: z.string().max(200).optional() });
 
-const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 429 | 500 | 502 => {
+const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 412 | 429 | 500 | 502 => {
   switch (error.code) {
     case "validation_error":
       return 400;
@@ -140,6 +140,8 @@ const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 429 | 50
       return 404;
     case "conflict":
       return 409;
+    case "skipped_precondition":
+      return 412;
     case "rate_limited":
       return 429;
     case "storage_error":
@@ -253,6 +255,8 @@ const _routes = app
   })
   .get("/api/v1/strava/activities", zValidator("query", stravaActivityQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activities(context.req.valid("query"))))
   .get("/api/v1/strava/calories", zValidator("query", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activityCalories(context.req.valid("query"))))
+  .get("/api/v1/strava/calories/sync-status", async (context) => respond(context, await createStravaHandlers(context.get("environment")).syncStatus()))
+  .post("/api/v1/runner/strava/calories/plan", zValidator("json", stravaCaloriesPlanSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).planCalories(context.req.valid("json"))))
   .delete("/api/v1/strava/connection", async (context) => respond(context, await createStravaHandlers(context.get("environment")).disconnect()))
   .post("/api/v1/runner/strava/calories/reconcile", zValidator("json", stravaCaloriesReconcileSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).reconcileCalories(context.req.valid("json"))))
   .post("/api/v1/runner/strava/calories/fetch", zValidator("json", stravaCaloriesFetchSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).fetchCalories(context.req.valid("json"))))
