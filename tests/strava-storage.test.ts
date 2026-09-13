@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../apps/api/src/app";
+import { D1LifeConsoleRepository } from "../apps/api/src/repositories/d1-life-console-repository";
 import { createStravaApiRepository } from "../apps/api/src/repositories/strava-api-repository";
+import { createStravaCaloriesRepository } from "../apps/api/src/repositories/strava-calories-repository";
 import { createStravaConnectionRepository } from "../apps/api/src/repositories/strava-connection-repository";
 import { appError } from "../apps/api/src/shared/app-error";
 import { createStravaUsecase } from "../apps/api/src/usecases/strava-usecase";
@@ -68,7 +70,7 @@ describe("Strava の接続と HTTP", () => {
       expect(await createStravaConnectionRepository(binding, settings.STRAVA_TOKEN_KEY).read()).toEqual({ ok: true, value: null });
     } finally { database.close(); }
   });
-  it.each([401, 429, 503])("外部 API の %s を空の活動一覧に変換しない", async (status) => {
+  it.each([[401, 502], [429, 429], [503, 502]])("外部 API の %s を空の活動一覧に変換しない", async (status, expected) => {
     const { binding, database } = createJobStorage();
     try {
       const repository = createStravaConnectionRepository(binding, settings.STRAVA_TOKEN_KEY);
@@ -77,7 +79,7 @@ describe("Strava の接続と HTTP", () => {
       await repository.release("setup");
       vi.stubGlobal("fetch", vi.fn(async () => new Response("private upstream content", { status })));
       const response = await app.request("/api/v1/strava/activities?from=2026-09-07&to=2026-09-13", {}, { ...settings, DB: binding });
-      expect(response.status).toBe(502);
+      expect(response.status).toBe(expected);
       const body = await response.text();
       expect(body).not.toContain("private upstream content");
       expect(body).not.toContain("\"data\"");
@@ -134,7 +136,7 @@ it("更新した token の保存に失敗したときは再接続を案内し、
     const write = vi.spyOn(repository, "write").mockResolvedValueOnce(err(failure));
     const fetcher = vi.fn(async () => Response.json({ access_token: "new-access", refresh_token: "new-refresh", expires_at: credentials.expiresAt }));
     const configuration = { clientId: settings.STRAVA_CLIENT_ID, clientSecret: settings.STRAVA_CLIENT_SECRET, redirectUri: settings.STRAVA_REDIRECT_URI };
-    const usecase = createStravaUsecase(repository, createStravaApiRepository(configuration, fetcher), configuration, { now: () => new Date() }, { create: () => "refresh-failure" });
+    const usecase = createStravaUsecase(repository, createStravaApiRepository(configuration, fetcher), createStravaCaloriesRepository(binding), new D1LifeConsoleRepository(binding), configuration, { now: () => new Date() }, { create: () => "refresh-failure" });
     const result = await usecase.activities({ from: "2026-09-07", to: "2026-09-13", page: 1 });
     expect(result).toEqual({ ok: false, error: { ...failure, message: "更新した接続情報を保存できませんでした。Strava に再接続してください。" } });
     expect(fetcher).toHaveBeenCalledTimes(1);

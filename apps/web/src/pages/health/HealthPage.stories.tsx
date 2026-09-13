@@ -1,4 +1,4 @@
-import type { WeightPoint, WeightGoal } from "@life-console/contracts";
+import type { CalorieBaseline, MealNutrition, StravaActivityCalories, WeightPoint, WeightGoal } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { http, HttpResponse } from "msw";
@@ -13,13 +13,19 @@ const weights: WeightPoint[] = [
   { id: "csv", source: "csv", weightKg: 80, occurredAt: "2026-09-07T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
   { id: "manual", source: "manual", weightKg: 81.4, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
 ];
-const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null) => [
+const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null, baseline: CalorieBaseline | null = null) => [
   http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: false, athleteId: null } })),
   http.get("*/api/v1/weight-goal", () => HttpResponse.json({ data: goal })),
   http.put("*/api/v1/weight-goal", async ({ request }) => {
     goal = await request.json() as WeightGoal | null;
     return HttpResponse.json({ data: null });
   }),
+  http.get("*/api/v1/calorie-baseline", () => HttpResponse.json({ data: baseline })),
+  http.put("*/api/v1/calorie-baseline", async ({ request }) => {
+    baseline = await request.json() as CalorieBaseline | null;
+    return HttpResponse.json({ data: null });
+  }),
+  http.get("*/api/v1/strava/calories", () => HttpResponse.json({ data: [] })),
   http.get("*/api/v1/weights", () => HttpResponse.json({ data: entries })),
   http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: [] })),
   http.get("*/api/v1/meals", () => HttpResponse.json({ data: [] })),
@@ -45,7 +51,7 @@ export const Recorded: Story = {
     await expect(await canvas.findByRole("button", { name: "体重を記録" })).toBeVisible();
     await expect(canvas.getByRole("group", { name: "表示期間" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "表で見る" }));
-    await expect(canvas.getByRole("table")).toHaveTextContent("80.70");
+    await expect(canvas.getByRole("table", { name: "体重の推移" })).toHaveTextContent("80.70");
     await expect(canvas.getByText("25%")).toBeVisible();
   },
 };
@@ -306,6 +312,84 @@ export const RunningWithoutWeight: Story = {
     await expect(chart).toHaveTextContent("25.0 km ・ 1 回");
     await expect(canvas.getByText("この週の体重記録はありません")).toBeVisible();
     await expect(canvas.queryByText("表示できる体重記録がありません。")).not.toBeInTheDocument();
+  },
+};
+
+const calorieMeals: MealNutrition[] = [600, 700, 600].map((caloriesKcal, index) => ({
+  mealId: `meal-${String(index)}`, photoId: null, occurredAt: `2026-09-07T0${String(index + 6)}:00:00Z`,
+  manualCaloriesKcal: caloriesKcal, estimate: null, analysisStatus: null, analysisSummary: null,
+}));
+const calorieRun = { id: "run-907", name: "架空の朝ラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 12000, movingSeconds: 3600, elapsedSeconds: 3700, averageHeartrate: 142 };
+const measuredCalories: StravaActivityCalories[] = [{ activityId: "run-907", status: "measured", caloriesKcal: 500 }];
+const calorieBalanceHandlers = (calories: (call: number) => StravaActivityCalories[]) => {
+  let call = 0;
+  return [
+    http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+    http.get("*/api/v1/strava/activities", ({ request }) => HttpResponse.json({ data: new URL(request.url).searchParams.get("page") === "1"
+      ? { activities: [calorieRun], nextPage: 2 }
+      : { activities: [], nextPage: null } })),
+    http.get("*/api/v1/strava/calories", () => {
+      call += 1;
+      return HttpResponse.json({ data: calories(call) });
+    }),
+    http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: calorieMeals })),
+    ...handlers(weights, null, { dailyExpenditureKcal: 1500 }),
+  ];
+};
+
+export const CalorieBaselineEntry: Story = {
+  name: "URL から基準消費量を設定して解除する",
+  parameters: { entry: "baseline" },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    const dialog = await screen.findByRole("dialog", { name: "1 日の基準消費量を設定" });
+    await userEvent.type(within(dialog).getByLabelText("1 日の基準消費量（kcal）"), "1500");
+    await userEvent.click(within(dialog).getByRole("button", { name: "基準消費量を保存" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await expect(await canvas.findByText(/基準消費量 1,500 kcal/)).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "基準消費量を編集" }));
+    await expect(await screen.findByLabelText("1 日の基準消費量（kcal）")).toHaveValue(1500);
+    await userEvent.click(screen.getByRole("button", { name: "基準消費量を解除" }));
+    await waitFor(() => expect(canvas.getByRole("button", { name: "基準消費量を設定" })).toBeVisible());
+  },
+};
+
+export const CalorieBaselineSaveError: Story = {
+  name: "基準消費量の保存失敗",
+  parameters: { entry: "baseline", msw: { handlers: [
+    http.put("*/api/v1/calorie-baseline", () => HttpResponse.json({ error: { message: "基準消費量を保存できませんでした。" } }, { status: 500 })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.type(await screen.findByLabelText("1 日の基準消費量（kcal）"), "1500");
+    await userEvent.click(screen.getByRole("button", { name: "基準消費量を保存" }));
+    await expect(await screen.findByRole("alert")).toHaveTextContent("基準消費量を保存できませんでした。");
+    await expect(screen.getByLabelText("1 日の基準消費量（kcal）")).toHaveValue(1500);
+  },
+};
+
+export const CalorieBalanceWithStrava: Story = {
+  name: "摂取と運動を同じ期間で見る",
+  parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: calorieBalanceHandlers(() => measuredCalories) } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("+100")).toBeVisible();
+    await expect(canvas.getByText("摂取 1,900 kcal、運動 500 kcal")).toBeInTheDocument();
+    await expect(canvas.getByText(/基準消費量 1,500 kcal/)).toBeVisible();
+  },
+};
+
+export const CalorieBalancePendingFilled: Story = {
+  name: "取得待ちの消費カロリーが実測に変わる",
+  parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: calorieBalanceHandlers(
+    (call) => call === 1 ? [{ activityId: "run-907", status: "pending", caloriesKcal: null }] : measuredCalories,
+  ) } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(await canvas.findByText(/取得待ち 1 件/)).toBeVisible();
+    await expect(within(canvas.getByRole("table", { name: /日別のカロリー収支/ })).getByText("未確定")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "運動を更新" }));
+    await expect(await canvas.findByText("+100", undefined, { timeout: 10_000 })).toBeVisible();
+    await expect(canvas.queryByText(/取得待ち/)).not.toBeInTheDocument();
   },
 };
 

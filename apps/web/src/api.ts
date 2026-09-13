@@ -1,8 +1,8 @@
 import type { AppType } from "@life-console/api";
 import type { ConnectorScheduleStatus, CreateConnectorScheduleInput, UpdateConnectorScheduleInput } from "@life-console/contracts";
 import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contracts";
-import type { MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
-import type { StravaActivityPage, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
+import type { CalorieBaseline, MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
+import type { StravaActivityCalories, StravaActivityPage, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
   PushConfiguration,
   PushSubscriptionInput,
@@ -73,6 +73,7 @@ export const api = {
   authorizeStrava: async () => unwrap<string>(await client.api.v1.strava.authorize.$post()),
   disconnectStrava: async () => unwrap<null>(await client.api.v1.strava.connection.$delete()),
   stravaActivities: async (from: string, to: string, page: number, signal: AbortSignal) => unwrap<StravaActivityPage>(await client.api.v1.strava.activities.$get({ query: { from, to, page: String(page) } }, { init: { signal } })),
+  stravaCalories: async (from: string, to: string) => unwrap<ReadonlyArray<StravaActivityCalories>>(await client.api.v1.strava.calories.$get({ query: { from, to } })),
   mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get({ query: { from, to } })),
   nutrition: async () => unwrap<ReadonlyArray<MealNutrition>>(await client.api.v1.nutrition.$get()),
   saveMealCalories: async (input: { readonly mealId: string; readonly caloriesKcal: number }) => unwrap<void>(await client.api.v1.nutrition[":id"].calories.$put({ param: { id: input.mealId }, json: { caloriesKcal: input.caloriesKcal } })),
@@ -111,6 +112,8 @@ export const api = {
   createMeal: async (input: Parameters<typeof client.api.v1.meals.$post>[0]["json"]) => unwrap<Meal>(await client.api.v1.meals.$post({ json: input })),
   weightGoal: async () => unwrap<WeightGoal | null>(await client.api.v1["weight-goal"].$get()),
   saveWeightGoal: async (input: WeightGoal | null) => unwrap<null>(await client.api.v1["weight-goal"].$put({ json: input })),
+  calorieBaseline: async () => unwrap<CalorieBaseline | null>(await client.api.v1["calorie-baseline"].$get()),
+  saveCalorieBaseline: async (input: CalorieBaseline | null) => unwrap<null>(await client.api.v1["calorie-baseline"].$put({ json: input })),
   weights: async () => unwrap<ReadonlyArray<WeightPoint>>(await client.api.v1.weights.$get()),
   createWeight: async (input: Parameters<typeof client.api.v1.weights.$post>[0]["json"]) => unwrap<null>(await client.api.v1.weights.$post({ json: input })),
   importWeightCsv: async (csv: string) => unwrap<number>(await fetch("/api/v1/weights/import", {

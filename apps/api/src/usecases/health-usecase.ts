@@ -1,5 +1,5 @@
 import type { LifeConsoleRepository, Meal, WeightPoint } from "@api/repositories/life-console-repository";
-import type { CreateMealInput, CreateWeightInput, WeightGoal } from "@life-console/contracts";
+import type { CalorieBaseline, CreateMealInput, CreateWeightInput, WeightGoal } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
@@ -11,6 +11,8 @@ export interface HealthUsecase {
   createMeal(input: CreateMealInput): Promise<Result<Meal, AppError>>;
   getWeightGoal(): Promise<Result<WeightGoal | null, AppError>>;
   saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>>;
+  getCalorieBaseline(): Promise<Result<CalorieBaseline | null, AppError>>;
+  saveCalorieBaseline(input: CalorieBaseline | null): Promise<Result<void, AppError>>;
   listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   listWeightsForExport(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   createWeight(input: CreateWeightInput): Promise<Result<void, AppError>>;
@@ -26,6 +28,8 @@ export const createHealthUsecase = (
   createMeal: (input) => repository.createMealAndQueueNutrition(idGenerator.create(), input, clock.now().toISOString()),
   getWeightGoal: () => repository.getWeightGoal(),
   saveWeightGoal: (input) => repository.saveWeightGoal(input),
+  getCalorieBaseline: () => repository.getCalorieBaseline(),
+  saveCalorieBaseline: (input) => repository.saveCalorieBaseline(input),
   listWeights: () => repository.listWeights(),
   listWeightsForExport: () => repository.listWeightsForExport(),
   createWeight: (input) => repository.createWeight(

@@ -3,7 +3,7 @@ import { weightGoalSchema } from "@life-console/contracts";
 export type WeightRange = "d30" | "d90" | "all" | `year-${string}`;
 export type HealthSearch = {
   readonly strava?: "connected" | "error" | undefined;
-  readonly entry?: "weight" | "meal" | "goal" | undefined;
+  readonly entry?: "weight" | "meal" | "goal" | "baseline" | undefined;
   readonly meal?: string | undefined;
   readonly range?: WeightRange | undefined;
   readonly running?: "show" | undefined;
@@ -17,7 +17,7 @@ export const parseHealthSearch = (search: Record<string, unknown>): HealthSearch
   const to = weightGoalSchema.shape.targetDate.unwrap().safeParse(search.to);
   return {
     ...(search.strava === "connected" || search.strava === "error" ? { strava: search.strava } : {}),
-    ...(search.entry === "weight" || search.entry === "meal" || search.entry === "goal" ? { entry: search.entry } : {}),
+    ...(search.entry === "weight" || search.entry === "meal" || search.entry === "goal" || search.entry === "baseline" ? { entry: search.entry } : {}),
     ...(typeof search.meal === "string" && search.meal.length > 0 ? { meal: search.meal } : {}),
     ...(search.running === "show" ? { running: search.running } : {}),
     ...(range === undefined ? {} : { range }),

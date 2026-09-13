@@ -8,6 +8,8 @@ import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/input";
 
+import { CalorieBaselineDialog } from "./_components/CalorieBaselineDialog";
+import { DailyCalorieBalanceList, type ExerciseTrackingState } from "./_components/DailyCalorieBalanceList";
 import { MealEntryDialog } from "./_components/MealEntryDialog";
 import { MealGallery } from "./_components/MealGallery";
 import { StravaActivities } from "./_components/StravaActivities";
@@ -15,9 +17,11 @@ import { WeightEntryDialog } from "./_components/WeightEntryDialog";
 import { WeightGoalDialog } from "./_components/WeightGoalDialog";
 import { WeightGoalProgress } from "./_components/WeightGoalProgress";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
+import { calorieBalanceRows, type ExerciseInput } from "./calorie-balance";
+import { exerciseCaloriesByDay } from "./exercise-calories";
 import { exerciseWeeks } from "./exercise-weeks";
 import type { HealthSearch } from "./health-search";
-import { mealsForPeriodQuery, weightsQuery, weightGoalQuery } from "./queries";
+import { calorieBaselineQuery, mealsForPeriodQuery, nutritionQuery, stravaCaloriesQuery, weightsQuery, weightGoalQuery } from "./queries";
 import { useStravaActivities } from "./use-strava-activities";
 import { WEIGHT_DAY_MS, type WeightWindow } from "./weight-window";
 
@@ -30,12 +34,14 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
   day: "numeric",
 }).format(new Date(occurredAt));
 
-export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, goalEntryOpen, onGoalEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
   readonly search: HealthSearch;
   readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
   readonly onRunningVisibilityChange: (show: boolean) => void;
   readonly goalEntryOpen: boolean;
   readonly onGoalEntryOpenChange: (open: boolean) => void;
+  readonly baselineEntryOpen: boolean;
+  readonly onBaselineEntryOpenChange: (open: boolean) => void;
   readonly selectedMealId: string | undefined;
   readonly onSelectMeal: (id: string | undefined) => void;
   readonly mealEntryOpen: boolean;
@@ -46,6 +52,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, g
   const queryClient = useQueryClient();
   const { data: weights } = useSuspenseQuery(weightsQuery);
   const { data: weightGoal } = useSuspenseQuery(weightGoalQuery);
+  const { data: calorieBaseline } = useSuspenseQuery(calorieBaselineQuery);
   const weightRange = search.from === undefined ? search.range ?? "d90" : "custom";
   const [showWeightTable, setShowWeightTable] = useState(false);
   const weightTrend = useMemo(() => calculate7DayMovingAverage(weights), [weights]);
@@ -63,7 +70,29 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, g
   const periodFrom = new Date(visibleWindow.start).toISOString().slice(0, 10);
   const periodTo = new Date(visibleWindow.end).toISOString().slice(0, 10);
   const meals = useQuery(mealsForPeriodQuery(periodFrom, periodTo));
+  const nutrition = useQuery(nutritionQuery);
   const strava = useStravaActivities(periodFrom, periodTo);
+  const stravaCalories = useQuery(stravaCaloriesQuery(periodFrom, periodTo, strava.complete));
+  const exerciseTracking: ExerciseTrackingState = !strava.connected
+    ? "untracked"
+    : strava.activities.isError || stravaCalories.isError
+      ? "failed"
+      : strava.complete && stravaCalories.data !== undefined ? "tracked" : "loading";
+  const exerciseByDay = useMemo(
+    () => strava.complete && stravaCalories.data !== undefined ? exerciseCaloriesByDay(strava.records, stravaCalories.data) : undefined,
+    [strava.complete, strava.records, stravaCalories.data],
+  );
+  const untracked = exerciseTracking === "untracked";
+  // 食事が未取得・取得失敗の間は行を組まない。空配列で組むと期間全体が「記録なし」の表になる。
+  const nutritionMeals = nutrition.isError ? undefined : nutrition.data;
+  const balanceRows = useMemo(() => {
+    if (nutritionMeals === undefined) return [];
+    const exercise: ExerciseInput | undefined = untracked
+      ? { mode: "untracked" }
+      : exerciseByDay === undefined ? undefined : { mode: "tracked", byDay: exerciseByDay };
+    return calorieBalanceRows(periodFrom, periodTo, nutritionMeals, exercise, calorieBaseline?.dailyExpenditureKcal ?? null);
+  }, [periodFrom, periodTo, nutritionMeals, untracked, exerciseByDay, calorieBaseline]);
+  const pendingActivities = balanceRows.reduce((total, row) => total + (row.kind === "day" ? row.day.exercise?.pendingActivities ?? 0 : 0), 0);
   const showRunning = search.running === "show";
   const runningWeeks = showRunning && strava.complete ? exerciseWeeks(periodFrom, periodTo, strava.records, [], []) : undefined;
   const windowBounds = {
@@ -160,7 +189,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, g
           </div>
           {showWeightTable && (
             <div className="mx-5 mb-4 max-h-96 overflow-auto rounded-lg border">
-              <table className="w-full border-collapse text-xs tabular-nums">
+              <table aria-label="体重の推移" className="w-full border-collapse text-xs tabular-nums">
                 <thead>
                   <tr className="bg-muted/60">
                     {["日付", "体重", "種類", "7 日平均", "窓内件数"].map((heading) => <th key={heading} className="border-b px-3 py-2.5 text-right font-semibold whitespace-nowrap">{heading}</th>)}
@@ -195,6 +224,16 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, g
           <p className="rounded-b-xl border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
         </Panel>
       </section>
+      <CalorieBaselineDialog open={baselineEntryOpen} onOpenChange={onBaselineEntryOpenChange} baseline={calorieBaseline} />
+      <DailyCalorieBalanceList
+        rows={balanceRows}
+        baselineKcal={calorieBaseline?.dailyExpenditureKcal ?? null}
+        exerciseState={exerciseTracking}
+        pendingActivities={pendingActivities}
+        nutritionPending={nutrition.isPending}
+        nutritionErrorMessage={nutrition.error?.message ?? null}
+        onEditBaseline={() => onBaselineEntryOpenChange(true)}
+      />
       <StravaActivities strava={strava} from={periodFrom} to={periodTo} weights={weights} meals={meals.data} onSelectWeek={onRangeChange} />
       {meals.isPending && <p role="status">食事を読み込んでいます。</p>}
       {meals.error !== null && <FormError>{meals.error.message}</FormError>}

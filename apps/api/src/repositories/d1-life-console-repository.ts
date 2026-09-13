@@ -1,8 +1,8 @@
-import type { WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import { calculate7DayMovingAverage } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import { err, ok, safeTry } from "@life-console/core";
-import { assetBalances, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
+import { assetBalances, calorieBaseline, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
 import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType } from "@life-console/domain";
 import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -298,6 +298,21 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return result.ok ? ok(undefined) : err(appError.storage(result.error));
   }
 
+  async getCalorieBaseline(): Promise<Result<CalorieBaseline | null, AppError>> {
+    const result = await safeTry(() => this.#database.select({ dailyExpenditureKcal: calorieBaseline.dailyExpenditureKcal })
+      .from(calorieBaseline).where(eq(calorieBaseline.id, 1)).get());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value ?? null);
+  }
+
+  async saveCalorieBaseline(input: CalorieBaseline | null): Promise<Result<void, AppError>> {
+    const result = await safeTry(() => input === null
+      ? this.#database.delete(calorieBaseline).where(eq(calorieBaseline.id, 1)).run()
+      : this.#database.insert(calorieBaseline).values({ id: 1, dailyExpenditureKcal: input.dailyExpenditureKcal })
+          .onConflictDoUpdate({ target: calorieBaseline.id, set: { dailyExpenditureKcal: input.dailyExpenditureKcal } }).run());
+    return result.ok ? ok(undefined) : err(appError.storage(result.error));
+  }
+
   listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
     return this.#readWeights();
   }
@@ -543,6 +558,25 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     if (input.kind === "conversation_reply" && result.value.meta.changes === 0) return err(appError.conflict("この会話への返信は既に実行待ち、または送信中です。"));
     if (input.kind === "nutrition_analysis" && result.value.meta.changes === 0) return err(appError.conflict("対象の食事は既に解析待ち、または解析中です。"));
     return this.getJobByIdempotencyKey(input.idempotencyKey);
+  }
+
+  async createJobUnlessActive(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string }): Promise<Result<void, AppError>> {
+    const selection = this.#database.select(queuedJobSelection({ ...input, createdAt: input.now, updatedAt: input.now }))
+      .from(sql`(select 1)`).where(notExists(this.#database.select({ id: jobs.id }).from(jobs)
+        .where(and(eq(jobs.kind, input.kind), inArray(jobs.status, pendingJobStatuses)))));
+    const result = await safeTry(() => this.#database.insert(jobs).select(selection).onConflictDoNothing().run());
+    return result.ok ? ok(undefined) : err(appError.storage(result.error));
+  }
+
+  async findRunningJobExecution(jobId: string, leaseToken: string, kind: JobKind, now: string): Promise<Result<{ readonly startedAt: string } | null, AppError>> {
+    const result = await safeTry(() => this.#database.select({ startedAt: jobs.startedAt }).from(jobs).where(and(
+      eq(jobs.id, jobId), eq(jobs.leaseToken, leaseToken), eq(jobs.kind, kind), eq(jobs.status, "running"),
+      isNull(jobs.cancelRequestedAt), gt(jobs.leaseExpiresAt, now),
+    )).get());
+    if (!result.ok) return err(appError.storage(result.error));
+    // claim が startedAt を埋めるため、実行中のジョブは必ず値を持つ。
+    const startedAt = result.value?.startedAt;
+    return ok(startedAt == null ? null : { startedAt });
   }
 
   async claimJob(runnerId: string, leaseToken: string, leaseExpiresAt: string, now: string): Promise<Result<Job | null, AppError>> {
