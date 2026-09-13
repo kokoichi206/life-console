@@ -21,6 +21,7 @@ Slack・Chatwork・Gmail・Talknote の連絡を集め、返信や作業が必�
 - 返信案は会話履歴と本人の返信状況を踏まえて生成。Gmail と同じアカウントのメインカレンダーから日程候補を提案
 - 下書きは本人が確認・編集。Slack / Chatwork はアプリから送信でき、Gmail / Talknote はコピーして元のサービスで送信
 - coding agent は Orca 経由で既存の checkout または新しい worktree に起動
+- agent が本人の判断を必要としたらホームの『あなたの確認待ち』へ質問。回答・修正指示を保存すると同じ agent が受け取って作業を継続
 - GitHub で追跡したいタスクは Issue・非公開 Project へ昇格
 
 タスクの管理元は Life Console。GitHub への昇格は一方向で、agent の作業環境は Mac に残ります。

@@ -9,6 +9,8 @@ import { buttonVariants } from "../../components/ui/Button";
 import { dashboardQuery } from "../../features/overview/queries";
 import { cn } from "../../lib/class-names";
 
+import { AgentQuestions } from "./_components/AgentQuestions";
+
 const money = (value: number): string => new Intl.NumberFormat("ja-JP", {
   style: "currency",
   currency: "JPY",
@@ -49,6 +51,7 @@ export const DashboardPage = () => {
         <Link className={buttonVariants({ variant: "outline" })} to="/finance" hash="expense-entry">支出を記録</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/operations" hash="note-entry">メモを記録</Link>
       </nav>
+      <AgentQuestions />
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="今日のタスク"

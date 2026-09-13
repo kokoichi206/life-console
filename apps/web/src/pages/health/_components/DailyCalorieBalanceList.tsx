@@ -1,6 +1,7 @@
 import { FormError, Panel } from "../../../components/DesignSystem";
 import { Button } from "../../../components/ui/Button";
-import type { CalorieBalanceDay, CalorieBalanceRow } from "../calorie-balance";
+import { cn } from "../../../lib/class-names";
+import { RECENT_BALANCE_DAYS, type CalorieBalanceDay, type CalorieBalanceRow } from "../calorie-balance";
 
 /** 運動の取得状態。収支に運動を含められるかが状態ごとに変わる。 */
 export type ExerciseTrackingState = "untracked" | "loading" | "failed" | "tracked";
@@ -92,14 +93,19 @@ const LegendSwatch = ({ className, label }: { readonly className: string; readon
   </span>
 );
 
-export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline }: {
+export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange }: {
   readonly rows: ReadonlyArray<CalorieBalanceRow>;
   readonly baselineKcal: number | null;
   readonly exerciseState: ExerciseTrackingState;
+  /** 表示期間全体の取得待ち件数。直近だけを表示していても runner は期間全体を取得している。 */
   readonly pendingActivities: number;
   readonly nutritionPending: boolean;
   readonly nutritionErrorMessage: string | null;
   readonly onEditBaseline: () => void;
+  readonly expanded: boolean;
+  /** 直近の窓から外れている日数。0 なら広げる先がないのでボタンを出さない。 */
+  readonly hiddenDays: number;
+  readonly onExpandedChange: (expanded: boolean) => void;
 }) => {
   const scaleKcal = Math.max(SCALE_STEP_KCAL, ...rows.map((row) => row.kind === "day" && row.day.balanceKcal !== null
     ? Math.ceil(Math.abs(row.day.balanceKcal) / SCALE_STEP_KCAL) * SCALE_STEP_KCAL
@@ -128,7 +134,12 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
       {nutritionPending && <p role="status" className="text-sm text-muted-foreground">カロリーを読み込んでいます。</p>}
       {nutritionErrorMessage !== null && <FormError>{nutritionErrorMessage}</FormError>}
       <figure className="m-0">
-        <div className="max-h-[28rem] overflow-auto rounded-xl border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" role="region" aria-label="日別の収支" tabIndex={0}>
+        {/* 折りたたみ時は最大 7 行なので高さを制限しない。スクロールしない領域を tab 止まりにしないよう、
+            キーボードで送るための role と tabIndex もスクロールする展開時だけ付ける。 */}
+        <div
+          className={cn("rounded-xl border", expanded && "max-h-[28rem] overflow-auto focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none")}
+          {...(expanded ? { "role": "region", "aria-label": "日別の収支", "tabIndex": 0 } : {})}
+        >
           <table className="w-full text-sm tabular-nums">
             <caption className="sr-only">日別のカロリー収支（日本時間・新しい順）</caption>
             <thead className="sticky top-0 bg-card">
@@ -170,6 +181,13 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
             </tbody>
           </table>
         </div>
+        {hiddenDays > 0 && (
+          <div className="mt-3 flex justify-center">
+            <Button type="button" size="sm" variant="outline" aria-expanded={expanded} onClick={() => onExpandedChange(!expanded)}>
+              {expanded ? `直近 ${RECENT_BALANCE_DAYS} 日だけ表示` : `すべて表示（他 ${hiddenDays} 日）`}
+            </Button>
+          </div>
+        )}
         <figcaption className="mt-3 space-y-1 text-[0.7rem] leading-5 text-muted-foreground">
           {scaled && (
             <span className="flex flex-wrap gap-x-4 gap-y-1">

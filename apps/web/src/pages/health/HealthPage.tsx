@@ -17,7 +17,7 @@ import { WeightEntryDialog } from "./_components/WeightEntryDialog";
 import { WeightGoalDialog } from "./_components/WeightGoalDialog";
 import { WeightGoalProgress } from "./_components/WeightGoalProgress";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
-import { calorieBalanceRows, type ExerciseInput } from "./calorie-balance";
+import { calorieBalanceRows, recentBalanceWindow, type ExerciseInput } from "./calorie-balance";
 import { exerciseCaloriesByDay } from "./exercise-calories";
 import { exerciseWeeks } from "./exercise-weeks";
 import type { HealthSearch } from "./health-search";
@@ -34,10 +34,12 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
   day: "numeric",
 }).format(new Date(occurredAt));
 
-export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, caloriesExpanded, onCaloriesExpandedChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
   readonly search: HealthSearch;
   readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
   readonly onRunningVisibilityChange: (show: boolean) => void;
+  readonly caloriesExpanded: boolean;
+  readonly onCaloriesExpandedChange: (expanded: boolean) => void;
   readonly goalEntryOpen: boolean;
   readonly onGoalEntryOpenChange: (open: boolean) => void;
   readonly baselineEntryOpen: boolean;
@@ -85,14 +87,20 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, g
   const untracked = exerciseTracking === "untracked";
   // 食事が未取得・取得失敗の間は行を組まない。空配列で組むと期間全体が「記録なし」の表になる。
   const nutritionMeals = nutrition.isError ? undefined : nutrition.data;
+  // 表示は既定で直近だけに絞る。取得の期間は絞らないので、広げたときに空にならない。
+  const recentBalance = recentBalanceWindow(periodFrom, periodTo);
+  const balanceFrom = caloriesExpanded ? periodFrom : recentBalance.from;
   const balanceRows = useMemo(() => {
     if (nutritionMeals === undefined) return [];
     const exercise: ExerciseInput | undefined = untracked
       ? { mode: "untracked" }
       : exerciseByDay === undefined ? undefined : { mode: "tracked", byDay: exerciseByDay };
-    return calorieBalanceRows(periodFrom, periodTo, nutritionMeals, exercise, calorieBaseline?.dailyExpenditureKcal ?? null);
-  }, [periodFrom, periodTo, nutritionMeals, untracked, exerciseByDay, calorieBaseline]);
-  const pendingActivities = balanceRows.reduce((total, row) => total + (row.kind === "day" ? row.day.exercise?.pendingActivities ?? 0 : 0), 0);
+    return calorieBalanceRows(balanceFrom, periodTo, nutritionMeals, exercise, calorieBaseline?.dailyExpenditureKcal ?? null);
+  }, [balanceFrom, periodTo, nutritionMeals, untracked, exerciseByDay, calorieBaseline]);
+  // 取得待ちの件数は表示を絞っても期間全体で数える。runner は期間全体を取得している。
+  const pendingActivities = exerciseByDay === undefined
+    ? 0
+    : [...exerciseByDay.values()].reduce((total, day) => total + day.pendingActivities, 0);
   const showRunning = search.running === "show";
   const runningWeeks = showRunning && strava.complete ? exerciseWeeks(periodFrom, periodTo, strava.records, [], []) : undefined;
   const windowBounds = {
@@ -233,6 +241,9 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, g
         nutritionPending={nutrition.isPending}
         nutritionErrorMessage={nutrition.error?.message ?? null}
         onEditBaseline={() => onBaselineEntryOpenChange(true)}
+        expanded={caloriesExpanded}
+        hiddenDays={recentBalance.hiddenDays}
+        onExpandedChange={onCaloriesExpandedChange}
       />
       <StravaActivities strava={strava} from={periodFrom} to={periodTo} weights={weights} meals={meals.data} onSelectWeek={onRangeChange} />
       {meals.isPending && <p role="status">食事を読み込んでいます。</p>}

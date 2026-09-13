@@ -233,7 +233,7 @@ Strava の DetailedActivity で `calories` が値を持たない活動（手動�
 | 未設定・未接続 | `status.data.configured === false` または `athleteId === null` | 列を出さない | 「運動を含めない収支」として `基準消費量 − 摂取` を描く。パネルの注記に「Strava 未接続のため、運動を含めていません」。符号・額の判定は運動を取得済み（0）として扱う。この扱いは注記で見える形にする |
 | 一覧の取得中 | `connected && !complete && !isError` | `role="status"` で「運動を取得しています。取得後に収支を表示します」 | 描かない（取得後に棒が飛ぶのを避ける） |
 | 一覧の取得失敗 | `activities.isError` | 1 行の注記「運動を取得できていないため、収支を表示していません」。再接続ボタンは既存パネルにあるので置かない | 描かない |
-| 一覧の取得完了 | `complete` | 日ごとの実測値。取得待ち・算入外があれば件数。期間内に取得待ちがある間はパネルに `role="status"` で「消費カロリーを取得中（残り n 件）。Mac の runner が順に取得します」 | 描く。「Powered by Strava」を figcaption に入れる（[表示ガイドライン](https://developers.strava.com/guidelines/)） |
+| 一覧の取得完了 | `complete` | 日ごとの実測値。取得待ち・算入外があれば件数。期間内に取得待ちがある間はパネルに `role="status"` で「消費カロリーを取得中（残り n 件）。Mac の runner が順に取得します」。`n` は期間全体の件数で、表示を直近 7 日に絞っていても変わらない（2.1 節） | 描く。「Powered by Strava」を figcaption に入れる（[表示ガイドライン](https://developers.strava.com/guidelines/)） |
 
 消費 kcal の読み込み経路: 一覧の Query は自動再取得しない（`gcTime: 0`、Strava の予算を使うため）。消費 kcal は D1 だけを読む `GET /api/v1/strava/calories?from&to` を別の Query で読み、一覧と活動 ID で突き合わせる。表示期間に取得待ちがある間だけ数十秒間隔で再取得し（間隔はコードの定数）、なくなれば止める。Strava を呼ばないので予算を消費しない。
 
@@ -243,7 +243,7 @@ Strava の DetailedActivity で `calories` が値を持たない活動（手動�
 
 新しいパネルを **体重の推移セクションの直後、「この期間の運動」パネルの前** に置く。
 
-- 期間セレクターは体重セクションのヘッダーにあり、`periodFrom` / `periodTo` を通じて全パネルに効く。期間に連動する 2 つのグラフを隣り合わせにすると「上のボタンで両方の期間が変わる」ことが分かる。
+- 期間セレクターは体重セクションのヘッダーにあり、`periodFrom` / `periodTo` を通じて全パネルに効く。期間に連動する 2 つのグラフを隣り合わせにすると「上のボタンで両方の期間が変わる」ことが分かる。カロリー収支の取得範囲はこの期間全体だが、表示は既定で直近 7 日に絞り、表の下のボタンで期間全体に広げる（2.1 節の表示範囲）。
 - 「この期間の運動」は `<details>` 中心の詳細パネルなので、その前に一覧性の高いグラフを置くと画面の流れが「目標 → 体重 → カロリー収支 → 運動の詳細 → 食事の写真」になる。
 
 パネルの見出しは隣の「この期間の運動」に揃える: `<h2>` に「カロリー収支」、副題に「基準消費量 1,500 kcal・体重と同じ期間・日本時間・新しい順」。未設定なら副題は「基準消費量が未設定・体重と同じ期間・日本時間」。右上に「基準消費量を設定」または「基準消費量を編集」ボタン。
@@ -254,7 +254,7 @@ Strava の DetailedActivity で `calories` が値を持たない活動（手動�
 
 今回やること:
 
-- 日別の収支の可視化（案 1）。符号・額の確定状態と、運動の確度（実測 / 取得待ち / 算入外）の表示。
+- 日別の収支の可視化（案 1）。符号・額の確定状態と、運動の確度（実測 / 取得待ち / 算入外）の表示。既定の直近 7 日表示と期間全体への展開（URL に保持）。
 - 基準消費量の保存（テーブル、migration、契約、API、ダイアログ、URL の `entry`）。
 - 消費 kcal の永続保存（テーブル、migration、domain の候補値、契約）、登録とジョブ予約、runner のジョブ、reconcile / fetch のエンドポイント、レート制限の制御、削除の同期、接続解除時の削除、D1 だけを読む消費 kcal の API と Web の再読み込み。
 - 上記の状態を再現する stories と純粋関数のテスト、storage テスト、runner の executor テスト。
@@ -321,7 +321,8 @@ Strava の DetailedActivity で `calories` が値を持たない活動（手動�
 - 未確定: 破線枠と薄い塗り（1.9 節の表）。符号だけ確定している行は色を付けた破線、符号も未確定なら灰色の破線。
 - 記録なし: 棒なし。摂取は `—`、運動があれば右端に値。連続する空白日は「9/2〜9/7 食事と運動の記録なし（6 日）」の 1 行にまとめる。食事はないが運動がある日（9/9）はまとめない。
 - 並び順: 新しい日を上にする。既存の日別表・食事一覧の「新しい順」と揃える。
-- スケール: 期間内の収支の最大絶対値を 500 kcal 単位に切り上げ、左右対称にする。最小は ±500。目盛りの数値は表示しない（各行に数値があるため）。
+- 表示範囲: 既定は表示期間の終端から直近 7 暦日（行の `from` を `max(periodFrom, periodTo の 6 日前)` に絞る）。期間セレクターが 30 日・90 日・全期間のどれでも既定は 7 日。表の下のボタンで期間全体に広がり、折りたたみ時の文言は「すべて表示（他 n 日）」、展開時は「直近 7 日だけ表示」。`n` は期間全体の暦日数 − 7。期間が 7 日以下ならボタンを出さない。展開状態は URL の search に持ち（`parseHealthSearch` に追加。既定のときは載せない）、期間セレクターを変えても維持する。取得範囲は変えない: `stravaCaloriesQuery` と `mealsForPeriodQuery` は期間全体を取り、表示だけを絞る（折りたたみ中に取得を止めると展開時に空になるため）。「消費カロリーを取得中（残り n 件）」の `n` は期間全体の件数のまま。上の図は展開後（期間全体）で、既定では 9/13〜9/7 の 7 行が出て 9/7 は単独の記録なしの行になり、ボタンは「すべて表示（他 5 日）」になる。
+- スケール: 表示している行の収支の最大絶対値を 500 kcal 単位に切り上げ、左右対称にする。最小は ±500。目盛りの数値は表示しない（各行に数値があるため）。表示範囲を展開するとスケールが変わりうる。
 - 読み上げ: 各行に `sr-only` の文（「摂取 1,703 kcal、運動 320 kcal、収支 +117 kcal」と状態）を残す。棒と絶対配置の数値は `aria-hidden` で、読み上げはこの文だけを使う。
 - 実装: 素の HTML `<table>`。日付・収支の列を持ち、収支セルの中に棒トラック（`div`、中央から左右へ幅 %）、その左右端に絶対配置の数値、右に収支ラベル、状態があるときだけ副行を置く。ゼロ線は各セルの棒トラック中央の 1 px の縦線で、行が隙間なく並ぶことで連続した線に見せる。数値は `tabular-nums` と `Intl.NumberFormat("ja-JP")`。スクロール領域は既存の表と同じく高さを制限する。
 
@@ -446,13 +447,13 @@ Web:
 | `apps/web/src/api.ts` | `calorieBaseline`, `saveCalorieBaseline`, `stravaCalories(from, to)` |
 | `apps/web/src/pages/health/queries.ts` | `calorieBaselineQuery`。`stravaCaloriesQuery(from, to)` は `refetchInterval` を関数にし、応答に `pending` が含まれる間だけ定数の間隔で再取得する |
 | `apps/web/src/router.tsx` | 健康ルートの loader に `ensureQueryData(calorieBaselineQuery)` を追加（`weightGoalQuery` と同じ扱い） |
-| `apps/web/src/pages/health/health-search.ts` | `entry` の候補に `"baseline"` を追加。`parseHealthSearch` の判定にも加える |
-| `apps/web/src/pages/health/HealthRoutePage.tsx` | `baselineEntryOpen={search.entry === "baseline"}` と `onBaselineEntryOpenChange`（`goal` と同じ navigate） |
-| `apps/web/src/pages/health/HealthPage.tsx` | `useSuspenseQuery(calorieBaselineQuery)`。`nutritionQuery` を `useQuery`。`strava.complete` のときだけ `stravaCaloriesQuery(periodFrom, periodTo)` を有効にし、`exerciseCaloriesByDay(strava.records, calories)` で日別に集計して `ExerciseInput` を組み立て、`calorieBalanceRows` に渡す。日別の行は `useMemo` で導出する。`CalorieBaselineDialog` と `DailyCalorieBalanceList` を体重セクションの直後に描く |
+| `apps/web/src/pages/health/health-search.ts` | `entry` の候補に `"baseline"` を追加。`parseHealthSearch` の判定にも加える。カロリー収支の展開状態のキー（実装の名前に従う。既定の直近 7 日のときは載せない）を追加 |
+| `apps/web/src/pages/health/HealthRoutePage.tsx` | `baselineEntryOpen={search.entry === "baseline"}` と `onBaselineEntryOpenChange`（`goal` と同じ navigate）。展開状態の切り替えは `replace` で navigate し、期間変更の navigate でも引き継ぐ |
+| `apps/web/src/pages/health/HealthPage.tsx` | `useSuspenseQuery(calorieBaselineQuery)`。`nutritionQuery` を `useQuery`。`strava.complete` のときだけ `stravaCaloriesQuery(periodFrom, periodTo)` を有効にし、`exerciseCaloriesByDay(strava.records, calories)` で日別に集計して `ExerciseInput` を組み立て、`calorieBalanceRows` に渡す。折りたたみ時は `calorieBalanceRows` の `from` を直近 7 日に絞り、取得の from / to は変えない。日別の行は `useMemo` で導出する。`CalorieBaselineDialog` と `DailyCalorieBalanceList` を体重セクションの直後に描く |
 | `apps/web/src/pages/health/HealthPage.test.tsx` | `client.setQueryData(calorieBaselineQuery.queryKey, null)` を追加（suspense query が増えるため必須） |
 | `apps/web/src/pages/health/calorie-balance.ts`, `.test.ts` | 新規。3.4 節 |
 | `apps/web/src/pages/health/exercise-calories.ts`, `.test.ts` | 新規。3.4 節（日別集計のみ） |
-| `apps/web/src/pages/health/_components/DailyCalorieBalanceList.tsx`, `.stories.tsx` | 新規。案 1 の表部品と stories |
+| `apps/web/src/pages/health/_components/DailyCalorieBalanceList.tsx`, `.stories.tsx` | 新規。案 1 の表部品と stories。表の下に表示範囲の切り替えボタン（期間が 7 日以下なら出さない）。stories に既定の 7 日表示と展開後の story |
 | `apps/web/src/pages/health/_components/CalorieBaselineDialog.tsx` | 新規。`WeightGoalDialog` と同じ構造（1.8 節） |
 | `apps/web/src/pages/health/HealthPage.stories.tsx` | `handlers()` に `GET/PUT */api/v1/calorie-baseline` と `GET */api/v1/strava/calories` を追加（既存の全 story が suspense で待つため前者は必須）。基準消費量の設定・解除・保存失敗と、Strava 込みの統合 story を追加 |
 
