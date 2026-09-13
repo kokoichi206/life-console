@@ -7,3 +7,4 @@ export * from "./strava";
 export * from "./nutrition";
 export * from "./shopping";
 export * from "./connector-schedules";
+export * from "./agent-questions";

@@ -30,15 +30,15 @@ export const createRunnerUsecase = (dependencies: Dependencies): RunnerUsecase =
     const abortController = new AbortController();
     let heartbeatActive = true;
     let leaseLost = false;
-    const waitingForUser = job.kind === "agent" || job.kind === "github_promotion";
+    const agentExecution = job.kind === "agent" || job.kind === "github_promotion";
 
     const heartbeat = async (): Promise<boolean> => {
       if (!heartbeatActive) return false;
       const result = await dependencies.api.heartbeatJob(
         job.id,
         leaseToken,
-        waitingForUser,
-        waitingForUser ? "agent の明示的な完了報告を待っています。" : "実行中",
+        false,
+        agentExecution ? null : "実行中",
       );
       if (!result.ok) {
         leaseLost = result.error.code === "invalid_lease";
