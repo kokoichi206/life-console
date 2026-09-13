@@ -21,7 +21,7 @@ import { calorieBalanceRows, recentBalanceWindow, type ExerciseInput } from "./c
 import { exerciseCaloriesByDay } from "./exercise-calories";
 import { exerciseWeeks } from "./exercise-weeks";
 import type { HealthSearch } from "./health-search";
-import { calorieBaselineQuery, mealsForPeriodQuery, nutritionQuery, stravaCaloriesQuery, weightsQuery, weightGoalQuery } from "./queries";
+import { calorieBaselineQuery, mealsForPeriodQuery, nutritionQuery, stravaCaloriesQuery, stravaCaloriesSyncStatusQuery, weightsQuery, weightGoalQuery } from "./queries";
 import { useStravaActivities } from "./use-strava-activities";
 import { WEIGHT_DAY_MS, type WeightWindow } from "./weight-window";
 
@@ -75,6 +75,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, c
   const nutrition = useQuery(nutritionQuery);
   const strava = useStravaActivities(periodFrom, periodTo);
   const stravaCalories = useQuery(stravaCaloriesQuery(periodFrom, periodTo, strava.complete));
+  const syncStatus = useQuery(stravaCaloriesSyncStatusQuery(strava.connected));
   const exerciseTracking: ExerciseTrackingState = !strava.connected
     ? "untracked"
     : strava.activities.isError || stravaCalories.isError
@@ -244,6 +245,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, c
         expanded={caloriesExpanded}
         hiddenDays={recentBalance.hiddenDays}
         onExpandedChange={onCaloriesExpandedChange}
+        syncStatus={syncStatus.data}
       />
       <StravaActivities strava={strava} from={periodFrom} to={periodTo} weights={weights} meals={meals.data} onSelectWeek={onRangeChange} />
       {meals.isPending && <p role="status">食事を読み込んでいます。</p>}

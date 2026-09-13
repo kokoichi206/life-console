@@ -1,4 +1,4 @@
-import { nutritionAnalysisPayloadSchema, createReplyDraftsSchema, stravaCaloriesSyncPayloadSchema, weightObsidianExportPayloadSchema, type ReplyDraftDecision } from "@life-console/contracts";
+import { nutritionAnalysisPayloadSchema, createReplyDraftsSchema, stravaCaloriesSyncPayloadSchema, weightObsidianExportPayloadSchema, type ReplyDraftDecision, type StravaCaloriesSyncPayload } from "@life-console/contracts";
 import { ok, safeTry, type Result } from "@life-console/core";
 import type { RunnerConfig } from "@runner/config";
 import { runnerError, type RunnerError } from "@runner/errors";
@@ -104,6 +104,12 @@ const succeeded = (summary: string): JobExecution => ({
 /** レート制限で待てる上限。Strava の 15 分枠が必ず 1 度は明ける長さにする。 */
 const MAX_RATE_LIMIT_WAIT_SECONDS = 900;
 
+type CaloriesWindowOutcome
+  = | { readonly stop: "completed" }
+    | { readonly stop: "paused"; readonly dailyLimitReached: boolean; readonly remaining: number | null }
+    | { readonly stop: "canceled" }
+    | { readonly stop: "failed"; readonly error: RunnerError };
+
 const caloriesSyncCanceled: JobExecution = {
   errorCode: null,
   outcome: "canceled",
@@ -202,6 +208,92 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
       reportedExternally: false,
       summary: "中止要求を受け取りました。",
     };
+  };
+
+  /**
+   * 1 つの窓を reconcile のページ送りから fetch の完了まで進める。
+   * 中断（レート制限）は `paused` で返し、待つかどうかは呼び出し側が決める。
+   */
+  const syncCaloriesWindow = async (
+    request: { readonly jobId: string; readonly leaseToken: string },
+    window: { readonly from: string; readonly to: string },
+    options: { readonly backfill: boolean; readonly waits: boolean },
+    totals: { fetched: number; unavailable: number; deleted: number; failed: number },
+    signal: AbortSignal,
+  ): Promise<CaloriesWindowOutcome> => {
+    const counts = () => `取得 ${String(totals.fetched)} 件・値なし ${String(totals.unavailable)} 件・削除 ${String(totals.deleted)} 件。`;
+    const pause = async (retryAfterSeconds: number | null, remaining: number | null): Promise<CaloriesWindowOutcome | null> => {
+      if (retryAfterSeconds === null) return null;
+      if (!options.waits) return { stop: "paused", dailyLimitReached: false, remaining };
+      return await waitUnlessAborted(Math.min(retryAfterSeconds, MAX_RATE_LIMIT_WAIT_SECONDS) * 1000, signal) ? null : { stop: "canceled" };
+    };
+    for (let page: number | null = 1; page !== null;) {
+      if (signal.aborted) return { stop: "canceled" };
+      const reconciled = await dependencies.api.reconcileStravaCalories({ ...request, ...window, page, backfill: options.backfill }, signal);
+      if (!reconciled.ok) return { stop: "failed", error: reconciled.error };
+      totals.deleted += reconciled.value.deleted;
+      if (reconciled.value.dailyLimitReached) return { stop: "paused", dailyLimitReached: true, remaining: null };
+      const paused = await pause(reconciled.value.retryAfterSeconds, null);
+      if (paused !== null) return paused;
+      page = reconciled.value.nextPage;
+    }
+    for (;;) {
+      if (signal.aborted) return { stop: "canceled" };
+      const fetched = await dependencies.api.fetchStravaCalories(request, signal);
+      if (!fetched.ok) return { stop: "failed", error: fetched.error };
+      totals.fetched += fetched.value.fetched;
+      totals.unavailable += fetched.value.unavailable;
+      totals.deleted += fetched.value.deleted;
+      totals.failed += fetched.value.failed;
+      if (fetched.value.dailyLimitReached) return { stop: "paused", dailyLimitReached: true, remaining: fetched.value.remaining };
+      if (fetched.value.remaining === 0) return { stop: "completed" };
+      if (fetched.value.fetched + fetched.value.unavailable + fetched.value.deleted === 0 && fetched.value.failed > 0) {
+        return { stop: "failed", error: runnerError("strava_calories_partial", `${counts()}${String(fetched.value.failed)} 件の取得に失敗しました。`) };
+      }
+      const paused = await pause(fetched.value.retryAfterSeconds, fetched.value.remaining);
+      if (paused !== null) return paused;
+    }
+  };
+
+  const executeStravaCaloriesSync = async (jobId: string, leaseToken: string, payload: StravaCaloriesSyncPayload, signal: AbortSignal): Promise<JobExecution> => {
+    const request = { jobId, leaseToken };
+    const totals = { fetched: 0, unavailable: 0, deleted: 0, failed: 0 };
+    const counts = () => `取得 ${String(totals.fetched)} 件・値なし ${String(totals.unavailable)} 件・削除 ${String(totals.deleted)} 件。`;
+    // 定期の job は待たずに終える。runner は 1 件ずつ実行するので、15 分待つと食事解析などが止まる。
+    const waits = payload.kind === "period";
+    const resume = waits ? "次回の表示か『運動を更新』で再開します。" : "次の定期同期で再開します。";
+    let backfillFloor: string | null = null;
+    let backfillCompleted = false;
+    const backfillSummary = () => backfillCompleted ? "遡り: 完了。" : backfillFloor === null ? "" : `遡り: ${backfillFloor} まで完了。`;
+    const stopped = (outcome: Extract<CaloriesWindowOutcome, { stop: "paused" | "canceled" | "failed" }>): JobExecution => {
+      if (outcome.stop === "canceled") return caloriesSyncCanceled;
+      if (outcome.stop === "failed") return failed(outcome.error);
+      const limit = outcome.dailyLimitReached ? "1 日の上限に達したため中断しました。" : "取得の上限に近づいたため中断しました。";
+      const rest = outcome.remaining === null ? "" : `残り ${String(outcome.remaining)} 件は`;
+      return succeeded(`${counts()}${backfillSummary()}${limit}${rest}${resume}`);
+    };
+    if (payload.kind === "period") {
+      const outcome = await syncCaloriesWindow(request, payload.period, { backfill: false, waits }, totals, signal);
+      return outcome.stop === "completed" ? succeeded(counts()) : stopped(outcome);
+    }
+    const recent = await dependencies.api.planStravaCalories({ ...request, phase: "recent" }, signal);
+    if (!recent.ok) return failed(recent.error);
+    if (recent.value !== null) {
+      const outcome = await syncCaloriesWindow(request, recent.value, { backfill: false, waits }, totals, signal);
+      if (outcome.stop !== "completed") return stopped(outcome);
+    }
+    for (;;) {
+      if (signal.aborted) return caloriesSyncCanceled;
+      const chunk = await dependencies.api.planStravaCalories({ ...request, phase: "backfill" }, signal);
+      if (!chunk.ok) return failed(chunk.error);
+      if (chunk.value === null) {
+        backfillCompleted = true;
+        return succeeded(`${counts()}${backfillSummary()}`);
+      }
+      const outcome = await syncCaloriesWindow(request, chunk.value, { backfill: true, waits }, totals, signal);
+      if (outcome.stop !== "completed") return stopped(outcome);
+      backfillFloor = chunk.value.from;
+    }
   };
 
   return {
@@ -321,39 +413,7 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
           const payload = await parsePayload(job, stravaCaloriesSyncPayloadSchema);
           if (!payload.ok) return failed(payload.error);
           if (job.leaseToken === null) return failed(runnerError("missing_lease_token", "消費カロリーの同期 job に lease token がありません。"));
-          const request = { jobId: job.id, leaseToken: job.leaseToken };
-          const totals = { fetched: 0, unavailable: 0, deleted: 0, failed: 0 };
-          const progress = () => `取得 ${String(totals.fetched)} 件・値なし ${String(totals.unavailable)} 件・削除 ${String(totals.deleted)} 件。`;
-          for (let page: number | null = 1; page !== null;) {
-            if (signal.aborted) return caloriesSyncCanceled;
-            const reconciled = await dependencies.api.reconcileStravaCalories({ ...request, from: payload.value.from, to: payload.value.to, page }, signal);
-            if (!reconciled.ok) return failed(reconciled.error);
-            totals.deleted += reconciled.value.deleted;
-            if (reconciled.value.dailyLimitReached) return succeeded(`${progress()}1 日の上限に達したため、一覧の同期を中断しました。次回の表示か『運動を更新』で再開します。`);
-            if (reconciled.value.retryAfterSeconds !== null
-              && !await waitUnlessAborted(Math.min(reconciled.value.retryAfterSeconds, MAX_RATE_LIMIT_WAIT_SECONDS) * 1000, signal)) {
-              return caloriesSyncCanceled;
-            }
-            page = reconciled.value.nextPage;
-          }
-          for (;;) {
-            if (signal.aborted) return caloriesSyncCanceled;
-            const fetched = await dependencies.api.fetchStravaCalories(request, signal);
-            if (!fetched.ok) return failed(fetched.error);
-            totals.fetched += fetched.value.fetched;
-            totals.unavailable += fetched.value.unavailable;
-            totals.deleted += fetched.value.deleted;
-            totals.failed += fetched.value.failed;
-            if (fetched.value.dailyLimitReached) return succeeded(`${progress()}1 日の上限に達したため中断しました。残り ${String(fetched.value.remaining)} 件は次回の表示か『運動を更新』で再開します。`);
-            if (fetched.value.remaining === 0) return succeeded(progress());
-            if (fetched.value.fetched + fetched.value.unavailable + fetched.value.deleted === 0 && fetched.value.failed > 0) {
-              return failed(runnerError("strava_calories_partial", `${progress()}${String(fetched.value.failed)} 件の取得に失敗しました。`));
-            }
-            if (fetched.value.retryAfterSeconds !== null
-              && !await waitUnlessAborted(Math.min(fetched.value.retryAfterSeconds, MAX_RATE_LIMIT_WAIT_SECONDS) * 1000, signal)) {
-              return caloriesSyncCanceled;
-            }
-          }
+          return executeStravaCaloriesSync(job.id, job.leaseToken, payload.value, signal);
         }
         case "nutrition_analysis": {
           const payload = await parsePayload(job, nutritionAnalysisPayloadSchema);

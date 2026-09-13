@@ -6,8 +6,10 @@ import type { Clock } from "@api/shared/clock";
 import type { IdGenerator } from "@api/shared/id-generator";
 import type {
   StravaActivity, StravaActivityCalories, StravaActivityPage, StravaActivityQuery, StravaCaloriesFetchInput,
-  StravaCaloriesFetchResult, StravaCaloriesReconcileInput, StravaCaloriesReconcileResult, StravaStatus,
+  StravaCaloriesFetchResult, StravaCaloriesPlanInput, StravaCaloriesPlanResult, StravaCaloriesReconcileInput,
+  StravaCaloriesReconcileResult, StravaCaloriesSyncStatus, StravaStatus,
 } from "@life-console/contracts";
+import { weightCalendarDate } from "@life-console/contracts";
 import { err, ok, type Result } from "@life-console/core";
 
 import { appError, type AppError } from "../shared/app-error";
@@ -18,6 +20,15 @@ const CALORIES_FETCH_BATCH = 10;
 const FIFTEEN_MINUTE_PAUSE_RATIO = 0.8;
 const DAILY_PAUSE_RATIO = 0.9;
 const QUARTER_HOUR_MILLISECONDS = 900_000;
+const ONE_DAY_MILLISECONDS = 86_400_000;
+/** 定期同期が毎回突き合わせる範囲。 */
+const RECENT_SYNC_DAYS = 30;
+/** 初回の遡りを 1 チャンクで進める日数。 */
+const BACKFILL_CHUNK_DAYS = 90;
+/** 遡りの下限。Strava の提供開始年の元日より前に活動は存在しない。 */
+const BACKFILL_FLOOR_DATE = "2009-01-01";
+
+const shiftDays = (date: string, days: number): string => new Date(Date.parse(`${date}T00:00:00Z`) + days * ONE_DAY_MILLISECONDS).toISOString().slice(0, 10);
 
 // Strava の 15 分枠は毎時 0・15・30・45 分に戻るため、次の境界までを待ち時間にする。
 const secondsToNextQuarterHour = (now: Date): number => Math.ceil(
@@ -65,6 +76,12 @@ export const createStravaUsecase = (
     if (usage.dailyRatio >= DAILY_PAUSE_RATIO) return { retryAfterSeconds: null, dailyLimitReached: true };
     if (usage.fifteenMinuteRatio >= FIFTEEN_MINUTE_PAUSE_RATIO) return { retryAfterSeconds: secondsToNextQuarterHour(clock.now()), dailyLimitReached: false };
     return { retryAfterSeconds: null, dailyLimitReached: false };
+  };
+  /** チャンクを読み終えたので次のチャンクへ進める。下限を越えたら遡りを完了にする。 */
+  const advanceBackfillChunk = (chunkFrom: string, chunkTo: string): Promise<Result<void, AppError>> => {
+    const now = clock.now().toISOString();
+    const next = shiftDays(chunkFrom, -1);
+    return next < BACKFILL_FLOOR_DATE ? caloriesStore.completeBackfill(chunkTo, now) : caloriesStore.advanceBackfill(chunkTo, next, now);
   };
   const requireJobExecution = async (jobId: string, leaseToken: string): Promise<Result<{ readonly startedAt: string }, AppError>> => {
     const execution = await jobs.findRunningJobExecution(jobId, leaseToken, "strava_calories_sync", clock.now().toISOString());
@@ -120,9 +137,47 @@ export const createStravaUsecase = (
     activityCalories(input: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<StravaActivityCalories>, AppError>> {
       return caloriesStore.listByPeriod(input.from, input.to);
     },
+    async syncStatus(): Promise<Result<StravaCaloriesSyncStatus, AppError>> {
+      const lastJob = await jobs.findLatestJob("strava_calories_sync");
+      if (!lastJob.ok) return lastJob;
+      const backfill = await caloriesStore.readBackfill();
+      return backfill.ok ? ok({ lastJob: lastJob.value, backfill: backfill.value }) : backfill;
+    },
+    /**
+     * 同期の窓を API の時計で決める。runner の時計や入力に日付を持たせない。
+     * `recent` はジョブ開始日を終端とする直近 30 日、`backfill` は次に遡るチャンク（完了なら null）。
+     */
+    async planCalories(input: StravaCaloriesPlanInput): Promise<Result<StravaCaloriesPlanResult, AppError>> {
+      const execution = await requireJobExecution(input.jobId, input.leaseToken);
+      if (!execution.ok) return execution;
+      const connection = await connections.read();
+      if (!connection.ok) return connection;
+      // 未接続で 2 時間ごとに failed を積まないよう、見送りとして返す。
+      if (connection.value === null) return err(appError.skippedPrecondition("Strava に接続していないため、消費カロリーの同期を見送りました。"));
+      const recentTo = weightCalendarDate(execution.value.startedAt);
+      const recentFrom = shiftDays(recentTo, -(RECENT_SYNC_DAYS - 1));
+      if (input.phase === "recent") return ok({ from: recentFrom, to: recentTo });
+      const progress = await caloriesStore.readBackfill();
+      if (!progress.ok) return progress;
+      const started = progress.value === null
+        ? await caloriesStore.startBackfill(shiftDays(recentFrom, -1), clock.now().toISOString())
+        : ok(progress.value);
+      if (!started.ok) return started;
+      if (started.value.completedAt !== null) return ok(null);
+      const chunkFrom = shiftDays(started.value.cursorTo, -(BACKFILL_CHUNK_DAYS - 1));
+      return ok({ from: chunkFrom < BACKFILL_FLOOR_DATE ? BACKFILL_FLOOR_DATE : chunkFrom, to: started.value.cursorTo });
+    },
     async reconcileCalories(input: StravaCaloriesReconcileInput): Promise<Result<StravaCaloriesReconcileResult, AppError>> {
       const execution = await requireJobExecution(input.jobId, input.leaseToken);
       if (!execution.ok) return execution;
+      if (input.backfill) {
+        // 遡りの窓は状態行が正。古い窓のまま進めると未読の期間を飛ばす。
+        const progress = await caloriesStore.readBackfill();
+        if (!progress.ok) return progress;
+        if (progress.value === null || progress.value.completedAt !== null || progress.value.cursorTo !== input.to) {
+          return err(appError.conflict("遡りの対象期間が変わりました。次の同期でやり直します。"));
+        }
+      }
       const credentials = await refreshIfNeeded();
       if (!credentials.ok) return credentials;
       const page = await upstream.activities(credentials.value.accessToken, { from: input.from, to: input.to, page: input.page });
@@ -135,7 +190,10 @@ export const createStravaUsecase = (
       if (page.value.nextPage !== null) return ok({ nextPage: page.value.nextPage, registered: registered.value, deleted: 0, ...paused });
       // 全ページを読み終えた時点で、このジョブが一度も見なかった行が Strava 側で削除された活動。
       const deleted = await caloriesStore.deleteUnseen(input.from, input.to, execution.value.startedAt);
-      return deleted.ok ? ok({ nextPage: null, registered: registered.value, deleted: deleted.value, ...paused }) : deleted;
+      if (!deleted.ok) return deleted;
+      // 進捗は最終ページでだけ進める。途中で切れたチャンクは次の同期が最初からやり直す。
+      const advanced = input.backfill ? await advanceBackfillChunk(input.from, input.to) : ok(undefined);
+      return advanced.ok ? ok({ nextPage: null, registered: registered.value, deleted: deleted.value, ...paused }) : advanced;
     },
     async fetchCalories(input: StravaCaloriesFetchInput): Promise<Result<StravaCaloriesFetchResult, AppError>> {
       const authorized = await requireJobExecution(input.jobId, input.leaseToken);
@@ -192,7 +250,10 @@ export const createStravaUsecase = (
         const revoked = await upstream.revoke(current.value.refreshToken);
         if (!revoked.ok) return revoked;
         const cleared = await connections.write(null, lease, clock.now().getTime());
-        return cleared.ok ? caloriesStore.deleteAll() : cleared;
+        if (!cleared.ok) return cleared;
+        // 遡りの状態も消す。再接続後は保存行がないので初回からやり直す。
+        const removed = await caloriesStore.deleteAll();
+        return removed.ok ? caloriesStore.deleteBackfill() : removed;
       });
     },
   };

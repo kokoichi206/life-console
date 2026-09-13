@@ -92,6 +92,21 @@
 | 既存の Strava story | `StravaActivities.stories.tsx`、`HealthPage.stories.tsx` の既存 story | handler の追加以外の変更がない | 既存 story の期待値を変えている |
 | migration | `packages/db/migrations` の新規 SQL と `meta/` | 新規テーブル 2 つと索引 1 つだけ。既存テーブルの変更がない。`pnpm migrations:check` が通る | 既存テーブルへの列追加がある。`meta/` の更新が欠けている |
 
+### 1.6 定期同期と初回の遡り（[calories-sync-schedule.md](calories-sync-schedule.md)）
+
+| 観点 | 何を見るか | 正しい状態 | 不合格の例 |
+| --- | --- | --- | --- |
+| 詳細取得は 1 活動 1 回（要件 3） | `strava-calories-repository.ts` の `registerOrTouch` と `listPendingActivityIds`、そのテスト | `registerOrTouch` の `onConflictDoUpdate` が更新するのは `seen_at` だけ。取得対象は `status = 'pending'` だけ。テストに「定期 job を 2 回実行しても `activityDetail` が活動ごとに 1 回」「チャンクのやり直しで再取得しない」がある | `onConflictDoUpdate` が `status` や `calories_kcal` を書き戻す。`measured` を再取得する経路がある。呼び出し回数を数えるテストがない |
+| interval の追加（2.2 節） | `packages/domain`、D1 の次回時刻の CASE 式 2 箇所、`ConnectorSchedules.tsx` の `intervalLabels` | 3 箇所すべてに `every_2_hours` がある。CASE 式が `'+2 hours'` を返し、`else`（+7 days）に落ちない | 片方の CASE 式だけ足している（次回時刻が 7 日後になる）。UI のラベルがなく型検査が失敗する |
+| schedule の登録の作法（2.2 節） | seed、migration、テスト以外の登録経路 | seed や migration に schedule を入れていない。登録は本人が `POST /api/v1/schedules` で行う手順がドキュメントにある | seed に schedule が入っている |
+| 定期の job は待たない（2.2 節） | runner の payload `{}` の分岐 | `retryAfterSeconds` を受けたら待たずに `succeeded`。`dailyLimitReached` も `succeeded`。payload `{ from, to }` は従来どおり上限付きで待つ | 定期の job が 15 分ずつ待ち続けて他の種別を止める |
+| 窓の決定（2.4 節） | `planCalories` | 直近 30 日はジョブの `startedAt` を日本時間の暦日にした日が終端で、runner の入力に日付がない。未接続なら precondition の失敗で Strava を呼ばない | runner が自分の時計で窓を送っている。未接続で `failed` を 2 時間ごとに積む |
+| 遡りの進捗（2.1 節） | `backfill: true` の reconcile と状態行の更新 | `cursor_to` は最終ページでだけ進む。更新は現在値を条件にした 1 文。途中で打ち切ったチャンクは次回やり直す。`from` が下限より前で `completed_at` が入る | 途中のページで進む（未読の活動が飛ぶ）。事前 SELECT と UPDATE に分かれている |
+| 二重実行の抑止（2.2 節） | `createJobUnlessActive` と `skip_if_pending` の条件 | 画面契機は同じ種別の未完了 job があれば積まない。定期は同じ `scheduleId` の未完了 job があれば積まない。両方が同時に存在しても runner は 1 件ずつ実行する | 定期と画面契機が同時に同じ活動を取りに行き詳細取得が 2 回になる（1 行目の観点でも検出） |
+| 接続解除（2.1 節） | `disconnect` | 消費 kcal の行と遡りの状態行を両方消す。revoke 失敗なら両方残す | 状態行が残り、再接続後に遡りが再開されない |
+| 規約ドキュメント（2.5 節） | `docs/strava-integration.md` ほか 2.5 節の表 | 表の全項目が書き換わり、「本人が画面を開いたときだけ同期する」の文が残っていない。「2 時間ごとに取得・保存する」「直近 30 日より古い削除は反映されない」がある | 旧記述が残る。規約の記述がコメントにだけある |
+| 同期の状態の表示（2.7 節） | `GET /api/v1/strava/calories/sync-status` と `DailyCalorieBalanceList` の 1 行 | D1 だけを読み、種別 `strava_calories_sync` の最新 1 件（`status` / `at` / `errorCode`）と遡りの状態（`cursorTo` / `completedAt`）を返す。2.7 節の表のとおり状態ごとに日本語の文言が変わり（内部識別子をそのまま出さない）、語は `apps/web/src/features/jobs/JobProgress.tsx` の `jobStatusLabels` で、その型が `Readonly<Record<JobStatus, string>>` である。利用側（`JobProgress` / `OperationsPage` / `ConnectorSchedules` / `DailyCalorieBalanceList`）に `?? job.status` のフォールバックがない。DTO の `status` が `JobStatus`（`packages/contracts/src/models.ts`、`connector-schedules.ts`、`life-console-repository.ts`）。未完了は `activeJobStatuses` で判定し、状態ごとの語と予約時刻を出す。`skipped_precondition` は「前提条件待ち」だけで理由を付けない。`failed` / `expired` / `lost` には `/operations` へのリンクがある。遡りの日付は `cursorTo` の翌日で、runner の summary と一致する。Strava 未接続では出ない。接続済みなら読み、取得待ちがある間の再取得と同じ間隔で更新する | 他の種別の job を拾う。`failed` や `expired` を英語のまま出す。`jobStatusLabels` の型が `Record<string, string>` に戻っている。利用側に `?? job.status` が残っている（`/operations` 側も含む）。DTO の `status` が `string` のまま。この行だけの対応表を持ち `/operations` と語が違う。未完了を 1 語に丸めて実行待ちと実行中を区別できない。「前提条件待ち（Strava 未接続）」のように表示時点で成り立たない理由を付ける。失敗を `role="alert"` で出す。未接続でも出る。Strava を呼ぶ。同期が進んでも再フォーカスまで表示が変わらない |
+
 ## 2. 動作確認手順
 
 各手順は「操作」→「期待する結果」。期待する結果が出なければ不合格として、再現条件と画面の状態を記録する。
@@ -187,6 +202,33 @@ runner はこの層では起動しない（Strava 未接続ではジョブが作
 | 13 | 接続解除（ユーザーが許可した場合のみ）: 「接続を解除」 | 既存機能どおり運動データが画面から消え、D1 の `strava_activity_calories` が 0 件。再接続すると再び `pending` から始まる |
 
 未実行の項目は報告で「ユーザーの許可待ち」「環境未整備」「実行したが不合格」を分けて書く。
+
+### 2.4 定期同期と初回の遡り（[calories-sync-schedule.md](calories-sync-schedule.md)）
+
+ローカル（Strava の環境変数なしでできること）:
+
+| 順 | 操作 | 期待する結果 |
+| --- | --- | --- |
+| 1 | `pnpm exec vitest run tests/strava-calories-storage.test.ts apps/runner/src/usecases/strava-calories-job.test.ts`（schedule の storage テストも含める） | すべて pass。「定期 job を 2 回実行しても `activityDetail` が活動ごとに 1 回」「チャンクのやり直しで再取得しない」「`every_2_hours` の次回時刻が 2 時間後」のテストがあることを目視で確認する |
+| 2 | ローカル API に `POST /api/v1/schedules` で `jobKind: "strava_calories_sync"`、`interval: "every_2_hours"`、`timezone: "Asia/Tokyo"`、`nextRunAt` を現在時刻、`coalescing: "skip_if_pending"`、`deadlineSeconds: 7200`、`payload: {}` を登録する | 200。`/operations` の schedule 一覧に出る（一覧が connector 以外も出す場合） |
+| 3 | `docs/weight-obsidian-export.md` の手順でローカルの Cron を 1 回起動する（`--test-scheduled` と `/__scheduled`） | `/operations` に `strava_calories_sync` の queued が 1 件。もう一度起動しても 2 件目が積まれない（`skip_if_pending`） |
+| 4 | Strava 未接続のまま `pnpm dev:runner:once` | job が `skipped_precondition` で終わり、summary に未接続の旨。`failed` ではない |
+| 5 | 2 時間後（またはローカル D1 の `schedules.next_run_at` を過去にして Cron を起動） | 次の job が積まれる。前の job が `skipped_precondition` なので抑止されない |
+
+実データ（3 章と同じくユーザーの許可が要る。Strava の読み取り予算を数日にわたって使う）:
+
+| 順 | 操作 | 期待する結果 |
+| --- | --- | --- |
+| 6 | Strava に接続した状態で Cron を起動し `pnpm dev:runner:once` | job が `succeeded`。summary に「直近 30 日: 取得 n 件…」と「遡り: YYYY-MM-DD まで完了」。D1 の `strava_calories_backfill` に 1 行あり、`cursor_to` が直近 30 日の `from` の前日より古い日付になっている（少なくとも 1 チャンク進んだ） |
+| 7 | 健康画面（既定の 7 日、30 日） | 取得待ちがなく、運動の値が右端に出る。全期間を表示すると古い期間に「取得待ち n 件」と status が出る |
+| 8 | もう一度 job を積んで `pnpm dev:runner:once` | 直近 30 日の取得は 0 件（再取得しない）。`cursor_to` がさらに進む。D1 で最初の job が `measured` にした行の `fetched_at` が変わっていない |
+| 9 | 遡りが完了するまで（数日）定期実行に任せ、`/operations` で job の summary を追う | 毎回 `succeeded` または `dailyLimitReached` の summary。`completed_at` が入ったら以後の job は「遡り: 完了」で、一覧取得は直近 30 日だけ |
+| 10 | 遡り完了後に Strava で新しい活動を記録し、次の定期 job を待つ | 2 時間以内に右端に運動の値が出る（画面を開かなくても） |
+| 11 | 直近 30 日内の検証用活動を Strava で削除し、次の定期 job を待つ | 行が消える。30 日より前の活動を削除しても定期 job では消えず、その期間を表示したときの job で消える（設計どおり） |
+| 12 | 接続を解除して再接続する（ユーザーが許可した場合のみ） | `strava_calories_backfill` の行が消え、再接続後の最初の job で遡りが初回からやり直される |
+| 13 | 6 の直後の健康画面 | カロリー収支の副題の下に「最後の同期: 9/14 06:12 完了・遡り: YYYY-MM-DD まで完了」の形の 1 行。時刻は job の `finishedAt` の日本時間。語が `/operations` の同じ job の表示と一致する |
+| 14 | `/operations` で実行中の同期 job を中止する、または runner を止めたまま queued の job を期限切れにする（2 時間） | 1 行が「最後の同期: … 中止」または「… 期限切れ」に変わり、「実行状況を見る」のリンクがある。queued のまま待っている間は「同期: 実行待ち（… に予約）」で、予約時刻が古いままなのが分かる |
+| 15 | 部品 story「同期の状態」（該当する story） | 完了・失敗（`errorCode` 付き）・実行待ち / 実行中・未同期・遡り中の文言が 2.7 節の表と一致し、未接続の story には出ない |
 
 ## 3. 報告の形
 

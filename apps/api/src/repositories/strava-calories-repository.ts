@@ -1,6 +1,6 @@
 import type { StravaActivityCalories } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
-import { stravaActivityCalories } from "@life-console/db";
+import { stravaActivityCalories, stravaCaloriesBackfill } from "@life-console/db";
 import { and, count, desc, eq, gte, lt } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { drizzle } from "drizzle-orm/d1";
@@ -21,7 +21,15 @@ export interface StravaCaloriesRepository {
   deleteActivity(activityId: string): Promise<Result<void, AppError>>;
   listByPeriod(from: string, to: string): Promise<Result<ReadonlyArray<StravaActivityCalories>, AppError>>;
   deleteAll(): Promise<Result<void, AppError>>;
+  readBackfill(): Promise<Result<BackfillProgress | null, AppError>>;
+  startBackfill(cursorTo: string, now: string): Promise<Result<BackfillProgress, AppError>>;
+  /** `cursor_to` が `from` のままのときだけ進める。同じチャンクを二重に進めない。 */
+  advanceBackfill(from: string, cursorTo: string, now: string): Promise<Result<void, AppError>>;
+  completeBackfill(from: string, now: string): Promise<Result<void, AppError>>;
+  deleteBackfill(): Promise<Result<void, AppError>>;
 }
+
+export type BackfillProgress = { readonly cursorTo: string; readonly completedAt: string | null };
 
 // 保存する occurred_at は Strava の start_date（UTC の ISO 文字列）で、暦日は listMeals と同じ +09:00 の境界で切る。
 const japanCalendarRange = (from: string, to: string) => ({
@@ -93,6 +101,36 @@ export const createStravaCaloriesRepository = (database: D1Database): StravaCalo
     },
     async deleteAll() {
       const result = await safeTry(() => db.delete(stravaActivityCalories).run());
+      return result.ok ? ok(undefined) : err(appError.storage(result.error));
+    },
+    async readBackfill() {
+      const result = await safeTry(() => db.select({ cursorTo: stravaCaloriesBackfill.cursorTo, completedAt: stravaCaloriesBackfill.completedAt })
+        .from(stravaCaloriesBackfill).where(eq(stravaCaloriesBackfill.id, 1)).get());
+      if (!result.ok) return err(appError.storage(result.error));
+      return ok(result.value ?? null);
+    },
+    async startBackfill(cursorTo, now) {
+      // 既に始まっていれば現在の進捗を残す。plan は毎回 read してから呼ぶが、同時実行でも上書きしない。
+      const result = await safeTry(() => db.insert(stravaCaloriesBackfill)
+        .values({ id: 1, cursorTo, startedAt: now, completedAt: null, updatedAt: now }).onConflictDoNothing()
+        .run());
+      if (!result.ok) return err(appError.storage(result.error));
+      return this.readBackfill().then((progress) => progress.ok
+        ? progress.value === null ? err(appError.storage("backfill insert returned no row")) : ok(progress.value)
+        : progress);
+    },
+    async advanceBackfill(from, cursorTo, now) {
+      const result = await safeTry(() => db.update(stravaCaloriesBackfill).set({ cursorTo, updatedAt: now })
+        .where(and(eq(stravaCaloriesBackfill.id, 1), eq(stravaCaloriesBackfill.cursorTo, from))).run());
+      return result.ok ? ok(undefined) : err(appError.storage(result.error));
+    },
+    async completeBackfill(from, now) {
+      const result = await safeTry(() => db.update(stravaCaloriesBackfill).set({ completedAt: now, updatedAt: now })
+        .where(and(eq(stravaCaloriesBackfill.id, 1), eq(stravaCaloriesBackfill.cursorTo, from))).run());
+      return result.ok ? ok(undefined) : err(appError.storage(result.error));
+    },
+    async deleteBackfill() {
+      const result = await safeTry(() => db.delete(stravaCaloriesBackfill).run());
       return result.ok ? ok(undefined) : err(appError.storage(result.error));
     },
   };

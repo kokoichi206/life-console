@@ -6,7 +6,7 @@ import type { AppError } from "../shared/app-error";
 import type { Clock } from "../shared/clock";
 import type { IdGenerator } from "../shared/id-generator";
 
-const nextRun = (now: Date, interval: CreateConnectorScheduleInput["interval"]) => new Date(now.getTime() + { hourly: 1, daily: 24, weekly: 168 }[interval] * 3_600_000).toISOString();
+const nextRun = (now: Date, interval: CreateConnectorScheduleInput["interval"]) => new Date(now.getTime() + { hourly: 1, every_2_hours: 2, daily: 24, weekly: 168 }[interval] * 3_600_000).toISOString();
 export const createConnectorScheduleUsecase = (repository: ConnectorScheduleRepository, clock: Clock, ids: IdGenerator) => ({
   list: (): Promise<Result<ReadonlyArray<ConnectorScheduleStatus>, AppError>> => repository.list(),
   create(input: CreateConnectorScheduleInput): Promise<Result<void, AppError>> {

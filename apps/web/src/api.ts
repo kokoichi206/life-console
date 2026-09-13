@@ -3,7 +3,7 @@ import type { AgentQuestion } from "@life-console/contracts";
 import type { ConnectorScheduleStatus, CreateConnectorScheduleInput, UpdateConnectorScheduleInput } from "@life-console/contracts";
 import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contracts";
 import type { CalorieBaseline, MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
-import type { StravaActivityCalories, StravaActivityPage, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
+import type { StravaActivityCalories, StravaActivityPage, StravaCaloriesSyncStatus, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
   PushConfiguration,
   PushSubscriptionInput,
@@ -76,6 +76,7 @@ export const api = {
   authorizeStrava: async () => unwrap<string>(await client.api.v1.strava.authorize.$post()),
   disconnectStrava: async () => unwrap<null>(await client.api.v1.strava.connection.$delete()),
   stravaActivities: async (from: string, to: string, page: number, signal: AbortSignal) => unwrap<StravaActivityPage>(await client.api.v1.strava.activities.$get({ query: { from, to, page: String(page) } }, { init: { signal } })),
+  stravaCaloriesSyncStatus: async () => unwrap<StravaCaloriesSyncStatus>(await client.api.v1.strava.calories["sync-status"].$get()),
   stravaCalories: async (from: string, to: string) => unwrap<ReadonlyArray<StravaActivityCalories>>(await client.api.v1.strava.calories.$get({ query: { from, to } })),
   mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get({ query: { from, to } })),
   nutrition: async () => unwrap<ReadonlyArray<MealNutrition>>(await client.api.v1.nutrition.$get()),

@@ -31,7 +31,7 @@ export type StravaCaloriesStatus = typeof stravaCaloriesStatuses[number];
 export const agentProviders = ["codex", "claude"] as const;
 export type AgentProvider = typeof agentProviders[number];
 
-export const scheduleIntervals = ["hourly", "daily", "weekly"] as const;
+export const scheduleIntervals = ["hourly", "every_2_hours", "daily", "weekly"] as const;
 
 export const scheduleCoalescingModes = ["skip_if_pending", "queue_all"] as const;
 

@@ -1,5 +1,7 @@
 import type { MealNutrition } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { expect, fn, within } from "storybook/test";
 
 import { calorieBalanceRows, recentBalanceWindow, type ExerciseInput } from "../calorie-balance";
@@ -41,6 +43,16 @@ const barWidth = (canvas: { getByRole: (role: string, options: { name: string })
 const meta = {
   title: "Health/カロリー収支",
   component: DailyCalorieBalanceList,
+  // 失敗時の `/operations` への導線が Link なので、部品単体でもルーターを用意する。
+  decorators: [(Story) => {
+    const router = useMemo(() => {
+      const root = createRootRoute();
+      const health = createRoute({ getParentRoute: () => root, path: "/", component: Story });
+      const operations = createRoute({ getParentRoute: () => root, path: "/operations", component: () => <p>実行状況</p> });
+      return createRouter({ routeTree: root.addChildren([health, operations]), history: createMemoryHistory({ initialEntries: ["/"] }) });
+    }, [Story]);
+    return <RouterProvider router={router} />;
+  }],
   args: {
     rows: recentRows,
     baselineKcal: 1500,
@@ -52,6 +64,7 @@ const meta = {
     expanded: false,
     hiddenDays: RECENT.hiddenDays,
     onExpandedChange: fn(),
+    syncStatus: { lastJob: { status: "succeeded", at: "2026-09-14T06:12:00.000Z", errorCode: null }, backfill: { cursorTo: "2026-03-01", completedAt: null } },
   },
 } satisfies Meta<typeof DailyCalorieBalanceList>;
 export default meta;
@@ -82,6 +95,92 @@ export const RecentDaysByDefault: Story = {
     const expand = canvas.getByRole("button", { name: "すべて表示（他 5 日）", expanded: false });
     await userEvent.click(expand);
     await expect(args.onExpandedChange).toHaveBeenCalledWith(true);
+  },
+};
+
+export const SyncStatus: Story = {
+  name: "定期同期が成功している",
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 15:12 完了・遡り: 2026-03-02 まで完了/)).toBeVisible();
+    // 正常なときは実行状況への導線を出さない。
+    await expect(canvas.queryByRole("link", { name: "実行状況を見る" })).not.toBeInTheDocument();
+  },
+};
+
+export const SyncFailed: Story = {
+  name: "定期同期が失敗している",
+  args: { syncStatus: { lastJob: { status: "failed", at: "2026-09-14T04:10:00.000Z", errorCode: "unknown_job_kind" }, backfill: null } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 13:10 失敗（unknown_job_kind）/)).toBeVisible();
+    await expect(canvas.getByRole("link", { name: "実行状況を見る" })).toHaveAttribute("href", "/operations");
+  },
+};
+
+export const SyncExpired: Story = {
+  name: "runner が実行せず期限切れになっている",
+  args: { syncStatus: { lastJob: { status: "expired", at: "2026-09-14T02:00:00.000Z", errorCode: null }, backfill: { cursorTo: "2026-03-01", completedAt: null } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 11:00 期限切れ・遡り: 2026-03-02 まで完了/)).toBeVisible();
+    await expect(canvas.getByRole("link", { name: "実行状況を見る" })).toBeVisible();
+  },
+};
+
+export const SyncQueued: Story = {
+  // runner が止まると queued のまま止まる。「実行中」に畳むとこの症状に気づけない。
+  name: "実行待ちのまま止まっている",
+  args: { syncStatus: { lastJob: { status: "queued", at: "2026-09-14T06:00:00.000Z", errorCode: null }, backfill: { cursorTo: "2026-03-01", completedAt: null } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/同期: 実行待ち（9\/14 15:00 に予約）・遡り: 2026-03-02 まで完了/)).toBeVisible();
+    await expect(canvas.queryByText(/実行中/)).not.toBeInTheDocument();
+  },
+};
+
+export const SyncRunning: Story = {
+  name: "同期を実行中",
+  args: { syncStatus: { lastJob: { status: "running", at: "2026-09-14T06:00:00.000Z", errorCode: null }, backfill: null } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/同期: 実行中（9\/14 15:00 に予約）/)).toBeVisible();
+    await expect(canvas.queryByRole("link", { name: "実行状況を見る" })).not.toBeInTheDocument();
+  },
+};
+
+export const SyncSkipped: Story = {
+  name: "実行条件が揃わず見送っている",
+  args: { syncStatus: { lastJob: { status: "skipped_precondition", at: "2026-09-14T06:00:00.000Z", errorCode: "skipped_precondition" }, backfill: null } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 15:00 前提条件待ち/)).toBeVisible();
+    // 失敗以外の errorCode は内部識別子なので出さない。
+    await expect(canvas.queryByText(/skipped_precondition/)).not.toBeInTheDocument();
+  },
+};
+
+export const SyncNotStarted: Story = {
+  name: "まだ一度も同期していない",
+  args: { syncStatus: { lastJob: null, backfill: null } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("まだ同期していません")).toBeVisible();
+  },
+};
+
+export const SyncBackfillCompleted: Story = {
+  name: "遡りが完了している",
+  args: { syncStatus: { lastJob: { status: "succeeded", at: "2026-09-14T06:12:00.000Z", errorCode: null }, backfill: { cursorTo: "2008-12-31", completedAt: "2026-09-14T06:12:00.000Z" } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 15:12 完了・遡り: 完了/)).toBeVisible();
+  },
+};
+
+export const SyncStatusHidden: Story = {
+  name: "Strava 未接続なら同期の状態を出さない",
+  args: {
+    syncStatus: undefined,
+    exerciseState: "untracked",
+    rows: calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, { mode: "untracked" }, 1500),
+    pendingActivities: 0,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText(/最後の同期|まだ同期していません|同期: /)).not.toBeInTheDocument();
+    await expect(canvas.getByText("Strava 未接続のため、運動を含めていません。")).toBeVisible();
   },
 };
 

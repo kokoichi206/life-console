@@ -1,5 +1,9 @@
+import type { JobStatus, StravaCaloriesSyncStatus } from "@life-console/contracts";
+import { Link } from "@tanstack/react-router";
+
 import { FormError, Panel } from "../../../components/DesignSystem";
 import { Button } from "../../../components/ui/Button";
+import { activeJobStatuses, jobStatusLabels } from "../../../features/jobs/JobProgress";
 import { cn } from "../../../lib/class-names";
 import { RECENT_BALANCE_DAYS, type CalorieBalanceDay, type CalorieBalanceRow } from "../calorie-balance";
 
@@ -10,6 +14,30 @@ const SCALE_STEP_KCAL = 500;
 const kcalFormat = new Intl.NumberFormat("ja-JP");
 const signedKcal = (value: number): string => `${value < 0 ? "−" : "+"}${kcalFormat.format(Math.abs(value))}`;
 const shortDay = (date: string): string => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+
+const syncDateTime = new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const nextDay = (date: string): string => new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+/** 本人が次に見る場所が `/operations` しかない状態。runner が動いていないことに気づく入口になる。 */
+const failedSyncStatuses = new Set<JobStatus>(["failed", "expired", "lost"]);
+
+/** runner が止まっていても気づけるよう、最後の同期の結果と遡りの進み具合を 1 行で示す。 */
+const syncStatusText = (status: StravaCaloriesSyncStatus): string => {
+  // cursorTo はまだ読んでいないチャンクの終端なので、読み終えた最古日はその翌日。
+  const backfill = status.backfill === null
+    ? ""
+    : `・遡り: ${status.backfill.completedAt === null ? `${nextDay(status.backfill.cursorTo)} まで完了` : "完了"}`;
+  const job = status.lastJob;
+  if (job === null) return `まだ同期していません${backfill}`;
+  const at = syncDateTime.format(new Date(job.at));
+  // 語は job 一覧と同じものを使う。`/operations` へ飛んだ先で同じ表示が見つかる。
+  const label = jobStatusLabels[job.status];
+  // 未完了は畳まない。runner が止まると「実行待ち」のまま止まり、それが異常の合図になる。
+  if (activeJobStatuses.has(job.status)) return `同期: ${label}（${at} に予約）${backfill}`;
+  // 原因を添えるのは失敗だけ。ほかの状態の errorCode は内部識別子で読み手に意味がない。
+  const cause = job.status === "failed" && job.errorCode !== null ? `（${job.errorCode}）` : "";
+  return `最後の同期: ${at} ${label}${cause}${backfill}`;
+};
 
 const balanceLabel = (day: CalorieBalanceDay): string => {
   if (day.balanceKcal === null) return "—";
@@ -93,7 +121,7 @@ const LegendSwatch = ({ className, label }: { readonly className: string; readon
   </span>
 );
 
-export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange }: {
+export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange, syncStatus }: {
   readonly rows: ReadonlyArray<CalorieBalanceRow>;
   readonly baselineKcal: number | null;
   readonly exerciseState: ExerciseTrackingState;
@@ -106,6 +134,8 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
   /** 直近の窓から外れている日数。0 なら広げる先がないのでボタンを出さない。 */
   readonly hiddenDays: number;
   readonly onExpandedChange: (expanded: boolean) => void;
+  /** 定期同期の状態。未接続や未取得のときは出さない。 */
+  readonly syncStatus: StravaCaloriesSyncStatus | undefined;
 }) => {
   const scaleKcal = Math.max(SCALE_STEP_KCAL, ...rows.map((row) => row.kind === "day" && row.day.balanceKcal !== null
     ? Math.ceil(Math.abs(row.day.balanceKcal) / SCALE_STEP_KCAL) * SCALE_STEP_KCAL
@@ -125,6 +155,18 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
           {baselineKcal === null ? "基準消費量を設定" : "基準消費量を編集"}
         </Button>
       </header>
+      {syncStatus !== undefined && (
+        <p className="text-xs text-muted-foreground">
+          {syncStatusText(syncStatus)}
+          {/* 正常なときは出さない。異常のときだけ、原因を追える場所への導線を添える。 */}
+          {syncStatus.lastJob !== null && failedSyncStatuses.has(syncStatus.lastJob.status) && (
+            <>
+              {" "}
+              <Link to="/operations" className="underline underline-offset-4">実行状況を見る</Link>
+            </>
+          )}
+        </p>
+      )}
       {exerciseState === "untracked" && <p className="text-xs text-muted-foreground">Strava 未接続のため、運動を含めていません。</p>}
       {exerciseState === "loading" && <p role="status" className="text-sm text-muted-foreground">運動を取得しています。取得後に収支を表示します。</p>}
       {exerciseState === "failed" && <p className="text-sm text-muted-foreground">運動を取得できていないため、収支を表示していません。</p>}

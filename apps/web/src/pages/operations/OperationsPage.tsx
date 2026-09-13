@@ -93,7 +93,7 @@ export const OperationsPage = () => {
           <div className="max-h-[900px] overflow-y-auto px-5">
             {jobs.map((job) => (
               <article key={job.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t py-3 first:border-t-0">
-                <Badge variant={job.status === "failed" || job.status === "lost" ? "destructive" : "secondary"}>{jobStatusLabels[job.status] ?? job.status}</Badge>
+                <Badge variant={job.status === "failed" || job.status === "lost" ? "destructive" : "secondary"}>{jobStatusLabels[job.status]}</Badge>
                 <div className="min-w-0">
                   <strong className="block truncate text-xs">{job.kind}</strong>
                   <small className="block text-[0.65rem] leading-5 text-muted-foreground">{job.summary ?? `作成 ${new Date(job.createdAt).toLocaleString("ja-JP")}`}</small>

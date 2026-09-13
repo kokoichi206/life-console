@@ -91,7 +91,7 @@ CSV と JS は両方の内容を生成して一時ファイルへ保存してか
 
 `nextRunAt` は希望する初回日時に置き換える。`dataDirectory` は vault からの相対パス。絶対パス、`..`、`.obsidian` 内のパス、vault 外を指すディレクトリ、データファイルの symlink は使えない。
 
-`interval` は `hourly` / `daily` / `weekly`。定期 job の作成時に `payload_json` をコピーするので、設定変更後も既存 job の入力は変わらない。無効化には対象 DB の `schedules.enabled = 0` を使い、すでに生成された job は別途中止する。
+`interval` は `hourly` / `every_2_hours` / `daily` / `weekly`。定期 job の作成時に `payload_json` をコピーするので、設定変更後も既存 job の入力は変わらない。無効化には対象 DB の `schedules.enabled = 0` を使い、すでに生成された job は別途中止する。
 
 ## 実行と確認
 
