@@ -95,8 +95,31 @@ describe("解析予約後の手入力", () => {
       const runner = createRunnerUsecase({ api, executor, heartbeatMilliseconds: 60_000, logger: { info: vi.fn(), error: vi.fn() } });
       expect(await runner.register()).toBe(true);
       await runner.runOnce();
-      expect(database.prepare("SELECT status, error_code FROM jobs").get()).toMatchObject({ status: "skipped_precondition", error_code: null });
-      expect(await (await app.request("/api/v1/nutrition", {}, environment)).json()).toMatchObject({ data: [{ manualCaloriesKcal: 520, estimate: null, analysisStatus: null }] });
+      expect(database.prepare("SELECT status, error_code FROM jobs").get()).toMatchObject({ status: "succeeded", error_code: null });
+      expect(await (await app.request("/api/v1/nutrition", {}, environment)).json()).toMatchObject({ data: [{ manualCaloriesKcal: 520, estimate: { proteinGrams: 20, fatGrams: 20, carbohydrateGrams: 60 }, analysisStatus: "succeeded" }] });
+    } finally { database.close(); }
+  });
+  it.each(["photo", null])("手入力済みの記録を個別解析・再解析し、カロリーと最新の栄養素を再取得する: %s", async (photoId) => {
+    const { database, repository, binding } = createJobStorage();
+    const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
+    const now = new Date().toISOString();
+    try {
+      expect((await repository.createMealAndQueueNutrition("manual", { clientId: "manual", photoId, memo: "おにぎり 1 個", manualCaloriesKcal: 200, occurredAt: now, tags: [] }, now)).ok).toBe(true);
+      vi.stubGlobal("fetch", (url: string, init: RequestInit) => app.request(url, init, environment));
+      const api = createApiRepository({ apiUrl: "http://localhost", runnerId: "test-runner", runnerName: "Test runner", runnerToken: "local-runner-token" } as RunnerConfig);
+      const generate = vi.fn();
+      const executor = createJobExecutorUsecase({ api, nutritionGenerator: { generate } } as unknown as Parameters<typeof createJobExecutorUsecase>[0]);
+      const runner = createRunnerUsecase({ api, executor, heartbeatMilliseconds: 60_000, logger: { info: vi.fn(), error: vi.fn() } });
+      expect(await runner.register()).toBe(true);
+      for (const proteinGrams of [5, 8]) {
+        generate.mockResolvedValue(ok({ caloriesKcal: 250, proteinGrams, fatGrams: 2, carbohydrateGrams: 50, model: "test", analyzedAt: new Date().toISOString(), inputHash: "a".repeat(64) }));
+        const response = await app.request("/api/v1/nutrition/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mealId: "manual" }) }, environment);
+        expect(response.status).toBe(200);
+        await runner.runOnce();
+        expect(await (await app.request("/api/v1/nutrition", {}, environment)).json()).toMatchObject({ data: [{ manualCaloriesKcal: 200, estimate: { proteinGrams }, analysisStatus: "succeeded" }] });
+      }
+      expect(generate).toHaveBeenCalledWith({ id: "manual", photoId, memo: "おにぎり 1 個" }, expect.any(AbortSignal));
+      expect(database.prepare("SELECT count(*) AS count FROM nutrition_estimates").get()?.count).toBe(2);
     } finally { database.close(); }
   });
 });

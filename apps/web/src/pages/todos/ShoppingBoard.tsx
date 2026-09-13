@@ -1,7 +1,7 @@
 import type { ShoppingList } from "@life-console/contracts";
 import { useIsMutating, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { api } from "../../api";
 import { EmptyState, Field, FormError, Panel } from "../../components/DesignSystem";
@@ -13,7 +13,10 @@ import { shoppingQuery, useShoppingMutation } from "./queries";
 type ShoppingItem = ShoppingList["items"][number];
 type ShoppingPlace = ShoppingList["places"][number];
 
-const ItemEditor = ({ item, places, close }: { readonly item: ShoppingItem; readonly places: ShoppingList["places"]; readonly close: () => void }) => {
+type PurchaseChange = { readonly item: ShoppingItem; readonly purchased: boolean };
+type ChangePurchase = (change: PurchaseChange) => void;
+
+const ItemEditor = ({ item, places, close, changePurchase }: { readonly item: ShoppingItem; readonly places: ShoppingList["places"]; readonly close: () => void; readonly changePurchase: ChangePurchase }) => {
   const [name, setName] = useState(item.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const rename = useShoppingMutation(() => api.updateShoppingItem(item.id, { name }), close);
@@ -40,6 +43,7 @@ const ItemEditor = ({ item, places, close }: { readonly item: ShoppingItem; read
         <p className="text-xs text-muted-foreground">どこかで買ったら、ほかの場所でも購入済みになります。</p>
       </div>
       <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => changePurchase({ item, purchased: item.purchasedAt === null })}>{item.purchasedAt === null ? "購入済みにする" : "未購入に戻す"}</Button>
         <Button variant="ghost" size="sm" disabled={busy} onClick={close}>閉じる</Button>
         {!confirmDelete
           ? <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmDelete(true)}>削除</Button>
@@ -55,27 +59,66 @@ const ItemEditor = ({ item, places, close }: { readonly item: ShoppingItem; read
   );
 };
 
-const ShoppingRow = ({ item, places }: { readonly item: ShoppingItem; readonly places: ShoppingList["places"] }) => {
+const ShoppingRow = ({ item, places, changePurchase }: { readonly item: ShoppingItem; readonly places: ShoppingList["places"]; readonly changePurchase: ChangePurchase }) => {
   const search = useSearch({ from: "/todos" });
   const navigate = useNavigate({ from: "/todos" });
-  const purchase = useShoppingMutation((purchased: boolean) => api.updateShoppingItem(item.id, { purchased }));
   const busy = useIsMutating({ mutationKey: ["shopping"] }) > 0;
+  const gesture = useRef<{ pointerId: number; x: number; y: number; horizontal: boolean } | null>(null);
+  const [offset, setOffset] = useState(0);
+  const action = item.purchasedAt === null ? "購入済みにする" : "未購入に戻す";
+  const resetSwipe = () => {
+    gesture.current = null;
+    setOffset(0);
+  };
   return (
-    <li className="space-y-3 border-t py-3">
-      <div className="flex items-center gap-3">
-        <label className="flex min-h-10 min-w-0 flex-1 items-center gap-3 text-sm">
-          <input className="size-5 shrink-0 accent-primary" type="checkbox" checked={item.purchasedAt !== null} disabled={busy} onChange={(event) => purchase.mutate(event.target.checked)} />
-          <span className={`break-words ${item.purchasedAt !== null ? "text-muted-foreground line-through" : ""}`}>{item.name}</span>
-        </label>
-        <Button variant="ghost" size="sm" disabled={busy || (search.itemId !== undefined && search.itemId !== item.id)} onClick={() => { void navigate({ search: (previous) => ({ ...previous, itemId: item.id }), hash: "shopping-item-editor" }); }} aria-expanded={search.itemId === item.id} aria-label={`${item.name}の編集`}>編集</Button>
+    <li className="relative overflow-hidden border-t" aria-label={item.name}>
+      <div aria-hidden="true" className="absolute inset-0 flex items-center bg-primary/15 px-3 text-sm font-medium text-foreground">
+        {offset >= 96 ? "離して確定" : action}
       </div>
-      {item.placeIds.length > 1 && <p className="pl-8 text-xs text-muted-foreground">{places.filter((place) => item.placeIds.includes(place.id)).map((place) => place.name).join("・")}</p>}
-      {purchase.error !== null && <FormError>{purchase.error.message}</FormError>}
+      <div
+        className="relative touch-pan-y touch-pinch-zoom space-y-2 bg-card py-3"
+        style={{ transform: `translateX(${offset}px)` }}
+        onPointerDown={(event) => {
+          if (busy || !event.isPrimary || event.button !== 0 || (event.target as HTMLElement).closest("button, a")) return;
+          gesture.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, horizontal: false };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          const start = gesture.current;
+          if (start === null || start.pointerId !== event.pointerId) return;
+          const dx = event.clientX - start.x;
+          const dy = event.clientY - start.y;
+          if (!start.horizontal) {
+            if (dx < -10 || (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx))) {
+              resetSwipe();
+              return;
+            }
+            if (dx < 10 || dx <= Math.abs(dy) * 1.5) return;
+            start.horizontal = true;
+          }
+          setOffset(Math.min(Math.max(dx, 0), 140));
+        }}
+        onPointerUp={(event) => {
+          const start = gesture.current;
+          if (start?.pointerId !== event.pointerId) return;
+          if (!busy && start.horizontal && event.clientX - start.x >= 96) changePurchase({ item, purchased: item.purchasedAt === null });
+          resetSwipe();
+        }}
+        onPointerCancel={resetSwipe}
+        onLostPointerCapture={resetSwipe}
+      >
+        <div className="flex min-h-11 items-center gap-3">
+          <span className={`min-w-0 flex-1 select-none break-words text-sm ${item.purchasedAt !== null ? "text-muted-foreground line-through" : ""}`}>{item.name}</span>
+          <Button variant="outline" size="sm" className="hidden shrink-0 [@media(any-pointer:fine)]:inline-flex" disabled={busy} aria-label={`${item.name}を${action}`} onClick={() => changePurchase({ item, purchased: item.purchasedAt === null })}>{action}</Button>
+          <Button variant="ghost" size="sm" disabled={busy || (search.itemId !== undefined && search.itemId !== item.id)} onClick={() => { void navigate({ search: (previous) => ({ ...previous, itemId: item.id }), hash: "shopping-item-editor" }); }} aria-expanded={search.itemId === item.id} aria-label={`${item.name}の編集`}>編集</Button>
+        </div>
+        {item.placeIds.length > 1 && <p className="text-xs text-muted-foreground">{places.filter((place) => item.placeIds.includes(place.id)).map((place) => place.name).join("・")}</p>}
+      </div>
     </li>
   );
 };
 
-const PlaceSection = ({ place, shopping, completed }: { readonly place: ShoppingPlace; readonly shopping: ShoppingList; readonly completed: boolean }) => {
+const PlaceSection = ({ place, shopping, completed, changePurchase }: { readonly place: ShoppingPlace; readonly shopping: ShoppingList; readonly completed: boolean; readonly changePurchase: ChangePurchase }) => {
   const [name, setName] = useState("");
   const [editingName, setEditingName] = useState<string | null>(null);
   const [showExisting, setShowExisting] = useState(false);
@@ -136,7 +179,7 @@ const PlaceSection = ({ place, shopping, completed }: { readonly place: Shopping
             )}
           </>
         )}
-        <ul>{items.map((item) => <ShoppingRow key={item.id} item={item} places={shopping.places} />)}</ul>
+        <ul>{items.map((item) => <ShoppingRow key={item.id} item={item} places={shopping.places} changePurchase={changePurchase} />)}</ul>
         {items.length === 0 && <p className="py-4 text-sm text-muted-foreground">{completed ? "購入済みの品はありません。" : "買うものはありません。"}</p>}
       </Panel>
     </section>
@@ -149,6 +192,13 @@ export const ShoppingBoard = () => {
   const query = useQuery(shoppingQuery);
   const [placeName, setPlaceName] = useState("");
   const createPlace = useShoppingMutation(() => api.createShoppingPlace(placeName), () => setPlaceName(""));
+  const [undoChanges, setUndoChanges] = useState<PurchaseChange[]>([]);
+  const purchase = useShoppingMutation((change: PurchaseChange & { readonly undo: boolean }) => api.updateShoppingItem(change.item.id, { purchased: change.purchased }), (change) => {
+    setUndoChanges((previous) => change.undo ? previous.slice(0, previous.findLastIndex((entry) => entry.item.id === change.item.id)) : [...previous, change]);
+  });
+  const changePurchase: ChangePurchase = (change) => purchase.mutate({ ...change, undo: false });
+  const undoChange = undoChanges.filter((change) => query.data?.items.some((item) => item.id === change.item.id)).at(-1);
+  const busy = useIsMutating({ mutationKey: ["shopping"] }) > 0;
   if (query.isPending) return <p role="status">買い物を読み込んでいます。</p>;
   if (query.isError && query.data === undefined) return (
     <div className="space-y-2">
@@ -169,12 +219,12 @@ export const ShoppingBoard = () => {
       )}
       <div>
         <h2 className="text-lg font-semibold">{search.completed ? "購入済み" : "買い物"}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">買う場所の欄で、品名を追加。買ったらチェックしてください。</p>
+        <p className="mt-1 text-sm text-muted-foreground">行を右にスワイプして、離すと確定。編集からも購入状態を変更できます。</p>
       </div>
       {editingItem !== undefined && (
         <section id="shopping-item-editor" aria-label="買うものを編集" className="space-y-2">
           <h3 className="font-semibold">買うものを編集</h3>
-          <ItemEditor key={editingItem.id} item={editingItem} places={shopping.places} close={() => { void navigate({ search: (previous) => ({ ...previous, itemId: undefined }) }); }} />
+          <ItemEditor changePurchase={changePurchase} key={editingItem.id} item={editingItem} places={shopping.places} close={() => { void navigate({ search: (previous) => ({ ...previous, itemId: undefined }) }); }} />
         </section>
       )}
       {search.itemId !== undefined && editingItem === undefined && (
@@ -188,14 +238,14 @@ export const ShoppingBoard = () => {
         {shopping.places.map((place) => <Link key={place.id} from="/todos" to="/todos" search={(previous) => ({ ...previous, placeId: place.id })} aria-current={search.placeId === place.id ? "page" : undefined} className={buttonVariants({ variant: search.placeId === place.id ? "default" : "outline", size: "sm" })}>{place.name}</Link>)}
       </nav>
       <div className="grid items-start gap-4 lg:grid-cols-2">
-        {shopping.places.map((place) => <div key={place.id} hidden={search.placeId !== undefined && search.placeId !== place.id}><PlaceSection place={place} shopping={shopping} completed={search.completed === true} /></div>)}
+        {shopping.places.map((place) => <div key={place.id} hidden={search.placeId !== undefined && search.placeId !== place.id}><PlaceSection place={place} shopping={shopping} completed={search.completed === true} changePurchase={changePurchase} /></div>)}
       </div>
       {search.placeId !== undefined && !shopping.places.some((place) => place.id === search.placeId) && <FormError>買う場所が見つかりません。『すべての場所』から開き直してください。</FormError>}
       {unassigned.length > 0 && (
         <Panel className="px-4">
           <h3 className="font-semibold">場所なし</h3>
           <p className="mt-1 text-xs text-muted-foreground">編集から、買える場所を付けられます。</p>
-          <ul>{unassigned.map((item) => <ShoppingRow key={item.id} item={item} places={shopping.places} />)}</ul>
+          <ul>{unassigned.map((item) => <ShoppingRow key={item.id} item={item} places={shopping.places} changePurchase={changePurchase} />)}</ul>
         </Panel>
       )}
       {shopping.places.length === 0 && <EmptyState>まず、買う場所を追加してください。</EmptyState>}
@@ -209,6 +259,22 @@ export const ShoppingBoard = () => {
         <Field label="買う場所を追加" className="min-w-0 flex-1"><Input required maxLength={240} placeholder="スーパー、薬局など" value={placeName} disabled={createPlace.isPending} onChange={(event) => setPlaceName(event.target.value)} /></Field>
         <Button type="submit" variant="outline" disabled={createPlace.isPending}>場所を追加</Button>
       </form>
+      {purchase.isPending && <p role="status" className="text-sm text-muted-foreground">購入状態を保存しています。</p>}
+      {purchase.error !== null && undoChange === undefined && <FormError>{purchase.error.message}</FormError>}
+      {undoChange !== undefined && (
+        <div className="fixed inset-x-4 bottom-20 z-40 mx-auto max-w-lg rounded-xl border bg-card p-3 shadow-lg md:bottom-6" aria-label="購入状態の取り消し">
+          <p role="status" className="break-words text-sm">
+            {undoChange.item.name}
+            を
+            {undoChange.purchased ? "購入済みにしました" : "未購入に戻しました"}
+          </p>
+          {purchase.error !== null && <FormError>{purchase.error.message}</FormError>}
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" disabled={busy} onClick={() => purchase.mutate({ item: undoChange.item, purchased: !undoChange.purchased, undo: true })}>元に戻す</Button>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => setUndoChanges([])}>閉じる</Button>
+          </div>
+        </div>
+      )}
       {createPlace.error !== null && <FormError>{createPlace.error.message}</FormError>}
     </section>
   );

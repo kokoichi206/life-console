@@ -1,7 +1,9 @@
 import { zValidator } from "@hono/zod-validator";
+import { createConnectorScheduleSchema, updateConnectorScheduleSchema } from "@life-console/contracts";
 import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from "@life-console/contracts";
-import { nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
+import { calorieBaselineSchema, nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
 import { mealPeriodQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
+import { stravaCaloriesQuerySchema, stravaCaloriesReconcileSchema, stravaCaloriesFetchSchema } from "@life-console/contracts";
 import { weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
@@ -10,12 +12,14 @@ import { createMiddleware } from "hono/factory";
 import { z } from "zod";
 
 import { createLifeConsoleHandlers } from "./handlers/life-console-handlers";
+import { createConnectorScheduleRepository } from "./repositories/connector-schedule-repository";
 import { D1LifeConsoleRepository } from "./repositories/d1-life-console-repository";
 import { createMonitoringRepository } from "./repositories/monitoring-repository";
 import { createNutritionRepository } from "./repositories/nutrition-repository";
 import { createPushSubscriptionRepository } from "./repositories/push-subscription-repository";
 import { createShoppingRepository } from "./repositories/shopping-repository";
 import { createStravaApiRepository } from "./repositories/strava-api-repository";
+import { createStravaCaloriesRepository } from "./repositories/strava-calories-repository";
 import { createStravaConnectionRepository } from "./repositories/strava-connection-repository";
 import { createWebPushRepository } from "./repositories/web-push-repository";
 import type { AppError } from "./shared/app-error";
@@ -24,6 +28,7 @@ import { systemClock } from "./shared/clock";
 import { parseApiEnvironment, type ApiEnvironment } from "./shared/environment";
 import { cryptoIdGenerator } from "./shared/id-generator";
 import { cloudLogger } from "./shared/logger";
+import { createConnectorScheduleUsecase } from "./usecases/connector-schedule-usecase";
 import { createConversationUsecase } from "./usecases/conversation-usecase";
 import { createDashboardUsecase } from "./usecases/dashboard-usecase";
 import { createFinanceUsecase } from "./usecases/finance-usecase";
@@ -85,6 +90,7 @@ const createHandlers = (environment: ApiEnvironment) => {
 };
 
 const createShoppingHandlers = (environment: ApiEnvironment) => createShoppingUsecase(createShoppingRepository(environment.DB), systemClock, cryptoIdGenerator);
+const createConnectorScheduleHandlers = (environment: ApiEnvironment) => createConnectorScheduleUsecase(createConnectorScheduleRepository(environment.DB), systemClock, cryptoIdGenerator);
 const shoppingLinkParameters = identifierParameterSchema.extend({ placeId: z.string().min(1).max(128) });
 
 const createNutritionHandlers = (environment: ApiEnvironment) => createNutritionUsecase(
@@ -107,11 +113,14 @@ export const createMonitoringHandlers = (environment: ApiEnvironment) => createM
 
 const createStravaHandlers = (environment: ApiEnvironment) => {
   const configuration = { clientId: environment.STRAVA_CLIENT_ID!, clientSecret: environment.STRAVA_CLIENT_SECRET!, redirectUri: environment.STRAVA_REDIRECT_URI! };
-  return createStravaUsecase(createStravaConnectionRepository(environment.DB, environment.STRAVA_TOKEN_KEY!), createStravaApiRepository(configuration), configuration, systemClock, cryptoIdGenerator);
+  return createStravaUsecase(
+    createStravaConnectionRepository(environment.DB, environment.STRAVA_TOKEN_KEY!), createStravaApiRepository(configuration),
+    createStravaCaloriesRepository(environment.DB), new D1LifeConsoleRepository(environment.DB), configuration, systemClock, cryptoIdGenerator,
+  );
 };
 const stravaCallbackSchema = z.object({ state: z.string().max(200), code: z.string().min(1).max(2000).optional(), scope: z.string().max(1000).optional(), error: z.string().max(200).optional() });
 
-const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 500 | 502 => {
+const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 429 | 500 | 502 => {
   switch (error.code) {
     case "validation_error":
       return 400;
@@ -122,9 +131,10 @@ const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 500 | 50
       return 403;
     case "not_found":
       return 404;
-    case "nutrition_manual_calories":
     case "conflict":
       return 409;
+    case "rate_limited":
+      return 429;
     case "storage_error":
       return 500;
     case "upstream_error":
@@ -235,7 +245,10 @@ const _routes = app
     return context.redirect(returnUrl.toString(), 303);
   })
   .get("/api/v1/strava/activities", zValidator("query", stravaActivityQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activities(context.req.valid("query"))))
+  .get("/api/v1/strava/calories", zValidator("query", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activityCalories(context.req.valid("query"))))
   .delete("/api/v1/strava/connection", async (context) => respond(context, await createStravaHandlers(context.get("environment")).disconnect()))
+  .post("/api/v1/runner/strava/calories/reconcile", zValidator("json", stravaCaloriesReconcileSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).reconcileCalories(context.req.valid("json"))))
+  .post("/api/v1/runner/strava/calories/fetch", zValidator("json", stravaCaloriesFetchSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).fetchCalories(context.req.valid("json"))))
   .get("/api/v1/nutrition", async (context) => respond(context, await createNutritionHandlers(context.get("environment")).list()))
   .put("/api/v1/nutrition/:id/calories", zValidator("param", identifierParameterSchema), zValidator("json", saveMealCaloriesSchema), async (context) => {
     return respond(context, await createNutritionHandlers(context.get("environment")).saveManualCalories(context.req.valid("param").id, context.req.valid("json").caloriesKcal));
@@ -364,6 +377,8 @@ const _routes = app
   })
   .get("/api/v1/weight-goal", async (context) => respond(context, await createHandlers(context.get("environment")).getWeightGoal()))
   .put("/api/v1/weight-goal", zValidator("json", weightGoalSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveWeightGoal(context.req.valid("json"))))
+  .get("/api/v1/calorie-baseline", async (context) => respond(context, await createHandlers(context.get("environment")).getCalorieBaseline()))
+  .put("/api/v1/calorie-baseline", zValidator("json", calorieBaselineSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveCalorieBaseline(context.req.valid("json"))))
   .get("/api/v1/weights", async (context) => respond(context, await createHandlers(context.get("environment")).listWeights()))
   .post("/api/v1/weights", zValidator("json", createWeightSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createWeight(context.req.valid("json")));
@@ -434,6 +449,9 @@ const _routes = app
   .post("/api/v1/schedules", zValidator("json", createScheduleSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createSchedule(context.req.valid("json")));
   })
+  .get("/api/v1/connector-schedules", async (context) => respond(context, await createConnectorScheduleHandlers(context.get("environment")).list()))
+  .post("/api/v1/connector-schedules", zValidator("json", createConnectorScheduleSchema), async (context) => respond(context, await createConnectorScheduleHandlers(context.get("environment")).create(context.req.valid("json"))))
+  .patch("/api/v1/connector-schedules/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateConnectorScheduleSchema), async (context) => respond(context, await createConnectorScheduleHandlers(context.get("environment")).update(context.req.valid("param").id, context.req.valid("json"))))
   .get("/api/v1/runner/weights/export", async (context) => respond(context, await createHandlers(context.get("environment")).listWeightsForExport()))
   .get("/api/v1/runner/runners", async (context) => respond(context, await createHandlers(context.get("environment")).listRunners()))
   .post("/api/v1/runner/register", zValidator("json", registerRunnerSchema), async (context) => {

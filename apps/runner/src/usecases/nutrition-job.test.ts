@@ -9,21 +9,12 @@ const estimate = { model: "test", analyzedAt: "2026-09-09T00:00:00Z", inputHash:
 const meal = { id: "meal", photoId: "photo", memo: "" };
 
 describe("栄養解析ジョブ", () => {
-  it("手入力による結果保存のスキップで、一括の残りを止めない", async () => {
-    const generate = vi.fn().mockResolvedValue(ok(estimate));
-    const saveNutritionEstimate = vi.fn().mockResolvedValueOnce(err({ code: "nutrition_manual_calories", summary: "手入力済み" })).mockResolvedValueOnce(ok(null));
+  it("保存の失敗を成功にせず報告する", async () => {
     const executor = createJobExecutorUsecase({
-      api: { nutritionCandidates: vi.fn().mockResolvedValue(ok([meal, { ...meal, id: "other" }])), saveNutritionEstimate },
-      nutritionGenerator: { generate },
+      api: { nutritionCandidates: vi.fn().mockResolvedValue(ok([meal])), saveNutritionEstimate: vi.fn().mockResolvedValue(err({ code: "conflict", summary: "実行権限が失効しました。" })) },
+      nutritionGenerator: { generate: vi.fn().mockResolvedValue(ok(estimate)) },
     } as unknown as Parameters<typeof createJobExecutorUsecase>[0]);
-    expect(await executor.execute(job, new AbortController().signal)).toMatchObject({ outcome: "succeeded", summary: "1 件の食事に推定カロリーと栄養素を保存しました。手入力済みの 1 件は保存しませんでした。" });
-    expect(saveNutritionEstimate).toHaveBeenCalledTimes(2);
-  });
-  it("手入力済みの個別候補は解析せずスキップする", async () => {
-    const generate = vi.fn();
-    const executor = createJobExecutorUsecase({ api: { nutritionCandidates: vi.fn().mockResolvedValue(ok([])) }, nutritionGenerator: { generate } } as unknown as Parameters<typeof createJobExecutorUsecase>[0]);
-    expect(await executor.execute({ ...job, payloadJson: JSON.stringify({ mealId: meal.id }) }, new AbortController().signal)).toMatchObject({ outcome: "skipped_precondition" });
-    expect(generate).not.toHaveBeenCalled();
+    expect(await executor.execute(job, new AbortController().signal)).toMatchObject({ outcome: "failed", errorCode: "conflict" });
   });
   it("画像解析中の中止を失敗として報告しない", async () => {
     const controller = new AbortController();

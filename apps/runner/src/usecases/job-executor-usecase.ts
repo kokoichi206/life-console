@@ -1,4 +1,4 @@
-import { nutritionAnalysisPayloadSchema, createReplyDraftsSchema, weightObsidianExportPayloadSchema, type ReplyDraftDecision } from "@life-console/contracts";
+import { nutritionAnalysisPayloadSchema, createReplyDraftsSchema, stravaCaloriesSyncPayloadSchema, weightObsidianExportPayloadSchema, type ReplyDraftDecision } from "@life-console/contracts";
 import { ok, safeTry, type Result } from "@life-console/core";
 import type { RunnerConfig } from "@runner/config";
 import { runnerError, type RunnerError } from "@runner/errors";
@@ -77,12 +77,39 @@ const wait = (milliseconds: number): Promise<void> => new Promise((resolve) => {
   setTimeout(resolve, milliseconds);
 });
 
+/** 中止されずに待ち切れたら true を返す。 */
+const waitUnlessAborted = (milliseconds: number, signal: AbortSignal): Promise<boolean> => new Promise((resolve) => {
+  if (signal.aborted) {
+    resolve(false);
+    return;
+  }
+  const abort = () => {
+    clearTimeout(timer);
+    resolve(false);
+  };
+  const timer = setTimeout(() => {
+    signal.removeEventListener("abort", abort);
+    resolve(true);
+  }, milliseconds);
+  signal.addEventListener("abort", abort, { once: true });
+});
+
 const succeeded = (summary: string): JobExecution => ({
   errorCode: null,
   outcome: "succeeded",
   reportedExternally: false,
   summary,
 });
+
+/** レート制限で待てる上限。Strava の 15 分枠が必ず 1 度は明ける長さにする。 */
+const MAX_RATE_LIMIT_WAIT_SECONDS = 900;
+
+const caloriesSyncCanceled: JobExecution = {
+  errorCode: null,
+  outcome: "canceled",
+  reportedExternally: false,
+  summary: "消費カロリーの取得を中止しました。",
+};
 
 const failed = (error: RunnerError): JobExecution => ({
   errorCode: error.code,
@@ -285,6 +312,44 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
             executionMode: "main_checkout",
           }, signal, payload.value.target);
         }
+        case "strava_calories_sync": {
+          const payload = await parsePayload(job, stravaCaloriesSyncPayloadSchema);
+          if (!payload.ok) return failed(payload.error);
+          if (job.leaseToken === null) return failed(runnerError("missing_lease_token", "消費カロリーの同期 job に lease token がありません。"));
+          const request = { jobId: job.id, leaseToken: job.leaseToken };
+          const totals = { fetched: 0, unavailable: 0, deleted: 0, failed: 0 };
+          const progress = () => `取得 ${String(totals.fetched)} 件・値なし ${String(totals.unavailable)} 件・削除 ${String(totals.deleted)} 件。`;
+          for (let page: number | null = 1; page !== null;) {
+            if (signal.aborted) return caloriesSyncCanceled;
+            const reconciled = await dependencies.api.reconcileStravaCalories({ ...request, from: payload.value.from, to: payload.value.to, page }, signal);
+            if (!reconciled.ok) return failed(reconciled.error);
+            totals.deleted += reconciled.value.deleted;
+            if (reconciled.value.dailyLimitReached) return succeeded(`${progress()}1 日の上限に達したため、一覧の同期を中断しました。次回の表示か『運動を更新』で再開します。`);
+            if (reconciled.value.retryAfterSeconds !== null
+              && !await waitUnlessAborted(Math.min(reconciled.value.retryAfterSeconds, MAX_RATE_LIMIT_WAIT_SECONDS) * 1000, signal)) {
+              return caloriesSyncCanceled;
+            }
+            page = reconciled.value.nextPage;
+          }
+          for (;;) {
+            if (signal.aborted) return caloriesSyncCanceled;
+            const fetched = await dependencies.api.fetchStravaCalories(request, signal);
+            if (!fetched.ok) return failed(fetched.error);
+            totals.fetched += fetched.value.fetched;
+            totals.unavailable += fetched.value.unavailable;
+            totals.deleted += fetched.value.deleted;
+            totals.failed += fetched.value.failed;
+            if (fetched.value.dailyLimitReached) return succeeded(`${progress()}1 日の上限に達したため中断しました。残り ${String(fetched.value.remaining)} 件は次回の表示か『運動を更新』で再開します。`);
+            if (fetched.value.remaining === 0) return succeeded(progress());
+            if (fetched.value.fetched + fetched.value.unavailable + fetched.value.deleted === 0 && fetched.value.failed > 0) {
+              return failed(runnerError("strava_calories_partial", `${progress()}${String(fetched.value.failed)} 件の取得に失敗しました。`));
+            }
+            if (fetched.value.retryAfterSeconds !== null
+              && !await waitUnlessAborted(Math.min(fetched.value.retryAfterSeconds, MAX_RATE_LIMIT_WAIT_SECONDS) * 1000, signal)) {
+              return caloriesSyncCanceled;
+            }
+          }
+        }
         case "nutrition_analysis": {
           const payload = await parsePayload(job, nutritionAnalysisPayloadSchema);
           if (!payload.ok) return failed(payload.error);
@@ -292,7 +357,6 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
           const candidates = await dependencies.api.nutritionCandidates(payload.value, signal);
           if (!candidates.ok) return failed(candidates.error);
           let analyzedCount = 0;
-          let manualCount = 0;
           const failures: RunnerError[] = [];
           for (const meal of candidates.value) {
             if (signal.aborted) return { outcome: "canceled", errorCode: null, reportedExternally: false, summary: "栄養解析を中止しました。" };
@@ -304,16 +368,11 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
             }
             const saved = await dependencies.api.saveNutritionEstimate({ ...estimate.value, mealId: meal.id, jobId: job.id, leaseToken: job.leaseToken }, signal);
             if (signal.aborted) return { outcome: "canceled", errorCode: null, reportedExternally: false, summary: "栄養解析を中止しました。" };
-            if (!saved.ok) {
-              if (saved.error.code !== "nutrition_manual_calories") return failed(saved.error);
-              manualCount += 1;
-              continue;
-            }
+            if (!saved.ok) return failed(saved.error);
             analyzedCount += 1;
           }
           if (failures.length > 0) return failed(runnerError("nutrition_analysis_partial", `${String(analyzedCount)} 件を保存、${String(failures.length)} 件の解析に失敗しました。${failures[0]!.summary}`));
-          if (payload.value.mealId !== undefined && analyzedCount === 0) return { outcome: "skipped_precondition", errorCode: null, reportedExternally: false, summary: "カロリーが手入力されたため、解析をスキップしました。" };
-          return succeeded(`${String(analyzedCount)} 件の食事に推定カロリーと栄養素を保存しました。${manualCount === 0 ? "" : `手入力済みの ${String(manualCount)} 件は保存しませんでした。`}`);
+          return succeeded(`${String(analyzedCount)} 件の食事に推定カロリーと栄養素を保存しました。`);
         }
         default:
           return failed(runnerError("unknown_job_kind", `未対応の job kind: ${job.kind}`));

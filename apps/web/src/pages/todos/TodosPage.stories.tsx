@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { delay, http, HttpResponse } from "msw";
 import { useMemo } from "react";
-import { expect, userEvent, waitFor, within } from "storybook/test";
+import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test";
 
 import { router as appRouter } from "../../router";
 
@@ -78,20 +78,20 @@ export const Shopping: Story = {
     await expect(canvas.queryByRole("combobox")).not.toBeInTheDocument();
     await userEvent.type(supermarket.getByLabelText("スーパーで買うもの"), "牛乳");
     await userEvent.click(supermarket.getByRole("button", { name: "追加" }));
-    await expect(await supermarket.findByRole("checkbox", { name: "牛乳" })).toBeVisible();
+    await expect(await supermarket.findByRole("button", { name: "牛乳を購入済みにする" })).toBeVisible();
     await expect(supermarket.getByLabelText("スーパーで買うもの")).toHaveValue("");
     const drugstore = within(canvas.getByRole("region", { name: "薬局" }));
     await userEvent.click(drugstore.getByRole("button", { name: "登録済みの品をここにも追加" }));
     await userEvent.click(drugstore.getByRole("button", { name: "牛乳" }));
-    await expect(await drugstore.findByRole("checkbox", { name: "牛乳" })).toBeVisible();
-    await userEvent.click(supermarket.getByRole("checkbox", { name: "牛乳" }));
-    await waitFor(() => expect(supermarket.queryByRole("checkbox", { name: "牛乳" })).not.toBeInTheDocument());
-    await waitFor(() => expect(drugstore.queryByRole("checkbox", { name: "牛乳" })).not.toBeInTheDocument());
+    await expect(await drugstore.findByRole("button", { name: "牛乳を購入済みにする" })).toBeVisible();
+    await userEvent.click(supermarket.getByRole("button", { name: "牛乳を購入済みにする" }));
+    await waitFor(() => expect(supermarket.queryByRole("button", { name: "牛乳を購入済みにする" })).not.toBeInTheDocument());
+    await waitFor(() => expect(drugstore.queryByRole("button", { name: "牛乳を購入済みにする" })).not.toBeInTheDocument());
     await userEvent.click(canvas.getByRole("link", { name: "完了済みを見る" }));
-    await expect(await supermarket.findByRole("checkbox", { name: "牛乳" })).toBeChecked();
-    await userEvent.click(supermarket.getByRole("checkbox", { name: "牛乳" }));
+    await expect(await supermarket.findByRole("button", { name: "牛乳を未購入に戻す" })).toBeVisible();
+    await userEvent.click(supermarket.getByRole("button", { name: "牛乳を未購入に戻す" }));
     await userEvent.click(canvas.getByRole("link", { name: "未完了を見る" }));
-    await expect(await drugstore.findByRole("checkbox", { name: "牛乳" })).not.toBeChecked();
+    await expect(await drugstore.findByRole("button", { name: "牛乳を購入済みにする" })).toBeVisible();
   },
 };
 export const TaskWithoutDates: Story = {
@@ -168,7 +168,7 @@ export const ShoppingRefreshFailure: Story = {
   play: async ({ canvas }) => {
     const supermarket = within(await canvas.findByRole("region", { name: "スーパー" }));
     await userEvent.type(supermarket.getByLabelText("スーパーで買うもの"), "入力途中の品");
-    await userEvent.click(supermarket.getByRole("checkbox", { name: "石けん" }));
+    await userEvent.click(supermarket.getByRole("button", { name: "石けんを購入済みにする" }));
     await expect(await canvas.findByRole("alert")).toHaveTextContent("一覧の更新に失敗しました。");
     await expect(supermarket.getByLabelText("スーパーで買うもの")).toHaveValue("入力途中の品");
     await userEvent.click(canvas.getByRole("button", { name: "再読み込み" }));
@@ -199,14 +199,84 @@ export const SharedItemEditor: Story = {
     await expect(canvas.getAllByLabelText("品名を変更")).toHaveLength(1);
     await expect(canvas.getByLabelText("品名を変更")).toHaveValue("ハンドソープ");
     await userEvent.click(canvas.getByRole("button", { name: "品名を保存" }));
-    await expect(await supermarket.findByRole("checkbox", { name: "ハンドソープ" })).toBeVisible();
-    await expect(await drugstore.findByRole("checkbox", { name: "ハンドソープ" })).toBeVisible();
+    await expect(await supermarket.findByRole("button", { name: "ハンドソープを購入済みにする" })).toBeVisible();
+    await expect(await drugstore.findByRole("button", { name: "ハンドソープを購入済みにする" })).toBeVisible();
     await userEvent.click(drugstore.getByRole("button", { name: "ハンドソープの編集" }));
     await expect(canvas.getByLabelText("品名を変更")).toHaveValue("ハンドソープ");
     await userEvent.type(canvas.getByLabelText("品名を変更"), "の詰め替え");
     const editor = within(canvas.getByRole("region", { name: "買うものを編集" }));
     await userEvent.click(editor.getByRole("button", { name: "薬局" }));
-    await waitFor(() => expect(drugstore.queryByRole("checkbox", { name: "ハンドソープ" })).not.toBeInTheDocument());
+    await waitFor(() => expect(drugstore.queryByRole("button", { name: "ハンドソープを購入済みにする" })).not.toBeInTheDocument());
     await expect(canvas.getByLabelText("品名を変更")).toHaveValue("ハンドソープの詰め替え");
+  },
+};
+
+export const SwipePurchaseAndUndo: Story = {
+  parameters: { initialEntry: "/todos?view=shopping" },
+  play: async ({ canvas }) => {
+    const supermarket = within(await canvas.findByRole("region", { name: "スーパー" }));
+    const drugstore = within(canvas.getByRole("region", { name: "薬局" }));
+    const item = supermarket.getByText("石けん");
+    await expect(supermarket.queryByRole("checkbox")).not.toBeInTheDocument();
+    await userEvent.click(item);
+    await expect(item).toBeVisible();
+    await userEvent.pointer([{ keys: "[MouseLeft>]", target: item, coords: { clientX: 100, clientY: 200 } }, { coords: { clientX: 140, clientY: 200 } }, { keys: "[/MouseLeft]" }]);
+    await expect(item).toBeVisible();
+    await userEvent.pointer([{ keys: "[MouseLeft>]", target: item, coords: { clientX: 100, clientY: 200 } }, { coords: { clientX: 102, clientY: 240 } }, { coords: { clientX: 220, clientY: 240 } }, { keys: "[/MouseLeft]" }]);
+    await expect(item).toBeVisible();
+    await userEvent.pointer([{ keys: "[MouseLeft>]", target: item, coords: { clientX: 100, clientY: 200 } }, { coords: { clientX: 220, clientY: 200 } }]);
+    await fireEvent.pointerCancel(item, { pointerId: 1 });
+    await userEvent.pointer({ keys: "[/MouseLeft]" });
+    await expect(item).toBeVisible();
+    await userEvent.pointer([{ keys: "[MouseLeft>]", target: item, coords: { clientX: 100, clientY: 200 } }, { coords: { clientX: 220, clientY: 200 } }, { keys: "[/MouseLeft]" }]);
+    await waitFor(() => expect(supermarket.queryByText("石けん")).not.toBeInTheDocument());
+    await waitFor(() => expect(drugstore.queryByText("石けん")).not.toBeInTheDocument());
+    await userEvent.click(await canvas.findByRole("button", { name: "元に戻す" }));
+    await expect(await supermarket.findByText("石けん")).toBeVisible();
+    await expect(await drugstore.findByText("石けん")).toBeVisible();
+  },
+};
+export const PurchaseFailure: Story = {
+  parameters: { initialEntry: "/todos?view=shopping", msw: { handlers: [http.patch("*/api/v1/shopping/items/:id", () => HttpResponse.json({ error: { message: "購入状態を保存できませんでした。" } }, { status: 500 })), ...handlers.filter((_, index) => index !== 3)] } },
+  play: async ({ canvas }) => {
+    const supermarket = within(await canvas.findByRole("region", { name: "スーパー" }));
+    await userEvent.click(supermarket.getByRole("button", { name: "石けんを購入済みにする" }));
+    await expect(await canvas.findByRole("alert")).toHaveTextContent("購入状態を保存できませんでした。");
+    await expect(supermarket.getByText("石けん")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "元に戻す" })).not.toBeInTheDocument();
+  },
+};
+
+export const UndoConsecutivePurchases: Story = {
+  parameters: { initialEntry: "/todos?view=shopping" },
+  beforeEach: () => { shopping = { ...initialShopping(), items: [...initialShopping().items, { id: "milk", name: "牛乳", purchasedAt: null, placeIds: ["super"] }] }; },
+  play: async ({ canvas }) => {
+    const supermarket = within(await canvas.findByRole("region", { name: "スーパー" }));
+    await userEvent.click(supermarket.getByRole("button", { name: "石けんを購入済みにする" }));
+    await waitFor(() => expect(supermarket.queryByText("石けん")).not.toBeInTheDocument());
+    await userEvent.click(supermarket.getByRole("button", { name: "牛乳を購入済みにする" }));
+    await waitFor(() => expect(supermarket.queryByText("牛乳")).not.toBeInTheDocument());
+    await userEvent.click(await canvas.findByRole("button", { name: "元に戻す" }));
+    await expect(await supermarket.findByText("牛乳")).toBeVisible();
+    await expect(supermarket.queryByText("石けん")).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "元に戻す" }));
+    await expect(await supermarket.findByText("石けん")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "元に戻す" })).not.toBeInTheDocument();
+  },
+};
+export const UndoFailure: Story = {
+  parameters: { initialEntry: "/todos?view=shopping", msw: { handlers: [http.patch("*/api/v1/shopping/items/:id", async ({ request }) => {
+    const input = await request.json() as { purchased: boolean };
+    if (!input.purchased) return HttpResponse.json({ error: { message: "取り消しを保存できませんでした。" } }, { status: 500 });
+    shopping = { ...shopping, items: shopping.items.map((item) => ({ ...item, purchasedAt: "2026-09-11T01:00:00Z" })) };
+    return HttpResponse.json({ data: null });
+  }), ...handlers.filter((_, index) => index !== 3)] } },
+  play: async ({ canvas }) => {
+    const supermarket = within(await canvas.findByRole("region", { name: "スーパー" }));
+    await userEvent.click(supermarket.getByRole("button", { name: "石けんを購入済みにする" }));
+    await userEvent.click(await canvas.findByRole("button", { name: "元に戻す" }));
+    await expect(await canvas.findByRole("alert")).toHaveTextContent("取り消しを保存できませんでした。");
+    await expect(canvas.getByRole("button", { name: "元に戻す" })).toBeEnabled();
+    await expect(supermarket.queryByText("石けん")).not.toBeInTheDocument();
   },
 };

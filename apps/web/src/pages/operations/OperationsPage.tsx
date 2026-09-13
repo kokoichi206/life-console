@@ -14,6 +14,7 @@ import { jobsQuery } from "../../features/jobs/queries";
 import { dashboardQuery } from "../../features/overview/queries";
 import { repositoriesQuery } from "../../features/repositories/queries";
 
+import { ConnectorSchedules } from "./ConnectorSchedules";
 import { MonitoringPanel } from "./MonitoringPanel";
 import { PushNotificationSettings } from "./PushNotificationSettings";
 import { sourceRepositoryMappingsQuery } from "./queries";
@@ -74,13 +75,14 @@ export const OperationsPage = () => {
   return (
     <>
       <PageHeader title="同期・実行状況" />
+      <ConnectorSchedules />
       <PushNotificationSettings />
       <MonitoringPanel />
       <div className="mb-4">
         <Panel>
           <SectionHeading
             eyebrow="JOB QUEUE"
-            title="Job 状態"
+            title="実行履歴"
             action={(
               <CountBadge>
                 <span className="mr-1 size-1.5 rounded-full bg-success" />

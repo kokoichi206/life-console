@@ -18,6 +18,10 @@ export const HealthRoutePage = () => {
       onGoalEntryOpenChange={(open) => {
         void navigate({ search: { ...search, entry: open ? "goal" : undefined, meal: undefined }, replace: !open, resetScroll: false });
       }}
+      baselineEntryOpen={search.entry === "baseline"}
+      onBaselineEntryOpenChange={(open) => {
+        void navigate({ search: { ...search, entry: open ? "baseline" : undefined, meal: undefined }, replace: !open, resetScroll: false });
+      }}
       selectedMealId={search.entry === undefined ? search.meal : undefined}
       onSelectMeal={(id) => {
         void navigate({ search: { ...search, meal: id, entry: undefined }, replace: id === undefined, resetScroll: false });

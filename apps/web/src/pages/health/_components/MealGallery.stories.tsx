@@ -98,12 +98,12 @@ export const AnalysisPending: Story = {
 };
 export const AnalysisFailure: Story = {
   name: "解析失敗と再実行", args: { selectedMealId: "meal-0" },
-  parameters: { msw: { handlers: [photoHandler, http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: nutrition.map((entry) => ({ ...entry, analysisStatus: "failed", analysisSummary: "写真から食品や分量を判断できませんでした。" })) })),
+  parameters: { msw: { handlers: [photoHandler, http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: nutrition.map((entry) => ({ ...entry, analysisStatus: "failed", analysisSummary: "写真から解析を予約できませんでした。" })) })),
     http.post("*/api/v1/nutrition/analyze", () => HttpResponse.json({ error: { message: "解析を予約できませんでした。" } }, { status: 503 }))] } },
   play: async ({ canvasElement, userEvent }) => {
     const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "食事の記録" }));
-    await expect(await detail.findByText("写真から食品や分量を判断できませんでした。")).toBeVisible();
-    await userEvent.click(await detail.findByRole("button", { name: "カロリーを再解析" }));
+    await expect(await detail.findByText("写真から解析を予約できませんでした。")).toBeVisible();
+    await userEvent.click(await detail.findByRole("button", { name: "栄養を再解析" }));
     await expect(await detail.findByText("解析を予約できませんでした。")).toBeVisible();
     await expect(detail.getByText("推定 約 650 kcal")).toBeVisible();
   },
@@ -125,6 +125,12 @@ export const EditCalories: Story = {
   name: "写真を開いてカロリーを変更",
   parameters: { msw: { handlers: [photoHandler,
     http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: nutrition })),
+    http.post("*/api/v1/nutrition/analyze", async ({ request }) => {
+      const { mealId } = await request.json() as { mealId: string };
+      const entry = nutrition.find((meal) => meal.mealId === mealId)!;
+      nutrition.splice(nutrition.indexOf(entry), 1, { ...entry, estimate: { ...entry.estimate!, proteinGrams: 35 }, analysisStatus: "succeeded" });
+      return HttpResponse.json({ data: { id: "reanalysis" } });
+    }),
     http.put("*/api/v1/nutrition/:id/calories", async ({ request, params }) => {
       const input = await request.json() as { caloriesKcal: number };
       const entry = nutrition.find((meal) => meal.mealId === params.id)!;
@@ -149,7 +155,11 @@ export const EditCalories: Story = {
     await userEvent.type(input, "0");
     await userEvent.click(detail.getByRole("button", { name: "カロリーを保存" }));
     await expect(await detail.findByText("0 kcal（手入力）")).toBeVisible();
-    await expect(detail.queryByRole("button", { name: "カロリーを再解析" })).not.toBeInTheDocument();
+    await expect(detail.getByText(/炭水化物 87.5 g/)).toBeVisible();
+    await expect(detail.getByRole("button", { name: "栄養を再解析" })).toBeEnabled();
+    await userEvent.click(detail.getByRole("button", { name: "栄養を再解析" }));
+    await expect(await detail.findByText(/たんぱく質 35 g/)).toBeVisible();
+    await expect(detail.getByText("0 kcal（手入力）")).toBeVisible();
     await userEvent.click(detail.getByRole("button", { name: "食事の詳細を閉じる" }));
     await expect(await canvas.findByText("0 kcal", { selector: "td" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "2026/9/9 18:00 の食事を開く" }));
@@ -172,15 +182,34 @@ export const SaveCaloriesFailure: Story = {
   },
 };
 
-export const ManualCaloriesCancelingAnalysis: Story = {
-  name: "手入力後の解析中止待ち", args: { selectedMealId: "meal-0" },
+export const ManualCaloriesDuringAnalysis: Story = {
+  name: "手入力後も解析を継続", args: { selectedMealId: "meal-0" },
   parameters: { msw: { handlers: [photoHandler, http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: nutrition.map((entry, index) => index === 0 ? { ...entry, manualCaloriesKcal: 520, analysisStatus: "running" } : entry) }))] } },
   play: async ({ canvas, canvasElement, userEvent }) => {
     const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
-    await expect(await detail.findByText("画像解析の中止を待っています。")).toBeVisible();
+    await expect(await detail.findByText("Mac の runner で順番に解析します。結果は自動で更新されます。")).toBeVisible();
     await expect(detail.getByText("520 kcal（手入力）")).toBeVisible();
-    await expect(detail.queryByRole("button", { name: "カロリーを再解析" })).not.toBeInTheDocument();
+    await expect(detail.getByRole("button", { name: "解析待ち・解析中" })).toBeDisabled();
     await userEvent.click(detail.getByRole("button", { name: "食事の詳細を閉じる" }));
     await expect(await canvas.findByRole("button", { name: "未解析の食事をまとめて解析" })).toBeDisabled();
+  },
+};
+
+export const AnalyzeMemo: Story = {
+  name: "メモだけの手入力記録の解析予約と失敗表示", args: { selectedMealId: "meal-1" },
+  parameters: { msw: { handlers: [photoHandler,
+    http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: nutrition.map((entry) => entry.mealId === "meal-1" ? { ...entry, manualCaloriesKcal: 200 } : entry) })),
+    http.post("*/api/v1/nutrition/analyze", async ({ request }) => {
+      await expect(await request.json()).toEqual({ mealId: "meal-1" });
+      return HttpResponse.json({ error: { message: "解析を予約できませんでした。" } }, { status: 503 });
+    }),
+  ] } },
+  play: async ({ canvasElement, userEvent }) => {
+    const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    const analyzeButton = await detail.findByRole("button", { name: "栄養を解析" });
+    await waitFor(() => expect(analyzeButton).toBeEnabled());
+    await userEvent.click(analyzeButton);
+    await expect(await detail.findByText("解析を予約できませんでした。")).toBeVisible();
+    await expect(detail.getByText("200 kcal（手入力）")).toBeVisible();
   },
 };

@@ -22,8 +22,11 @@ export type SourceMappingConnector = typeof sourceMappingConnectors[number];
 export const jobStatuses = ["queued", "claimed", "running", "waiting_for_user", "succeeded", "failed", "canceled", "lost", "expired", "skipped_precondition"] as const;
 export type JobStatus = typeof jobStatuses[number];
 
-export const jobKinds = ["slack_sync", "chatwork_sync", "gmail_sync", "talknote_sync", "reply_drafts", "conversation_reply", "weight_import", "weight_obsidian_export", "finance_import", "nutrition_analysis", "agent", "github_promotion", "backup", "repository_scan"] as const;
+export const jobKinds = ["slack_sync", "chatwork_sync", "gmail_sync", "talknote_sync", "reply_drafts", "conversation_reply", "weight_import", "weight_obsidian_export", "finance_import", "nutrition_analysis", "strava_calories_sync", "agent", "github_promotion", "backup", "repository_scan"] as const;
 export type JobKind = typeof jobKinds[number];
+
+export const stravaCaloriesStatuses = ["pending", "measured", "unavailable"] as const;
+export type StravaCaloriesStatus = typeof stravaCaloriesStatuses[number];
 
 export const agentProviders = ["codex", "claude"] as const;
 export type AgentProvider = typeof agentProviders[number];

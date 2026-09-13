@@ -11,7 +11,8 @@ import { resolveGmailAccount } from "./gmail-connector";
 const busyIntervalSchema = z.object({ start: z.iso.datetime({ offset: true }), end: z.iso.datetime({ offset: true }) })
   .refine((interval) => Date.parse(interval.start) < Date.parse(interval.end));
 const freebusySchema = z.object({ calendars: z.object({ primary: z.object({
-  busy: z.array(busyIntervalSchema).optional(),
+  // gog の Go SDK は空の busy 配列を omitempty で省略する。
+  busy: z.array(busyIntervalSchema).default([]),
   errors: z.array(z.object({ reason: z.string() })).optional(),
 }) }) });
 
@@ -59,7 +60,7 @@ export const createReplyCalendarRepository = (commands: CommandRepository, gmail
     const parsed = await parseCliJson(fetched.value.stdout, freebusySchema);
     if (!parsed.ok) return parsed;
     const calendar = parsed.value.calendars.primary;
-    if ((calendar.errors?.length ?? 0) > 0 || calendar.busy === undefined) {
+    if ((calendar.errors?.length ?? 0) > 0) {
       return err(runnerError("calendar_freebusy_incomplete", "カレンダーの空き時間を確認できませんでした。空きとして扱わず、作成を中止しました。"));
     }
     return ok({ account: account.value, checkedAt: checkedAt.toISOString(), request,

@@ -3,7 +3,7 @@ export type AppErrorCode
     | "forbidden"
     | "invalid_lease"
     | "not_found"
-    | "nutrition_manual_calories"
+    | "rate_limited"
     | "storage_error"
     | "unauthorized"
     | "upstream_error"
@@ -24,8 +24,8 @@ export const appError = {
   conflict: (message: string): AppError => createError("conflict", message),
   forbidden: (message: string): AppError => createError("forbidden", message),
   invalidLease: (): AppError => createError("invalid_lease", "job の lease が無効です。"),
-  nutritionManualCalories: (): AppError => createError("nutrition_manual_calories", "カロリーが手入力されたため、解析結果を保存しませんでした。"),
   notFound: (message: string): AppError => createError("not_found", message),
+  rateLimited: (message: string): AppError => createError("rate_limited", message),
   storage: (cause: unknown): AppError => createError("storage_error", "データの保存または取得に失敗しました。", cause),
   unauthorized: (): AppError => createError("unauthorized", "runner の認証に失敗しました。"),
   upstream: (message: string, cause?: unknown): AppError => createError("upstream_error", message, cause),

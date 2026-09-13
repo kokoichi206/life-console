@@ -9,6 +9,7 @@ import type { ReplyDraftUsecase } from "@api/usecases/reply-draft-usecase";
 import type { RepositoryUsecase } from "@api/usecases/repository-usecase";
 import type { TaskUsecase } from "@api/usecases/task-usecase";
 import type {
+  CalorieBaseline,
   WeightGoal,
   CompleteJobInput,
   CreateReplyDraftsInput,
@@ -69,6 +70,8 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   readMealPhoto: (photoId: string) => dependencies.mealPhotos.read(photoId),
   getWeightGoal: () => dependencies.health.getWeightGoal(),
   saveWeightGoal: (input: WeightGoal | null) => dependencies.health.saveWeightGoal(input),
+  getCalorieBaseline: () => dependencies.health.getCalorieBaseline(),
+  saveCalorieBaseline: (input: CalorieBaseline | null) => dependencies.health.saveCalorieBaseline(input),
   listWeights: () => dependencies.health.listWeights(),
   listWeightsForExport: () => dependencies.health.listWeightsForExport(),
   createWeight: (input: CreateWeightInput) => dependencies.health.createWeight(input),

@@ -46,7 +46,7 @@ describe("食事の栄養推定の保存", () => {
       expect(database.prepare("SELECT count(*) AS count FROM nutrition_estimates").get()?.count).toBe(0);
     } finally { database.close(); }
   });
-  it("写真のない食事・削除済みを解析せず、100 件より前も集計対象にする", async () => {
+  it("メモのみは個別に解析でき、100 件より前も集計対象にする", async () => {
     const { database, repository, nutrition } = await setup();
     try {
       for (let index = 0; index < 101; index += 1) await repository.createMealAndQueueNutrition(`memo-${index}`, { clientId: `client-${index}`, photoId: null,
@@ -56,7 +56,7 @@ describe("食事の栄養推定の保存", () => {
       const listed = await nutrition.list();
       expect(listed.ok && listed.value.length).toBe(102);
       const usecase = createNutritionUsecase(nutrition, repository, { now: () => new Date(now) }, { create: () => "new-job" });
-      expect((await usecase.generate({ mealId: "memo-0" })).ok).toBe(false);
+      expect(await nutrition.candidates({ mealId: "memo-0" })).toMatchObject({ ok: true, value: [{ id: "memo-0", photoId: null }] });
       expect((await usecase.generate({ mealId: "missing" })).ok).toBe(false);
       expect((await usecase.generate({ mealId: "meal" })).ok).toBe(false);
       expect((await usecase.generate({})).ok).toBe(false);
@@ -212,7 +212,7 @@ describe("手入力のカロリー", () => {
       expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ manualCaloriesKcal, estimate: null, analysisStatus: null }] });
       expect(database.prepare("SELECT count(*) AS count FROM jobs").get()?.count).toBe(0);
       expect(await nutrition.candidates({})).toEqual({ ok: true, value: [] });
-      expect(await nutrition.candidates({ mealId: "manual" })).toEqual({ ok: true, value: [] });
+      expect(await nutrition.candidates({ mealId: "manual" })).toMatchObject({ ok: true, value: [{ id: "manual", photoId: "photo" }] });
       database.prepare("INSERT INTO jobs (id, kind, status, idempotency_key, payload_json, attempt, created_at, updated_at) VALUES ('bulk', 'nutrition_analysis', 'queued', 'bulk', '{}', 0, ?, ?)").run(now, now);
       expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ analysisStatus: null }] });
     } finally { database.close(); }
@@ -220,39 +220,48 @@ describe("手入力のカロリー", () => {
   it("詳細からの手入力を保存し、進行中の解析結果で上書きしない", async () => {
     const { database, nutrition } = await setup();
     try {
-      expect(await nutrition.saveManualCalories("meal", 450, now)).toEqual({ ok: true, value: undefined });
-      expect(await nutrition.save("late-estimate", estimate, now)).toMatchObject({ ok: false, error: { code: "nutrition_manual_calories" } });
-      expect(database.prepare("SELECT status, cancel_requested_at FROM jobs WHERE id = 'job'").get()).toMatchObject({ status: "running", cancel_requested_at: now });
-      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ manualCaloriesKcal: 450, estimate: null, analysisStatus: "running" }] });
+      expect(await nutrition.saveManualCalories("meal", 450)).toEqual({ ok: true, value: undefined });
+      expect(await nutrition.save("late-estimate", estimate, now)).toEqual({ ok: true, value: undefined });
+      expect(database.prepare("SELECT status, cancel_requested_at FROM jobs WHERE id = 'job'").get()).toMatchObject({ status: "running", cancel_requested_at: null });
+      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ manualCaloriesKcal: 450, estimate: { proteinGrams: 25.5 }, analysisStatus: "succeeded" }] });
       database.exec("UPDATE jobs SET lease_token = 'expired'");
       expect(await nutrition.save("invalid-lease", estimate, now)).toMatchObject({ ok: false, error: { code: "conflict" } });
-      expect(await nutrition.saveManualCalories("meal", 0, now)).toEqual({ ok: true, value: undefined });
+      expect(await nutrition.saveManualCalories("meal", 0)).toEqual({ ok: true, value: undefined });
       expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ manualCaloriesKcal: 0 }] });
-      expect((await nutrition.saveManualCalories("missing", 100, now)).ok).toBe(false);
+      expect((await nutrition.saveManualCalories("missing", 100)).ok).toBe(false);
       database.exec("UPDATE meals SET deleted_at = 'deleted'");
-      expect((await nutrition.saveManualCalories("meal", 100, now)).ok).toBe(false);
+      expect((await nutrition.saveManualCalories("meal", 100)).ok).toBe(false);
+    } finally { database.close(); }
+  });
+  it("一括解析中の手入力でも栄養素を保存し、保存元のジョブを表示する", async () => {
+    const { database, nutrition } = await setup();
+    try {
+      database.exec("UPDATE jobs SET payload_json = '{}'");
+      expect((await nutrition.saveManualCalories("meal", 450)).ok).toBe(true);
+      expect((await nutrition.save("bulk-estimate", estimate, now)).ok).toBe(true);
+      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ manualCaloriesKcal: 450, estimate: { proteinGrams: 25.5 }, analysisStatus: "succeeded" }] });
     } finally { database.close(); }
   });
   it("解析済みでも手入力を保存し、過去の推定履歴を保持する", async () => {
     const { database, nutrition } = await setup();
     try {
       expect((await nutrition.save("estimate", estimate, now)).ok).toBe(true);
-      expect((await nutrition.saveManualCalories("meal", 500, now)).ok).toBe(true);
-      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ manualCaloriesKcal: 500, estimate: { caloriesKcal: 600 }, analysisStatus: "running" }] });
+      expect((await nutrition.saveManualCalories("meal", 500)).ok).toBe(true);
+      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ manualCaloriesKcal: 500, estimate: { caloriesKcal: 600 }, analysisStatus: "succeeded" }] });
     } finally { database.close(); }
   });
 });
 
-describe("手入力時の解析予約の中止", () => {
-  it("ジョブ中止の保存に失敗したら手入力値も保存しない", async () => {
+describe("手入力時の解析予約の保持", () => {
+  it("手入力の保存では解析ジョブを変更しない", async () => {
     const { database, nutrition } = await setup();
     try {
       database.exec("CREATE TRIGGER fail_cancel BEFORE UPDATE ON jobs BEGIN SELECT RAISE(ABORT, 'job storage unavailable'); END");
-      expect(await nutrition.saveManualCalories("meal", 500, now)).toMatchObject({ ok: false, error: { code: "storage_error" } });
-      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ manualCaloriesKcal: null }] });
+      expect(await nutrition.saveManualCalories("meal", 500)).toEqual({ ok: true, value: undefined });
+      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ manualCaloriesKcal: 500 }] });
     } finally { database.close(); }
   });
-  it("空欄保存後の手入力で予約を中止し、他の未解析写真の一括予約を妨げない", async () => {
+  it("空欄保存後の手入力でも予約を保持し、他の未解析写真の候補から区別する", async () => {
     const { database, repository, binding } = createJobStorage();
     const nutrition = createNutritionRepository(binding);
     const input = { clientId: "manual-later", photoId: "photo", memo: "", occurredAt: now, tags: [] };
@@ -260,10 +269,11 @@ describe("手入力時の解析予約の中止", () => {
       expect((await repository.createMealAndQueueNutrition("manual-later", input, now)).ok).toBe(true);
       expect((await repository.createMealAndQueueNutrition("other", { ...input, clientId: "other" }, now)).ok).toBe(true);
       database.exec("UPDATE jobs SET status = 'failed' WHERE id = 'nutrition-initial:other'");
-      expect((await nutrition.saveManualCalories("manual-later", 500, now)).ok).toBe(true);
-      expect(database.prepare("SELECT status FROM jobs WHERE id = 'nutrition-initial:manual-later'").get()).toMatchObject({ status: "canceled" });
+      expect((await nutrition.saveManualCalories("manual-later", 500)).ok).toBe(true);
+      expect(database.prepare("SELECT status FROM jobs WHERE id = 'nutrition-initial:manual-later'").get()).toMatchObject({ status: "queued" });
       const usecase = createNutritionUsecase(nutrition, repository, { now: () => new Date(now) }, { create: () => "bulk-after-manual" });
-      expect((await usecase.generate({})).ok).toBe(true);
+      expect(await nutrition.candidates({})).toMatchObject({ ok: true, value: [{ id: "other" }] });
+      expect((await usecase.generate({})).ok).toBe(false);
     } finally { database.close(); }
   });
 });
