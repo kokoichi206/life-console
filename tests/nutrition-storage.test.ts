@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createNutritionRepository } from "../apps/api/src/repositories/nutrition-repository";
 import { createNutritionUsecase } from "../apps/api/src/usecases/nutrition-usecase";
@@ -107,6 +107,20 @@ describe("写真付き食事の自動解析予約", () => {
 });
 
 describe("栄養推定の読み取り結果", () => {
+  it("栄養一覧は食事に対応する推定と栄養解析ジョブの索引を使う", async () => {
+    const { database, binding, nutrition } = await setup();
+    try {
+      const prepare = vi.spyOn(binding, "prepare");
+      expect((await nutrition.list()).ok).toBe(true);
+      expect(prepare).toHaveBeenCalledTimes(1);
+      const query = prepare.mock.calls[0]![0];
+      const parameters = Array.from(query.matchAll(/\?/gu), () => null);
+      const plan = database.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...parameters).map((row) => row.detail).join("\n");
+      expect(plan).toContain("nutrition_estimates_meal_time_idx");
+      expect(plan).toContain("jobs_kind_created_idx");
+      expect(plan).not.toMatch(/SCAN (jobs|nutrition_estimates)/u);
+    } finally { database.close(); }
+  });
   it("解析結果もジョブもない写真・メモは null を返す", async () => {
     const { database, repository, binding } = createJobStorage();
     try {

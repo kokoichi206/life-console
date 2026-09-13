@@ -62,7 +62,7 @@ export const MonitoringPanel = () => {
   const summary = useQuery(monitoringQuery);
   const { monitorTarget, monitorBefore } = useSearch({ from: "/operations" });
   const navigate = useNavigate({ from: "/operations" });
-  const history = useQuery({ queryKey: ["monitor-history", monitorTarget, monitorBefore], queryFn: () => api.monitoringHistory(monitorTarget, monitorBefore), refetchInterval: monitorBefore === undefined ? 15_000 : false });
+  const history = useQuery({ queryKey: ["monitor-history", monitorTarget, monitorBefore], queryFn: () => api.monitoringHistory(monitorTarget, monitorBefore), refetchInterval: monitorBefore === undefined ? 120_000 : false });
   const move = (target: string | undefined, before: number | undefined) => {
     void navigate({ search: { monitorTarget: target, monitorBefore: before } });
   };

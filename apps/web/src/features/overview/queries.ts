@@ -5,5 +5,5 @@ import { api } from "../../api";
 export const dashboardQuery = queryOptions({
   queryKey: ["dashboard"],
   queryFn: api.dashboard,
-  refetchInterval: 30_000,
+  refetchInterval: 60_000,
 });

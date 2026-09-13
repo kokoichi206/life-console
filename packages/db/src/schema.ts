@@ -119,7 +119,7 @@ export const nutritionEstimates = sqliteTable("nutrition_estimates", {
   fatGrams: integer("fat_grams").notNull(),
   carbohydrateGrams: integer("carbohydrate_grams").notNull(),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [index("nutrition_estimates_meal_time_idx").on(table.mealId, table.analyzedAt)]);
 
 export const weights = sqliteTable("weights", {
   id: text("id").primaryKey(),
@@ -224,6 +224,7 @@ export const jobs = sqliteTable("jobs", {
 }, (table) => [
   uniqueIndex("jobs_idempotency_uidx").on(table.idempotencyKey),
   index("jobs_claim_idx").on(table.status, table.createdAt),
+  index("jobs_kind_created_idx").on(table.kind, table.createdAt),
 ]);
 
 export const promotions = sqliteTable("promotions", {
@@ -263,7 +264,10 @@ export const monitorObservations = sqliteTable("monitor_observations", {
 export const monitorIncidents = sqliteTable("monitor_incidents", {
   id: text("id").primaryKey(), targetId: text("target_id").notNull(), openedAt: text("opened_at").notNull(), resolvedAt: text("resolved_at"),
   reason: text("reason").notNull(),
-}, (table) => [uniqueIndex("monitor_open_incident_uidx").on(table.targetId).where(sql`resolved_at IS NULL`)]);
+}, (table) => [
+  uniqueIndex("monitor_open_incident_uidx").on(table.targetId).where(sql`resolved_at IS NULL`),
+  index("monitor_incidents_target_resolved_idx").on(table.targetId, table.resolvedAt),
+]);
 export const monitorNotifications = sqliteTable("monitor_notifications", {
   id: text("id").primaryKey(), incidentId: text("incident_id").notNull(), endpoint: text("endpoint").notNull(),
   kind: text("kind", { enum: monitorNotificationKinds }).notNull(), slot: integer("slot").notNull(), body: text("body").notNull(),

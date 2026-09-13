@@ -34,6 +34,20 @@ const setup = async () => {
 };
 
 describe("監視履歴と通知予約", () => {
+  it("CLI の観測は当該対象だけ、runner の観測は同じ runner の対象だけを再判定する", async () => {
+    const f = await setup();
+    await f.usecase.register({ runnerId: "other-runner", targets: [{ service: "runner", account: "process" }] });
+    const decide = vi.spyOn(f.repository, "decide");
+    await f.usecase.record(f.event("slack"), false);
+    expect(decide.mock.calls.map(([target]) => target.service)).toEqual(["slack"]);
+    decide.mockClear();
+    await f.usecase.record(f.event("runner"), false);
+    expect(decide.mock.calls.map(([target]) => target.service).sort()).toEqual(["runner", "slack"]);
+    expect(decide.mock.calls.every(([target]) => target.runnerId === "mac-test")).toBe(true);
+    decide.mockClear();
+    await f.usecase.maintain();
+    expect(decide).toHaveBeenCalledTimes(3);
+  });
   it("同じ観測の再送では履歴も連続失敗数も増えない", async () => {
     const fixture = await setup();
     const observation = fixture.event("slack", "unavailable");
