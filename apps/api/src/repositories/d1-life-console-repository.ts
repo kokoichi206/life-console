@@ -14,6 +14,7 @@ import { appError } from "../shared/app-error";
 
 import type {
   AgentJobContext,
+  LatestJob,
   ConnectorHealth,
   Conversation,
   ConversationListFilter,
@@ -568,6 +569,14 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return result.ok ? ok(undefined) : err(appError.storage(result.error));
   }
 
+  async findLatestJob(kind: JobKind): Promise<Result<LatestJob | null, AppError>> {
+    const result = await safeTry(() => this.#database.select({
+      status: jobs.status, at: sql<string>`coalesce(${jobs.finishedAt}, ${jobs.createdAt})`, errorCode: jobs.errorCode,
+    }).from(jobs).where(eq(jobs.kind, kind)).orderBy(desc(jobs.createdAt), desc(sql`${jobs}.rowid`)).limit(1).get());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value ?? null);
+  }
+
   async findRunningJobExecution(jobId: string, leaseToken: string, kind: JobKind, now: string): Promise<Result<{ readonly startedAt: string } | null, AppError>> {
     const result = await safeTry(() => this.#database.select({ startedAt: jobs.startedAt }).from(jobs).where(and(
       eq(jobs.id, jobId), eq(jobs.leaseToken, leaseToken), eq(jobs.kind, kind), eq(jobs.status, "running"),
@@ -669,6 +678,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     };
     const nextPeriod = sql<string>`case interval
       when 'hourly' then strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+1 hour')
+      when 'every_2_hours' then strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+2 hours')
       when 'daily' then strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+1 day')
       else strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+7 days') end`;
     const duePeriods = this.#database.$with("due_periods").as(
@@ -709,6 +719,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
           id: sql<string>`id`.as("id"), interval: sql<string>`interval`.as("interval"),
           nextRunAt: sql<string>`case interval
             when 'hourly' then strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+1 hour')
+            when 'every_2_hours' then strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+2 hours')
             when 'daily' then strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+1 day')
             else strftime('%Y-%m-%dT%H:%M:%fZ', next_run_at, '+7 days') end`.as("next_run_at"),
         }).from(sql`future_runs`).where(lte(sql`julianday(next_run_at)`, sql`julianday(${now})`))),

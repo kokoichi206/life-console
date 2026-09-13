@@ -26,6 +26,7 @@ const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null, baseli
     return HttpResponse.json({ data: null });
   }),
   http.get("*/api/v1/strava/calories", () => HttpResponse.json({ data: [] })),
+  http.get("*/api/v1/strava/calories/sync-status", () => HttpResponse.json({ data: { lastJob: null, backfill: null } })),
   http.get("*/api/v1/weights", () => HttpResponse.json({ data: entries })),
   http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: [] })),
   http.get("*/api/v1/meals", () => HttpResponse.json({ data: [] })),
@@ -328,6 +329,7 @@ const calorieBalanceHandlers = (calories: (call: number) => StravaActivityCalori
     http.get("*/api/v1/strava/activities", ({ request }) => HttpResponse.json({ data: new URL(request.url).searchParams.get("page") === "1"
       ? { activities: [calorieRun], nextPage: 2 }
       : { activities: [], nextPage: null } })),
+    http.get("*/api/v1/strava/calories/sync-status", () => HttpResponse.json({ data: { lastJob: { status: "succeeded", at: "2026-09-14T06:12:00.000Z", errorCode: null }, backfill: null } })),
     http.get("*/api/v1/strava/calories", () => {
       call += 1;
       return HttpResponse.json({ data: calories(call) });

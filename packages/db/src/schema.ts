@@ -313,6 +313,14 @@ export const stravaActivityCalories = sqliteTable("strava_activity_calories", {
   fetchedAt: text("fetched_at"),
 }, (table) => [index("strava_activity_calories_pending_idx").on(table.status, table.occurredAt)]);
 
+export const stravaCaloriesBackfill = sqliteTable("strava_calories_backfill", {
+  id: integer("id").primaryKey(),
+  cursorTo: text("cursor_to").notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const shoppingPlaces = sqliteTable("shopping_places", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

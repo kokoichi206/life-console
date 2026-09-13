@@ -1,6 +1,6 @@
 import type { CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
-import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType, ConnectorKind, TaskArea, TaskStatus, SourceMappingConnector, SourceScope } from "@life-console/domain";
+import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, JobStatus, AgentProvider, MealPhotoContentType, ConnectorKind, TaskArea, TaskStatus, SourceMappingConnector, SourceScope } from "@life-console/domain";
 
 import type { AppError } from "../shared/app-error";
 
@@ -77,7 +77,7 @@ export type Job = {
   readonly taskId: string | null;
   readonly repositoryId: string | null;
   readonly kind: string;
-  readonly status: string;
+  readonly status: JobStatus;
   readonly payloadJson: string;
   readonly leaseToken: string | null;
   readonly cancelRequestedAt: string | null;
@@ -86,6 +86,13 @@ export type Job = {
   readonly errorCode: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+};
+
+export type LatestJob = {
+  readonly status: JobStatus;
+  /** 終わっていれば終了時刻、実行中なら作成時刻。 */
+  readonly at: string;
+  readonly errorCode: string | null;
 };
 
 export type RunnerHealth = {
@@ -217,6 +224,8 @@ export interface LifeConsoleRepository {
   createJob(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: AgentProvider }): Promise<Result<Job, AppError>>;
   /** 同じ種別の未完了ジョブがなければ 1 件だけ作る。既にあれば作らずに成功で返す。 */
   createJobUnlessActive(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string }): Promise<Result<void, AppError>>;
+  /** 種別ごとの最新のジョブ。同期が動いているかを画面へ出すために読む。 */
+  findLatestJob(kind: JobKind): Promise<Result<LatestJob | null, AppError>>;
   /** lease が有効で実行中のジョブだけを返す。`startedAt` は runner が最初に claim した時刻。 */
   findRunningJobExecution(jobId: string, leaseToken: string, kind: JobKind, now: string): Promise<Result<{ readonly startedAt: string } | null, AppError>>;
   claimJob(runnerId: string, leaseToken: string, leaseExpiresAt: string, now: string): Promise<Result<Job | null, AppError>>;

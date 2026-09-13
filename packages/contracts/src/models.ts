@@ -1,4 +1,4 @@
-import type { TaskArea, TaskStatus, SourceMappingConnector, SourceScope, ReplyDraftStatus } from "@life-console/domain";
+import type { TaskArea, TaskStatus, JobStatus, SourceMappingConnector, SourceScope, ReplyDraftStatus } from "@life-console/domain";
 export type Task = {
   readonly id: string;
   readonly title: string;
@@ -88,7 +88,7 @@ export type Job = {
   readonly taskId: string | null;
   readonly repositoryId: string | null;
   readonly kind: string;
-  readonly status: string;
+  readonly status: JobStatus;
   readonly payloadJson: string;
   readonly leaseToken: string | null;
   readonly cancelRequestedAt: string | null;
