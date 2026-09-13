@@ -1,4 +1,4 @@
-import type { WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType, ConnectorKind, TaskArea, TaskStatus, SourceMappingConnector, SourceScope } from "@life-console/domain";
 
@@ -192,6 +192,8 @@ export interface LifeConsoleRepository {
   markMealPhotoUploaded(id: string, now: string): Promise<Result<void, AppError>>;
   getWeightGoal(): Promise<Result<WeightGoal | null, AppError>>;
   saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>>;
+  getCalorieBaseline(): Promise<Result<CalorieBaseline | null, AppError>>;
+  saveCalorieBaseline(input: CalorieBaseline | null): Promise<Result<void, AppError>>;
   listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   listWeightsForExport(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   createWeight(id: string, input: CreateWeightInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>>;
@@ -213,6 +215,10 @@ export interface LifeConsoleRepository {
   listConnectorHealth(): Promise<Result<ReadonlyArray<ConnectorHealth>, AppError>>;
   listJobs(): Promise<Result<ReadonlyArray<Job>, AppError>>;
   createJob(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: AgentProvider }): Promise<Result<Job, AppError>>;
+  /** 同じ種別の未完了ジョブがなければ 1 件だけ作る。既にあれば作らずに成功で返す。 */
+  createJobUnlessActive(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string }): Promise<Result<void, AppError>>;
+  /** lease が有効で実行中のジョブだけを返す。`startedAt` は runner が最初に claim した時刻。 */
+  findRunningJobExecution(jobId: string, leaseToken: string, kind: JobKind, now: string): Promise<Result<{ readonly startedAt: string } | null, AppError>>;
   claimJob(runnerId: string, leaseToken: string, leaseExpiresAt: string, now: string): Promise<Result<Job | null, AppError>>;
   heartbeatJob(jobId: string, input: JobHeartbeatInput, leaseExpiresAt: string, now: string): Promise<Result<{ readonly cancelRequested: boolean }, AppError>>;
   completeJob(jobId: string, input: CompleteJobInput, now: string): Promise<Result<void, AppError>>;

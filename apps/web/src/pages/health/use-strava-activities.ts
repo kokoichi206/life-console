@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import { api } from "../../api";
 
@@ -36,6 +36,11 @@ export const useStravaActivities = (from: string, to: string) => {
     if (connected && !disconnect.isPending && hasNextPage && !isFetching && !isError) void fetchNextPage();
   }, [connected, disconnect.isPending, hasNextPage, isFetching, isError, fetchNextPage]);
   const complete = connected && activities.isSuccess && !activities.hasNextPage && !activities.isFetching && !disconnect.isPending;
-  const records = complete ? [...new Map(activities.data.pages.flatMap((page) => page.activities).map((activity) => [activity.id, activity])).values()] : [];
+  const pages = activities.data?.pages;
+  // 応答が変わらない限り同じ配列を返し、収支の日別集計を再計算させない。
+  const records = useMemo(
+    () => complete && pages !== undefined ? [...new Map(pages.flatMap((page) => page.activities).map((activity) => [activity.id, activity])).values()] : [],
+    [complete, pages],
+  );
   return { status, authorize, disconnect, connected, activities, complete, records };
 };

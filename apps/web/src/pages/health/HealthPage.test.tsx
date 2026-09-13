@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { HealthPage } from "./HealthPage";
-import { mealsQuery, weightsQuery, weightGoalQuery } from "./queries";
+import { calorieBaselineQuery, mealsQuery, weightsQuery, weightGoalQuery } from "./queries";
 
 describe("体重の記録頻度", () => {
   it("同じ日本時間の暦日の複数記録を 1 日として数える", () => {
@@ -16,7 +16,8 @@ describe("体重の記録頻度", () => {
     ]);
     client.setQueryData(mealsQuery.queryKey, []);
     client.setQueryData(weightGoalQuery.queryKey, null);
-    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { search: {}, onRangeChange: () => undefined, onRunningVisibilityChange: () => undefined, goalEntryOpen: false, onGoalEntryOpenChange: () => undefined, selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
+    client.setQueryData(calorieBaselineQuery.queryKey, null);
+    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { search: {}, onRangeChange: () => undefined, onRunningVisibilityChange: () => undefined, goalEntryOpen: false, onGoalEntryOpenChange: () => undefined, baselineEntryOpen: false, onBaselineEntryOpenChange: () => undefined, selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
     expect(html.replace(/<[^>]*>/g, "").replace(/\s+/g, "")).toContain("記録頻度2/8日25%");
     client.clear();
   });

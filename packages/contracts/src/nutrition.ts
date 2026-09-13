@@ -4,6 +4,9 @@ import { createNutritionEstimateSchema } from "./schemas";
 
 export const saveMealCaloriesSchema = z.object({ caloriesKcal: z.number().int().nonnegative() });
 
+export const calorieBaselineSchema = z.object({ dailyExpenditureKcal: z.number().int().positive().max(10_000) });
+export type CalorieBaseline = z.infer<typeof calorieBaselineSchema>;
+
 export const nutritionAnalysisPayloadSchema = z.object({ mealId: z.string().min(1).max(128).optional() });
 export const nutritionCandidateSchema = z.object({
   id: z.string(), photoId: z.string().nullable(), memo: z.string(),

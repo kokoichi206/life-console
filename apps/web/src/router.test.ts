@@ -21,7 +21,7 @@ describe("アプリのルーティング", () => {
   });
 
   it("入力を閉じても表示期間を保持し、URL から開き直せる", async () => {
-    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") ? null : [] })));
+    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") || url.endsWith("calorie-baseline") ? null : [] })));
     vi.stubGlobal("fetch", fetchResponse);
     const testRouter = createTestRouter("/health?entry=weight&range=d90");
     await testRouter.load();
@@ -33,14 +33,14 @@ describe("アプリのルーティング", () => {
   });
 
   it("Query のキャッシュを消した後は、直前に事前読み込みしたページも再取得する", async () => {
-    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") ? null : [] })));
+    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") || url.endsWith("calorie-baseline") ? null : [] })));
     vi.stubGlobal("fetch", fetchResponse);
     const testRouter = createTestRouter("/tasks");
     await testRouter.load();
     await testRouter.preloadRoute({ to: "/health" });
-    expect(fetchResponse).toHaveBeenCalledTimes(3);
+    expect(fetchResponse).toHaveBeenCalledTimes(4);
     testRouter.options.context.queryClient.clear();
     await testRouter.preloadRoute({ to: "/health" });
-    expect(fetchResponse).toHaveBeenCalledTimes(6);
+    expect(fetchResponse).toHaveBeenCalledTimes(8);
   });
 });
