@@ -1,7 +1,7 @@
 import type { MonitoringRepository } from "@api/repositories/monitoring-repository";
 import type { PushSubscriptionRepository } from "@api/repositories/push-subscription-repository";
 import type { WebPushRepository } from "@api/repositories/web-push-repository";
-import { monitorState, type MonitorObservation, type MonitorStatus, type RegisterMonitorsInput } from "@life-console/contracts";
+import { monitorTargetId, monitorState, type MonitorObservation, type MonitorStatus, type RegisterMonitorsInput } from "@life-console/contracts";
 import { ok } from "@life-console/core";
 
 import type { Clock } from "../shared/clock";
@@ -19,11 +19,15 @@ const monitoringDecision = (target: MonitorStatus, targets: ReadonlyArray<Monito
   return { decision: "hold" as const, reason: "確認中" };
 };
 export const createMonitoringUsecase = (repository: MonitoringRepository, subscriptions: PushSubscriptionRepository, push: WebPushRepository, clock: Clock, configured: boolean, expectedRunnerIds: ReadonlyArray<string> = []) => {
-  const evaluate = async () => {
+  const evaluate = async (observation?: MonitorObservation) => {
     const targets = await repository.list();
     if (!targets.ok) return targets;
     const now = clock.now();
-    for (const target of targets.value) {
+    const affectedTargets = observation === undefined
+      ? targets.value
+      : targets.value.filter((target) =>
+          observation.service === "runner" ? target.runnerId === observation.runnerId : target.id === monitorTargetId(observation.runnerId, observation));
+    for (const target of affectedTargets) {
       const decision = monitoringDecision(target, targets.value, now.getTime());
       const saved = await repository.decide(target, decision.decision, decision.reason, now.toISOString());
       if (!saved.ok) return saved;
@@ -35,7 +39,7 @@ export const createMonitoringUsecase = (repository: MonitoringRepository, subscr
     async record(observation: MonitorObservation, historical: boolean) {
       const saved = await repository.record(observation, historical, clock.now().toISOString());
       if (!saved.ok || historical) return saved;
-      return evaluate();
+      return evaluate(observation);
     },
     async summary() {
       const targets = await repository.list();

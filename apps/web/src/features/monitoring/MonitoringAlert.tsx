@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 
 import { api } from "../../api";
 
-export const monitoringQuery = { queryKey: ["monitoring"], queryFn: api.monitoring, refetchInterval: 15_000 };
+export const monitoringQuery = { queryKey: ["monitoring"], queryFn: api.monitoring, refetchInterval: 60_000 };
 export const MonitoringAlert = () => {
   const query = useQuery(monitoringQuery);
   if (query.error !== null) return <p role="alert" className="mb-4 rounded-lg border border-destructive p-3 text-sm text-destructive">死活監視の状態を取得できません。接続を確認してください。</p>;
