@@ -50,7 +50,7 @@ const QuestionForm = ({ question, onAnswered }: { readonly question: AgentQuesti
 };
 
 export const AgentQuestions = () => {
-  const questions = useQuery({ queryKey: ["agent-questions"], queryFn: api.agentQuestions, refetchInterval: 5_000 });
+  const questions = useQuery({ queryKey: ["agent-questions"], queryFn: api.agentQuestions, refetchInterval: 15_000 });
   const [answered, setAnswered] = useState(false);
   return (
     <Panel className="mb-4">

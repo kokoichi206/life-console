@@ -6,6 +6,6 @@ import { api } from "../../api";
 export const conversationsQuery = (input: ListConversationsInput = { period: "24h" }) => queryOptions({
   queryKey: ["conversations", input],
   queryFn: () => api.conversations(input),
-  refetchInterval: 15_000,
+  refetchInterval: 60_000,
 });
 export const replyDraftsQuery = queryOptions({ queryKey: ["reply-drafts"], queryFn: api.replyDrafts, refetchInterval: 15_000 });

@@ -42,7 +42,7 @@ const main = async () => {
         console.log(reply.answer);
         return;
       }
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
     }
   }
   await request(reportUrl, { outcome: action, summary: text, errorCode });
