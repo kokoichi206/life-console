@@ -38,7 +38,7 @@ const stravaCaloriesPeriodSchema = z.object({
   to: z.iso.date(),
 }).refine((value) => value.from <= value.to, { message: "開始日と終了日を確認してください。" });
 
-/** 画面契機は期間を指定し、定期同期は空 payload で窓を API に決めさせる。 */
+/** 手動の同期依頼は期間を指定し、定期同期は空 payload で窓を API に決めさせる。 */
 export const stravaCaloriesSyncPayloadSchema = z.union([
   stravaCaloriesPeriodSchema.transform((period) => ({ kind: "period" as const, period })),
   z.object({}).strict().transform(() => ({ kind: "scheduled" as const })),

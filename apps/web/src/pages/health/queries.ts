@@ -34,5 +34,5 @@ export const stravaCaloriesQuery = (from: string, to: string, enabled: boolean) 
   queryFn: () => api.stravaCalories(from, to),
   enabled,
   retry: false,
-  refetchInterval: (query) => query.state.data?.some((entry) => entry.status === "pending") === true ? STRAVA_CALORIES_POLL_INTERVAL_MS : false,
+  refetchInterval: (query) => query.state.data?.some((entry) => entry.status === "pending") === true ? STRAVA_CALORIES_POLL_INTERVAL_MS : 60_000,
 });

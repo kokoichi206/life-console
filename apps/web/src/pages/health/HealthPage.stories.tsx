@@ -325,6 +325,10 @@ const measuredCalories: StravaActivityCalories[] = [{ activityId: "run-907", occ
 const calorieBalanceHandlers = (calories: (call: number) => StravaActivityCalories[]) => {
   let call = 0;
   return [
+    http.post("*/api/v1/strava/sync", async ({ request }) => {
+      await expect(await request.json()).toEqual({ from: "2026-09-01", to: "2026-09-07" });
+      return HttpResponse.json({ data: null });
+    }),
     http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
     http.get("*/api/v1/strava/activities", ({ request }) => HttpResponse.json({ data: new URL(request.url).searchParams.get("page") === "1"
       ? { activities: [calorieRun], nextPage: 2 }
@@ -392,36 +396,37 @@ export const CalorieBalanceBeforeActivities: Story = {
   ] } },
   play: async ({ canvas }) => {
     await expect(await canvas.findByText("+100")).toBeVisible();
-    await expect(canvas.getByText("保存済みの運動で計算しています。最新の運動を確認中です。")).toBeVisible();
+    await expect(canvas.getByText("保存済みの運動で計算しています。未同期の運動は含まれません。")).toBeVisible();
     await expect(canvas.getByText("摂取 1,900 kcal、運動 500 kcal")).toBeInTheDocument();
   },
 };
 
 export const CalorieBalanceStoredAfterActivityError: Story = {
-  name: "最新の運動の取得失敗を示し保存済みの収支を残す",
+  name: "運動一覧の DB 読み取りに失敗しても保存済みの収支を残す",
   parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: [
     http.get("*/api/v1/strava/activities", () => HttpResponse.json({ error: { code: "upstream_error", message: "運動を取得できませんでした。" } }, { status: 502 })),
     ...calorieBalanceHandlers(() => measuredCalories),
   ] } },
   play: async ({ canvas }) => {
     await expect(await canvas.findByText("+100")).toBeVisible();
-    await expect(await canvas.findByText("最新の運動を取得できませんでした。保存済みの運動で計算しています。")).toBeVisible();
+    await expect(await canvas.findByText("保存済みの運動で計算しています。未同期の運動は含まれません。")).toBeVisible();
   },
 };
 
 export const CalorieBalanceWithoutStoredActivities: Story = {
-  name: "保存が空で最新情報も未取得のときは運動ゼロにしない",
+  name: "初回の同期前は運動ゼロにしない",
   parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: [
     http.get("*/api/v1/strava/activities", async () => {
       await delay("infinite");
       return HttpResponse.json({ data: { activities: [], nextPage: null } });
     }),
+    http.get("*/api/v1/strava/calories/sync-status", () => HttpResponse.json({ data: { lastJob: null, backfill: null } })),
     ...calorieBalanceHandlers(() => []),
   ] } },
   play: async ({ canvas }) => {
-    await expect(await canvas.findByText("運動を取得しています。取得後に収支を表示します。")).toBeVisible();
+    await expect(await canvas.findByText("運動の同期を待っています。「運動を同期」から開始できます。")).toBeVisible();
     await expect(await canvas.findByText("摂取 1,900 kcal")).toBeInTheDocument();
-    await expect(canvas.queryByText("超過 −400")).not.toBeInTheDocument();
+    await expect(canvas.queryByText("−400")).not.toBeInTheDocument();
     await expect(canvas.queryByText(/Strava 未接続/)).not.toBeInTheDocument();
   },
 };
@@ -429,13 +434,13 @@ export const CalorieBalanceWithoutStoredActivities: Story = {
 export const CalorieBalancePendingFilled: Story = {
   name: "取得待ちの消費カロリーが実測に変わる",
   parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: calorieBalanceHandlers(
-    (call) => call <= 2 ? [{ activityId: "run-907", occurredAt: calorieRun.occurredAt, status: "pending", caloriesKcal: null }] : measuredCalories,
+    (call) => call === 1 ? [{ activityId: "run-907", occurredAt: calorieRun.occurredAt, status: "pending", caloriesKcal: null }] : measuredCalories,
   ) } },
   play: async ({ canvas, userEvent }) => {
     await expect(await canvas.findByText(/取得待ち 1 件/)).toBeVisible();
     await expect(within(canvas.getByRole("table", { name: /日別のカロリー収支/ })).getByText("未確定")).toBeVisible();
-    await waitFor(() => expect(canvas.getByRole("button", { name: "運動を更新" })).toBeEnabled());
-    await userEvent.click(canvas.getByRole("button", { name: "運動を更新" }));
+    await waitFor(() => expect(canvas.getByRole("button", { name: "運動を同期" })).toBeEnabled());
+    await userEvent.click(canvas.getByRole("button", { name: "運動を同期" }));
     await expect(await canvas.findByText("+100", undefined, { timeout: 10_000 })).toBeVisible();
     await expect(canvas.queryByText(/取得待ち/)).not.toBeInTheDocument();
   },

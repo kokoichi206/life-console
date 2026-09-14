@@ -14,6 +14,18 @@ import { createJobStorage } from "./support/d1-storage";
 const credentials = { athleteId: 42, accessToken: "test-access", refreshToken: "test-refresh", expiresAt: 2_000_000_000 };
 const settings = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", STRAVA_CLIENT_ID: "123", STRAVA_CLIENT_SECRET: "test-client-secret", STRAVA_TOKEN_KEY: "ab".repeat(32), STRAVA_REDIRECT_URI: "http://localhost/api/v1/strava/callback" };
 const origin = { Origin: "http://localhost" };
+const leaseToken = "11111111-1111-4111-8111-111111111111";
+const syncInput = { jobId: "sync-job", leaseToken, from: "2026-09-07", to: "2026-09-13", page: 1, backfill: false };
+const prepareRunningSync = async (binding: D1Database) => {
+  const jobs = new D1LifeConsoleRepository(binding);
+  const now = new Date().toISOString();
+  expect(await jobs.createJobUnlessActive({ id: syncInput.jobId, kind: "strava_calories_sync", idempotencyKey: "sync-job", payloadJson: "{}", now })).toMatchObject({ ok: true });
+  expect(await jobs.claimJob("test-runner", leaseToken, "2099-01-01T00:00:00.000Z", now)).toMatchObject({ ok: true, value: { id: syncInput.jobId } });
+  expect(await jobs.heartbeatJob(syncInput.jobId, { runnerId: "test-runner", leaseToken, waitingForUser: false, progressSummary: null }, "2099-01-01T00:00:00.000Z", now)).toMatchObject({ ok: true });
+};
+const reconcile = (environment: typeof settings & { DB: D1Database }) => app.request("/api/v1/runner/strava/calories/reconcile", {
+  method: "POST", headers: { "Authorization": "Bearer local-runner-token", "Content-Type": "application/json" }, body: JSON.stringify(syncInput),
+}, environment);
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -62,15 +74,19 @@ describe("Strava の接続と HTTP", () => {
       const status = await app.request("/api/v1/strava/status", {}, environment);
       expect(await status.json()).toEqual({ data: { configured: true, athleteId: 42 } });
       expect(status.headers.get("Cache-Control")).toBe("no-store");
+      await prepareRunningSync(binding);
+      expect((await reconcile(environment)).status).toBe(200);
+      const beforeRead = fetcher.mock.calls.length;
       const page = await app.request("/api/v1/strava/activities?from=2026-09-07&to=2026-09-13&page=1", {}, environment);
-      expect(await page.json()).toEqual({ data: { activities: [{ id: "1", name: "架空のラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 5000, movingSeconds: 1800, elapsedSeconds: 2000, averageHeartrate: null }], nextPage: 2 } });
+      expect(await page.json()).toEqual({ data: { activities: [{ id: "1", name: "架空のラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 5000, movingSeconds: 1800, elapsedSeconds: 2000, averageHeartrate: null }], nextPage: null } });
       const last = await app.request("/api/v1/strava/activities?from=2026-09-07&to=2026-09-13&page=2", {}, environment);
       expect(await last.json()).toEqual({ data: { activities: [], nextPage: null } });
+      expect(fetcher).toHaveBeenCalledTimes(beforeRead);
       expect((await app.request("/api/v1/strava/connection", { method: "DELETE", headers: origin }, environment)).status).toBe(200);
       expect(await createStravaConnectionRepository(binding, settings.STRAVA_TOKEN_KEY).read()).toEqual({ ok: true, value: null });
     } finally { database.close(); }
   });
-  it.each([[401, 502], [429, 429], [503, 502]])("外部 API の %s を空の活動一覧に変換しない", async (status, expected) => {
+  it.each([[401, 502], [429, 429], [503, 502]])("同期時の外部 API の %s を空の活動一覧に変換しない", async (status, expected) => {
     const { binding, database } = createJobStorage();
     try {
       const repository = createStravaConnectionRepository(binding, settings.STRAVA_TOKEN_KEY);
@@ -78,7 +94,8 @@ describe("Strava の接続と HTTP", () => {
       await repository.write(credentials, "setup", Date.now());
       await repository.release("setup");
       vi.stubGlobal("fetch", vi.fn(async () => new Response("private upstream content", { status })));
-      const response = await app.request("/api/v1/strava/activities?from=2026-09-07&to=2026-09-13", {}, { ...settings, DB: binding });
+      await prepareRunningSync(binding);
+      const response = await reconcile({ ...settings, DB: binding });
       expect(response.status).toBe(expected);
       const body = await response.text();
       expect(body).not.toContain("private upstream content");
@@ -113,10 +130,10 @@ it("期限切れの認証を 1 件ずつ更新し、返された最新の refres
     });
     vi.stubGlobal("fetch", fetcher);
     const environment = { ...settings, DB: binding };
-    const path = "/api/v1/strava/activities?from=2026-09-07&to=2026-09-13";
-    const first = app.request(path, {}, environment);
+    await prepareRunningSync(binding);
+    const first = reconcile(environment);
     await refreshStarted;
-    expect((await app.request(path, {}, environment)).status).toBe(409);
+    expect((await reconcile(environment)).status).toBe(409);
     completeRefresh(Response.json({ access_token: "new-access", refresh_token: "new-refresh", expires_at: credentials.expiresAt }));
     expect((await first).status).toBe(200);
     expect(await repository.read()).toEqual({ ok: true, value: { ...credentials, accessToken: "new-access", refreshToken: "new-refresh" } });
@@ -137,7 +154,8 @@ it("更新した token の保存に失敗したときは再接続を案内し、
     const fetcher = vi.fn(async () => Response.json({ access_token: "new-access", refresh_token: "new-refresh", expires_at: credentials.expiresAt }));
     const configuration = { clientId: settings.STRAVA_CLIENT_ID, clientSecret: settings.STRAVA_CLIENT_SECRET, redirectUri: settings.STRAVA_REDIRECT_URI };
     const usecase = createStravaUsecase(repository, createStravaApiRepository(configuration, fetcher), createStravaCaloriesRepository(binding), new D1LifeConsoleRepository(binding), configuration, { now: () => new Date() }, { create: () => "refresh-failure" });
-    const result = await usecase.activities({ from: "2026-09-07", to: "2026-09-13", page: 1 });
+    await prepareRunningSync(binding);
+    const result = await usecase.reconcileCalories(syncInput);
     expect(result).toEqual({ ok: false, error: { ...failure, message: "更新した接続情報を保存できませんでした。Strava に再接続してください。" } });
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(write).toHaveBeenCalledTimes(1);

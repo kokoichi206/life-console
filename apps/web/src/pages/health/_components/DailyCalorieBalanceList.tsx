@@ -8,7 +8,7 @@ import { cn } from "../../../lib/class-names";
 import { RECENT_BALANCE_DAYS, type CalorieBalanceDay, type CalorieBalanceRow } from "../calorie-balance";
 
 /** 運動の取得状態。収支に運動を含められるかが状態ごとに変わる。 */
-export type ExerciseTrackingState = "untracked" | "loading" | "failed" | "tracked" | "stored";
+export type ExerciseTrackingState = "untracked" | "loading" | "failed" | "tracked" | "stored" | "unsynced";
 
 const SCALE_STEP_KCAL = 500;
 const kcalFormat = new Intl.NumberFormat("ja-JP");
@@ -122,11 +122,10 @@ const LegendSwatch = ({ className, label }: { readonly className: string; readon
   </span>
 );
 
-export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange, syncStatus, activityRefreshFailed = false }: {
+export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange, syncStatus }: {
   readonly rows: ReadonlyArray<CalorieBalanceRow>;
   readonly baselineKcal: number | null;
   readonly exerciseState: ExerciseTrackingState;
-  readonly activityRefreshFailed?: boolean;
   /** 表示期間全体の取得待ち件数。直近だけを表示していても runner は期間全体を取得している。 */
   readonly pendingActivities: number;
   readonly nutritionPending: boolean;
@@ -172,7 +171,8 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
       {exerciseState === "untracked" && <p className="text-xs text-muted-foreground">Strava 未接続のため、運動を含めていません。</p>}
       {exerciseState === "loading" && <p role="status" className="text-sm text-muted-foreground">運動を取得しています。取得後に収支を表示します。</p>}
       {exerciseState === "failed" && <p className="text-sm text-muted-foreground">運動を取得できていないため、収支を表示していません。</p>}
-      {exerciseState === "stored" && <p role="status" className="text-sm text-muted-foreground">{activityRefreshFailed ? "最新の運動を取得できませんでした。保存済みの運動で計算しています。" : "保存済みの運動で計算しています。最新の運動を確認中です。"}</p>}
+      {exerciseState === "unsynced" && <p role="status" className="text-sm text-muted-foreground">運動の同期を待っています。「運動を同期」から開始できます。</p>}
+      {exerciseState === "stored" && <p role="status" className="text-sm text-muted-foreground">保存済みの運動で計算しています。未同期の運動は含まれません。</p>}
       {(exerciseState === "tracked" || exerciseState === "stored") && pendingActivities > 0 && (
         <p role="status" className="text-sm text-muted-foreground">{`消費カロリーを取得中（残り ${pendingActivities} 件）。Mac の runner が順に取得します。`}</p>
       )}

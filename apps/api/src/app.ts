@@ -255,6 +255,7 @@ const _routes = app
   })
   .get("/api/v1/strava/activities", zValidator("query", stravaActivityQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activities(context.req.valid("query"))))
   .get("/api/v1/strava/calories", zValidator("query", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activityCalories(context.req.valid("query"))))
+  .post("/api/v1/strava/sync", zValidator("json", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).requestSync(context.req.valid("json"))))
   .get("/api/v1/strava/calories/sync-status", async (context) => respond(context, await createStravaHandlers(context.get("environment")).syncStatus()))
   .post("/api/v1/runner/strava/calories/plan", zValidator("json", stravaCaloriesPlanSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).planCalories(context.req.valid("json"))))
   .delete("/api/v1/strava/connection", async (context) => respond(context, await createStravaHandlers(context.get("environment")).disconnect()))

@@ -56,7 +56,7 @@ describe("消費カロリーの同期ジョブ", () => {
       fetchStravaCalories,
     }).execute(job, new AbortController().signal);
     expect(result).toMatchObject({ outcome: "succeeded", errorCode: null });
-    expect(result.summary).toContain("1 日の上限に達したため中断しました。次回の表示か『運動を更新』で再開します。");
+    expect(result.summary).toContain("1 日の上限に達したため中断しました。次の定期同期か『運動を同期』で再開します。");
     expect(fetchStravaCalories).not.toHaveBeenCalled();
   });
 
@@ -66,7 +66,7 @@ describe("消費カロリーの同期ジョブ", () => {
       fetchStravaCalories: vi.fn().mockResolvedValue(ok(fetchResult({ fetched: 10, remaining: 40, dailyLimitReached: true }))),
     }).execute(job, new AbortController().signal);
     expect(result).toMatchObject({ outcome: "succeeded", errorCode: null });
-    expect(result.summary).toBe("取得 10 件・値なし 0 件・削除 0 件。1 日の上限に達したため中断しました。残り 40 件は次回の表示か『運動を更新』で再開します。");
+    expect(result.summary).toBe("取得 10 件・値なし 0 件・削除 0 件。1 日の上限に達したため中断しました。残り 40 件は次の定期同期か『運動を同期』で再開します。");
   });
 
   it("15 分の上限では待ってから続け、待機中の中止を失敗にしない", async () => {
