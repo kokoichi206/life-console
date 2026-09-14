@@ -121,7 +121,7 @@ export const WorkInbox = () => {
             return (
               <button key={conversation.id} type="button" aria-pressed={selected?.id === conversation.id} className={cn("block w-full border-b border-l-2 border-l-transparent p-4 text-left last:border-b-0 hover:bg-muted/40", selected?.id === conversation.id && "border-l-primary bg-primary/5")} onClick={() => selectConversation(conversation)}>
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-[0.65rem] text-muted-foreground">
-                  <span>{serviceLabels[conversation.connector as keyof typeof serviceLabels]}</span>
+                  <span>{serviceLabels[conversation.connector]}</span>
                   <span className="ml-auto">{new Date(conversation.occurredAt).toLocaleDateString("ja-JP")}</span>
                 </div>
                 <strong className="block truncate text-xs">{conversation.authorLabel}</strong>

@@ -1,4 +1,4 @@
-import type { TaskArea, TaskStatus, JobStatus, SourceMappingConnector, SourceScope, ReplyDraftStatus } from "@life-console/domain";
+import type { AgentProvider, AssetKind, ConnectorKind, ConversationClassification, FinanceEntryKind, JobKind, JobStatus, OrcaStatus, ReplyDraftStatus, SourceMappingConnector, SourceScope, TaskArea, TaskStatus, WeightSource } from "@life-console/domain";
 export type Task = {
   readonly id: string;
   readonly title: string;
@@ -18,19 +18,19 @@ export type Task = {
 
 export type Conversation = {
   readonly id: string;
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly externalMessageId: string;
   readonly authorLabel: string;
   readonly excerpt: string;
   readonly sourceUrl: string | null;
-  readonly classification: string;
+  readonly classification: ConversationClassification;
   readonly occurredAt: string;
 };
 
 export type ReplyDraft = {
   readonly conversationId: string;
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly authorLabel: string;
   readonly excerpt: string;
   readonly sourceUrl: string | null;
@@ -48,7 +48,7 @@ export type WeightPoint = {
   readonly id: string;
   readonly occurredAt: string;
   readonly recordedAt: string;
-  readonly source: string;
+  readonly source: WeightSource;
   readonly weightKg: number;
 };
 
@@ -59,10 +59,10 @@ export type FinanceSummary = {
   readonly netWorthYen: number;
   readonly byCategory: ReadonlyArray<{ readonly category: string; readonly amountYen: number }>;
   readonly byPaymentMethod: ReadonlyArray<{ readonly paymentMethod: string; readonly amountYen: number }>;
-  readonly assetAllocation: ReadonlyArray<{ readonly assetKind: string; readonly amountYen: number }>;
+  readonly assetAllocation: ReadonlyArray<{ readonly assetKind: AssetKind; readonly amountYen: number }>;
   readonly transactions: ReadonlyArray<{
     readonly id: string;
-    readonly kind: string;
+    readonly kind: FinanceEntryKind;
     readonly amountYen: number;
     readonly adjustedAmountYen: number;
     readonly category: string;
@@ -87,12 +87,12 @@ export type Job = {
   readonly id: string;
   readonly taskId: string | null;
   readonly repositoryId: string | null;
-  readonly kind: string;
+  readonly kind: JobKind;
   readonly status: JobStatus;
   readonly payloadJson: string;
   readonly leaseToken: string | null;
   readonly cancelRequestedAt: string | null;
-  readonly provider: string | null;
+  readonly provider: AgentProvider | null;
   readonly summary: string | null;
   readonly errorCode: string | null;
   readonly createdAt: string;
@@ -104,12 +104,12 @@ export type RunnerHealth = {
   readonly name: string;
   readonly lastHeartbeatAt: string;
   readonly tokenExpiresAt: string | null;
-  readonly orcaStatus: string;
+  readonly orcaStatus: OrcaStatus;
   readonly lastErrorCode: string | null;
 };
 
 export type ConnectorHealth = {
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly sourceLabel: string;
   readonly watermark: string | null;

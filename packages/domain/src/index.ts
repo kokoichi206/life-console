@@ -36,8 +36,10 @@ export const scheduleIntervals = ["hourly", "every_2_hours", "daily", "weekly"] 
 export const scheduleCoalescingModes = ["skip_if_pending", "queue_all"] as const;
 
 export const financeEntryKinds = ["income", "expense"] as const;
+export type FinanceEntryKind = typeof financeEntryKinds[number];
 
 export const assetKinds = ["cash", "investment", "debt"] as const;
+export type AssetKind = typeof assetKinds[number];
 
 export const replyDraftStatuses = ["ready", "replied", "no_action", "needs_review"] as const;
 export type ReplyDraftStatus = typeof replyDraftStatuses[number];
@@ -46,6 +48,7 @@ export const mealPhotoContentTypes = ["image/jpeg", "image/png", "image/webp"] a
 export type MealPhotoContentType = typeof mealPhotoContentTypes[number];
 
 export const weightSources = ["manual", "csv"] as const;
+export type WeightSource = typeof weightSources[number];
 
 export const orcaStatuses = ["healthy", "unreachable", "unknown"] as const;
 export type OrcaStatus = typeof orcaStatuses[number];

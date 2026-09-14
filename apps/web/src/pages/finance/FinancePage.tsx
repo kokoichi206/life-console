@@ -1,3 +1,4 @@
+import type { AssetKind } from "@life-console/contracts";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useState, type CSSProperties, type FormEvent } from "react";
 
@@ -19,6 +20,10 @@ const money = (value: number): string => new Intl.NumberFormat("ja-JP", {
   maximumFractionDigits: 0,
 }).format(value);
 
+/** 英語の内部識別子を画面へ出さない。候補を足すときは日本語の表示名も足す。 */
+const assetKindLabels: Readonly<Record<AssetKind, string>> = { cash: "現金", investment: "金融資産", debt: "負債" };
+const assetKindDotClasses: Readonly<Record<AssetKind, string>> = { cash: "bg-chart-1", investment: "bg-chart-4", debt: "bg-chart-2" };
+
 const localDateTime = (): string => {
   const date = new Date();
   date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
@@ -35,7 +40,7 @@ export const FinancePage = () => {
   const [payee, setPayee] = useState("");
   const [occurredAt, setOccurredAt] = useState(localDateTime());
   const [accountName, setAccountName] = useState("");
-  const [assetKind, setAssetKind] = useState<"cash" | "investment" | "debt">("cash");
+  const [assetKind, setAssetKind] = useState<AssetKind>("cash");
   const [balanceYen, setBalanceYen] = useState("");
   const [analysisMonth, setAnalysisMonth] = useState(new Date().toISOString().slice(0, 7));
   const [adjustmentTransactionId, setAdjustmentTransactionId] = useState("");
@@ -173,8 +178,8 @@ export const FinancePage = () => {
           <div className="mt-5 grid gap-2 px-5">
             {data.assetAllocation.map((entry) => (
               <div key={entry.assetKind} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 text-xs">
-                <span className={`size-2 rounded-full ${entry.assetKind === "cash" ? "bg-chart-1" : entry.assetKind === "investment" ? "bg-chart-4" : "bg-chart-2"}`} />
-                <span>{({ cash: "現金", investment: "金融資産", debt: "負債" }[entry.assetKind] ?? entry.assetKind)}</span>
+                <span className={`size-2 rounded-full ${assetKindDotClasses[entry.assetKind]}`} />
+                <span>{assetKindLabels[entry.assetKind]}</span>
                 <strong className="tabular-nums">{money(entry.amountYen)}</strong>
               </div>
             ))}
@@ -213,10 +218,8 @@ export const FinancePage = () => {
             </div>
             <Field label="口座名"><Input required value={accountName} onChange={(event) => setAccountName(event.target.value)} /></Field>
             <Field label="種類">
-              <NativeSelect className="w-full" value={assetKind} onChange={(event) => setAssetKind(event.target.value as typeof assetKind)}>
-                <option value="cash">現金</option>
-                <option value="investment">金融資産</option>
-                <option value="debt">負債</option>
+              <NativeSelect className="w-full" value={assetKind} onChange={(event) => setAssetKind(event.target.value as AssetKind)}>
+                {Object.entries(assetKindLabels).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}
               </NativeSelect>
             </Field>
             <Field label="残高"><Input required type="number" inputMode="numeric" value={balanceYen} onChange={(event) => setBalanceYen(event.target.value)} /></Field>

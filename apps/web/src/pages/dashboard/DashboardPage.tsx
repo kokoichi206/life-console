@@ -1,3 +1,4 @@
+import type { TaskStatus } from "@life-console/contracts";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
@@ -17,11 +18,14 @@ const money = (value: number): string => new Intl.NumberFormat("ja-JP", {
   maximumFractionDigits: 0,
 }).format(value);
 
-const statusLabel = (status: string): string => ({
+/** 英語の内部識別子を画面へ出さない。候補を足すときは日本語の表示名も足す。 */
+const taskStatusLabels: Readonly<Record<TaskStatus, string>> = {
   inbox: "受信箱",
   todo: "未着手",
   doing: "進行中",
-}[status] ?? status);
+  done: "完了",
+  canceled: "中止",
+};
 
 const HealthItem = ({ healthy, label, detail }: { readonly healthy: boolean; readonly label: string; readonly detail: string }) => (
   <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5">
@@ -88,7 +92,7 @@ export const DashboardPage = () => {
                   <strong className="block truncate text-sm">{task.title}</strong>
                   <small className="text-[0.7rem] text-muted-foreground">{task.repositoryName ?? "リポジトリ未選択"}</small>
                 </div>
-                <Badge variant="secondary">{statusLabel(task.status)}</Badge>
+                <Badge variant="secondary">{taskStatusLabels[task.status]}</Badge>
               </article>
             ))}
             {data.todayTasks.length === 0 && <EmptyState>今日対応するタスクはありません。</EmptyState>}
