@@ -16,6 +16,7 @@ export const scheduleIntervalSchema = z.enum(scheduleIntervals);
 export const scheduleCoalescingSchema = z.enum(scheduleCoalescingModes);
 export const financeEntryKindSchema = z.enum(financeEntryKinds);
 export const assetKindSchema = z.enum(assetKinds);
+export const weightSourceSchema = z.enum(weightSources);
 
 export const createTaskSchema = z.object({
   area: z.enum(taskAreas).optional(),
@@ -139,7 +140,7 @@ export const createNutritionEstimateSchema = z.object({
 });
 
 export const createWeightSchema = z.object({
-  source: z.enum(weightSources),
+  source: weightSourceSchema,
   sourceKey: z.string().trim().min(1).max(240),
   weightKg: z.number().positive().max(500),
   occurredAt: isoDateTimeSchema,
@@ -295,7 +296,7 @@ export type CreateConnectorSyncInput = z.infer<typeof createConnectorSyncSchema>
 export type CreateConversationReplyInput = z.infer<typeof createConversationReplySchema>;
 export type SyncRepositoriesInput = z.infer<typeof syncRepositoriesSchema>;
 export type UpsertSourceRepositoryMappingInput = z.infer<typeof upsertSourceRepositoryMappingSchema>;
-export type { JobKind, JobStatus } from "@life-console/domain";
+export type { AssetKind, JobKind, JobStatus, TaskStatus } from "@life-console/domain";
 
 export const weightGoalSchema = z.object({
   startWeightKg: z.number().min(0.1).max(500),

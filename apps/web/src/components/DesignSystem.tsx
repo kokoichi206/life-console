@@ -1,3 +1,4 @@
+import type { TaskStatus } from "@life-console/contracts";
 import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "../lib/class-names";
@@ -74,12 +75,14 @@ export const MetricCard = ({ label, value, detail, tone }: {
   </Card>
 );
 
-export const StatusDot = ({ status }: { readonly status: string }) => {
-  const className = {
-    doing: "bg-chart-2 ring-4 ring-accent",
-    done: "bg-success",
-    inbox: "bg-chart-4",
-    todo: "bg-chart-3",
-  }[status] ?? "bg-muted-foreground";
-  return <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", className)} />;
+const taskStatusDotClasses: Readonly<Record<TaskStatus, string>> = {
+  canceled: "bg-muted-foreground",
+  doing: "bg-chart-2 ring-4 ring-accent",
+  done: "bg-success",
+  inbox: "bg-chart-4",
+  todo: "bg-chart-3",
 };
+
+export const StatusDot = ({ status }: { readonly status: TaskStatus }) => (
+  <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", taskStatusDotClasses[status])} />
+);

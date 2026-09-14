@@ -31,7 +31,7 @@ export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, 
     await Promise.all(["conversations", "tasks", "jobs", "dashboard", "reply-drafts"].map((key) => client.invalidateQueries({ queryKey: [key] })));
   };
   const generate = useMutation({ mutationFn: () => api.generateReplyDrafts({
-    connector: conversation.connector as keyof typeof serviceLabels, period: "7d", conversationId: conversation.id,
+    connector: conversation.connector, period: "7d", conversationId: conversation.id,
     ...(calendarEnabled ? { calendar } : {}),
   }), onSuccess: invalidateWork });
   const createTask = useMutation({ mutationFn: () => api.createTaskFromConversation(conversation.id), onSuccess: invalidateWork });
@@ -59,7 +59,7 @@ export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, 
     <section aria-label="選択した会話" className="min-w-0 space-y-4">
       <Panel className="gap-4 px-5">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{serviceLabels[conversation.connector as keyof typeof serviceLabels]}</Badge>
+          <Badge variant="outline">{serviceLabels[conversation.connector]}</Badge>
           <time className="text-xs text-muted-foreground">{new Date(conversation.occurredAt).toLocaleString("ja-JP")}</time>
           {conversation.sourceUrl !== null && (
             <a className={buttonVariants({ variant: "ghost", size: "sm", className: "ml-auto" })} href={conversation.sourceUrl} target="_blank" rel="noreferrer">
