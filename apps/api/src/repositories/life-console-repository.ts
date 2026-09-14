@@ -1,4 +1,4 @@
-import type { CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import type { AgentProvider, AssetKind, ConnectorKind, ConversationClassification, FinanceEntryKind, JobCompletionOutcome, JobKind, JobStatus, MealPhotoContentType, OrcaStatus, RepositoryRole, SourceMappingConnector, SourceScope, TaskArea, TaskStatus, WeightSource } from "@life-console/domain";
 
@@ -204,6 +204,10 @@ export interface LifeConsoleRepository {
   listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   listWeightsForExport(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   createWeight(id: string, input: CreateWeightInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>>;
+  getAbstinenceGoal(): Promise<Result<AbstinenceGoal | null, AppError>>;
+  saveAbstinenceGoal(input: AbstinenceGoal | null): Promise<Result<void, AppError>>;
+  listAbstinenceEvents(): Promise<Result<ReadonlyArray<AbstinenceEvent>, AppError>>;
+  createAbstinenceEvent(id: string, input: { readonly occurredAt: string; readonly durationMinutes: number | null; readonly memo: string }, now: string): Promise<Result<void, AppError>>;
   getFinanceSummary(): Promise<Result<FinanceSummary, AppError>>;
   createFinanceTransaction(id: string, input: CreateFinanceTransactionInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>>;
   createFinanceAdjustment(id: string, input: CreateFinanceAdjustmentInput, now: string): Promise<Result<void, AppError>>;

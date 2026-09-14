@@ -305,6 +305,22 @@ export const weightGoalSchema = z.object({
 });
 export type WeightGoal = z.infer<typeof weightGoalSchema>;
 
+export const abstinenceGoalSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  startedAt: isoDateTimeSchema,
+  targetDays: z.number().int().positive().max(100_000),
+  targetDate: z.iso.date().nullable(),
+});
+
+export const abstinenceEventSchema = z.object({
+  occurredAt: isoDateTimeSchema,
+  durationMinutes: z.number().int().nonnegative().max(100_000).nullable(),
+  memo: z.string().trim().max(2_000).default(""),
+});
+
+export type AbstinenceGoalInput = z.infer<typeof abstinenceGoalSchema>;
+export type AbstinenceEventInput = z.infer<typeof abstinenceEventSchema>;
+
 export const mealPeriodQuerySchema = z.union([
   z.object({ from: z.iso.date(), to: z.iso.date() }).refine((value) => value.from <= value.to),
   z.object({}).strict(),
