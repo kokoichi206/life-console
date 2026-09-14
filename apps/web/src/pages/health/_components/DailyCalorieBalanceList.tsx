@@ -43,9 +43,9 @@ const balanceLabel = (day: CalorieBalanceDay): string => {
   if (day.balanceKcal === null) return "—";
   if (!day.signKnown) return "未確定";
   const amount = signedKcal(day.balanceKcal);
-  if (day.amountKnown) return day.balanceKcal < 0 ? `超過 ${amount}` : amount;
+  if (day.amountKnown) return amount;
   // 額が未確定の日は、まだ動く向きを添える。摂取が増えれば下がり、取得待ちの運動が埋まれば上がる。
-  return day.balanceKcal < 0 ? `超過 ${amount} 以下` : `${amount} 以上`;
+  return day.balanceKcal < 0 ? `${amount} 以下` : `${amount} 以上`;
 };
 
 // 「食事がない日」と「食べたがカロリーが未記録の日」を区別する。後者を 0 kcal とも `—` とも見せない。
@@ -55,7 +55,7 @@ const intakeText = (day: CalorieBalanceDay): string => {
 };
 
 // 実測が 1 件もない日は空にする。取得待ちと算入外は記号ではなく副行の件数で示す。
-const exerciseText = (day: CalorieBalanceDay): string => day.exercise !== undefined && day.exercise.kcal > 0 ? signedKcal(day.exercise.kcal) : "";
+const exerciseText = (day: CalorieBalanceDay): string => day.exercise !== undefined && day.exercise.kcal > 0 ? kcalFormat.format(day.exercise.kcal) : "";
 
 /** 棒と数値は `aria-hidden` なので、読み上げ用に同じ値をラベル付きで置く。 */
 const spokenIntake = (day: CalorieBalanceDay): string => {
@@ -87,14 +87,13 @@ const barClassName = (day: CalorieBalanceDay, balanceKcal: number): string => {
 };
 
 /**
- * 通常幅は 1 行。摂取と運動を棒に重ね、棒はその内側（左右の余白は数値の幅と揃える）に収める。
- * 狭い画面は棒に 1 行目を丸ごと渡し、数値と収支を 2 行目へ落とす。
- * 収支の列が幅の半分以上を占めるため、1 行のままだと棒の描ける幅が残らない。
+ * 摂取・収支・運動の数値を棒の左右・中央に揃える。棒は中央のゼロ線を基準に描く。
+ * 狭い画面でも 3 列の対応を保ち、収支の数値と棒の基準点を同じ中央に置く。
  */
 const BalanceRow = ({ day, scaleKcal, scaled }: { readonly day: CalorieBalanceDay; readonly scaleKcal: number; readonly scaled: boolean }) => (
-  <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] items-center gap-x-3 gap-y-1">
+  <div className="grid grid-cols-[minmax(0,1fr)_6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1">
     {/* col-span は grid-column のショートハンドで col-start を打ち消すため、開始と終了を別々に指定する。 */}
-    <div aria-hidden="true" className="relative col-start-1 col-end-3 row-start-1 h-5 sm:col-end-2 sm:mx-11">
+    <div aria-hidden="true" className="relative col-start-1 col-end-4 row-start-1 h-5 mx-3 sm:mx-11">
       {scaled && <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border" />}
       {day.balanceKcal !== null && (
         <span
@@ -106,11 +105,13 @@ const BalanceRow = ({ day, scaleKcal, scaled }: { readonly day: CalorieBalanceDa
         />
       )}
     </div>
-    <div aria-hidden="true" className="col-start-1 row-start-2 flex justify-between text-xs text-muted-foreground sm:row-start-1">
+    <div aria-hidden="true" className="col-start-1 row-start-2 text-xs text-muted-foreground">
       <span>{intakeText(day)}</span>
+    </div>
+    <span className="col-start-2 row-start-2 text-center font-medium">{balanceLabel(day)}</span>
+    <div aria-hidden="true" className="col-start-3 row-start-2 text-right text-xs text-muted-foreground">
       <span>{exerciseText(day)}</span>
     </div>
-    <span className="col-start-2 row-start-2 text-right font-medium sm:row-start-1">{balanceLabel(day)}</span>
   </div>
 );
 
@@ -188,15 +189,11 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
               <tr>
                 <th scope="col" className="border-b px-3 py-2 text-left font-medium whitespace-nowrap">日付</th>
                 <th scope="col" className="border-b px-3 py-2 font-medium">
-                  <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] items-center gap-x-3">
-                    <div aria-hidden="true" className="relative h-4 text-[0.65rem] font-normal text-muted-foreground">
-                      <span className="absolute left-0">摂取</span>
-                      {/* 狭い画面では棒が別の行になり、ゼロ線と見出しの中央が揃わないので目盛りを出さない。 */}
-                      {scaled && <span className="absolute left-1/2 hidden -translate-x-1/2 sm:block">0</span>}
-                      {/* 未接続なら運動の値は永久に出ないので見出しも出さない。取得中・失敗は一時的なので残す。 */}
-                      {exerciseState !== "untracked" && <span className="absolute right-0">運動</span>}
-                    </div>
-                    <span className="text-right">収支</span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_6.5rem_minmax(0,1fr)] items-center gap-x-3 text-[0.65rem] font-normal text-muted-foreground">
+                    <span>摂取</span>
+                    <span className="text-center">収支</span>
+                    {/* 未接続なら運動の値は永久に出ないので見出しも出さない。取得中・失敗は一時的なので残す。 */}
+                    {exerciseState !== "untracked" ? <span className="text-right">運動</span> : <span />}
                   </div>
                 </th>
               </tr>

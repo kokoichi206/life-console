@@ -75,9 +75,9 @@ export const SavingAndOverrun: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText("+117")).toBeVisible();
     await expect(canvas.getByText("+100")).toBeVisible();
-    await expect(canvas.getByText("超過 −222")).toBeVisible();
+    await expect(canvas.getByText("−222")).toBeVisible();
     await expect(canvas.getByText("1,900")).toBeVisible();
-    await expect(canvas.getByText("+500")).toBeVisible();
+    await expect(canvas.getByText("500")).toBeVisible();
     await expect(canvas.getByText("摂取 1,900 kcal、運動 500 kcal")).toBeInTheDocument();
     // ラベルはヘッダーに 1 回だけ出す。
     await expect(canvas.getByText("摂取")).toBeVisible();
@@ -201,7 +201,7 @@ export const BaselineUnset: Story = {
     await expect(canvas.getByText("基準消費量が未設定・体重と同じ期間・日本時間")).toBeVisible();
     await expect(canvas.queryByText("+117")).not.toBeInTheDocument();
     await expect(canvas.getByText("1,703")).toBeVisible();
-    await expect(canvas.getByText("+320")).toBeVisible();
+    await expect(canvas.getByText("320")).toBeVisible();
     // 棒を 1 本も描かないので、ゼロの目盛りと凡例は出さない。摂取と運動の数値は残る。
     await expect(canvas.queryByText("0")).not.toBeInTheDocument();
     await expect(canvas.queryByText("貯金")).not.toBeInTheDocument();
@@ -221,9 +221,9 @@ export const SignOnlyConfirmed: Story = {
     ], tracked({ "2026-09-10": exercise(180), "2026-09-11": exercise(0, 1) }), 1500),
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText("超過 −222 以下")).toBeVisible();
+    await expect(canvas.getByText("−222 以下")).toBeVisible();
     await expect(canvas.getByText("1,902")).toBeVisible();
-    await expect(canvas.getByText("+180")).toBeVisible();
+    await expect(canvas.getByText("180")).toBeVisible();
     await expect(canvas.getByText("未記録 1 件")).toBeVisible();
     await expect(canvas.getByText("+155 以上")).toBeVisible();
     await expect(canvas.getByText("1,345")).toBeVisible();
@@ -289,7 +289,7 @@ export const GapDays: Story = {
     await expect(canvas.getByRole("region", { name: "日別の収支" })).toBeVisible();
     await expect(canvas.getByText("9/2〜9/7 食事と運動の記録なし（6 日）")).toBeVisible();
     await expect(canvas.getByText("食事の記録なし")).toBeVisible();
-    await expect(canvas.getByText("+410")).toBeVisible();
+    await expect(canvas.getByText("410")).toBeVisible();
     // 食事のない日は摂取も収支も `—`。全件未記録の日（摂取は空）と区別する。
     await expect(canvas.getAllByText("—")).toHaveLength(2);
   },
@@ -304,7 +304,7 @@ export const WithoutStrava: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("Strava 未接続のため、運動を含めていません。")).toBeVisible();
-    await expect(canvas.getByText("超過 −203")).toBeVisible();
+    await expect(canvas.getByText("−203")).toBeVisible();
     await expect(canvas.queryByText("Powered by Strava")).not.toBeInTheDocument();
     // 値が永久に出ない列の見出しは残さない。摂取の見出しは残る。
     await expect(canvas.queryByText("運動")).not.toBeInTheDocument();
@@ -362,9 +362,9 @@ export const Mobile: Story = {
   parameters: { viewport: { options: { calorieMobile: { name: "カロリー収支 · 390 × 800", styles: { width: "390px", height: "800px" }, type: "mobile" } } } },
   globals: { viewport: { value: "calorieMobile", isRotated: false } },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText("超過 −222")).toBeVisible();
+    await expect(canvas.getByText("−222")).toBeVisible();
     await expect(canvas.getByText("1,902")).toBeVisible();
-    await expect(canvas.getByText("+180")).toBeVisible();
+    await expect(canvas.getByText("180")).toBeVisible();
     // 狭い画面でも収支の棒が視認できる幅を持つこと。
     await expect(barWidth(canvas, "9/10")).toBeGreaterThan(12);
     // 既定の 7 行は狭い画面でもスクロールさせない。スクロールしない枠は tab 止まりにもしない。
