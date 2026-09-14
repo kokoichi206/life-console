@@ -1,3 +1,4 @@
+import type { JobStatus } from "@life-console/domain";
 import { z } from "zod";
 
 import { createNutritionEstimateSchema } from "./schemas";
@@ -24,6 +25,6 @@ export type MealNutrition = {
   readonly occurredAt: string;
   readonly manualCaloriesKcal: number | null;
   readonly estimate: NutritionEstimate | null;
-  readonly analysisStatus: string | null;
+  readonly analysisStatus: JobStatus | null;
   readonly analysisSummary: string | null;
 };

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../apps/api/src/app";
+import { createStravaCaloriesRepository } from "../apps/api/src/repositories/strava-calories-repository";
 import { createStravaConnectionRepository } from "../apps/api/src/repositories/strava-connection-repository";
 
 import { createJobStorage } from "./support/d1-storage";
@@ -15,7 +16,7 @@ const distantFuture = "2099-01-01T00:00:00.000Z";
 type Storage = ReturnType<typeof createJobStorage>;
 
 const activity = (id: string, occurredAt: string) => ({
-  id: Number(id), name: "架空の運動", sport_type: "Run", start_date: occurredAt, distance: 5000, moving_time: 1800, elapsed_time: 2000,
+  id: Number(id), name: "架空の運動", sport_type: "Run", start_date: occurredAt, distance: 5000, moving_time: 1800, elapsed_time: 2000, average_heartrate: undefined as number | undefined,
 });
 
 /** 一覧は 1 ページ目だけ返し、詳細は id ごとの応答を引く架空の Strava。 */
@@ -79,6 +80,16 @@ const fetchCalories = (storage: Storage, jobId: string, token = leaseToken) => a
 const syncStatus = (storage: Storage) => app.request("/api/v1/strava/calories/sync-status", {}, environmentFor(storage));
 const storedCalories = (storage: Storage) => app.request(`/api/v1/strava/calories?from=${period.from}&to=${period.to}`, {}, environmentFor(storage));
 const jobIds = ({ database }: Storage) => database.prepare("SELECT id FROM jobs WHERE kind = 'strava_calories_sync' ORDER BY created_at").all().map((row) => String(row.id));
+const requestSync = (storage: Storage) => app.request("/api/v1/strava/sync", {
+  method: "POST", headers: { "Content-Type": "application/json", "Origin": "http://localhost" }, body: JSON.stringify(period),
+}, environmentFor(storage));
+const startAndReconcile = async (storage: Storage) => {
+  expect((await requestSync(storage)).status).toBe(200);
+  const jobId = jobIds(storage)[0]!;
+  await startSyncJob(storage, jobId);
+  expect((await reconcile(storage, jobId)).status).toBe(200);
+  return jobId;
+};
 const storedRows = ({ database }: Storage) => database.prepare("SELECT activity_id, status, calories_kcal FROM strava_activity_calories ORDER BY occurred_at DESC").all();
 const seenAt = ({ database }: Storage, activityId: string) => String(database.prepare("SELECT seen_at FROM strava_activity_calories WHERE activity_id = ?").get(activityId)!.seen_at);
 
@@ -87,45 +98,107 @@ afterEach(() => {
 });
 
 describe("Strava の消費カロリーの保存と同期", () => {
-  it("一覧の取得で保存行のない活動を pending 登録し、同期ジョブを 1 件だけ予約する", async () => {
+  it("画面の読み取りは Strava を呼ばず、保存もジョブ予約もしない", async () => {
     const storage = createJobStorage();
-    stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z"), activity("2", "2026-09-08T00:00:00Z")] });
+    const calls = stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")] });
     try {
       await connect(storage);
-      expect((await listActivities(storage)).status).toBe(200);
-      expect(storedRows(storage)).toEqual([
-        { activity_id: "2", status: "pending", calories_kcal: null },
-        { activity_id: "1", status: "pending", calories_kcal: null },
-      ]);
+      expect(await (await listActivities(storage)).json()).toEqual({ data: { activities: [], nextPage: null } });
+      expect(await (await storedCalories(storage)).json()).toEqual({ data: [] });
+      expect(storedRows(storage)).toEqual([]);
+      expect(jobIds(storage)).toEqual([]);
+      expect(calls).toEqual([]);
+      expect((await requestSync(storage)).status).toBe(200);
+      expect((await requestSync(storage)).status).toBe(200);
       expect(jobIds(storage)).toHaveLength(1);
-      expect((await listActivities(storage, 2)).status).toBe(200);
-      expect((await listActivities(storage)).status).toBe(200);
-      expect(jobIds(storage)).toHaveLength(1);
+      expect(calls).toEqual([]);
     } finally { storage.database.close(); }
   });
 
-  it("取得待ちが残っていなければ同期ジョブを予約しない", async () => {
+  it("同期した表示項目を DB から返し、再同期で変更を反映して取得済みカロリーを保つ", async () => {
+    const storage = createJobStorage();
+    const original = activity("1", "2026-09-07T00:00:00Z");
+    const calls = stubStrava({ activities: [original], detail: () => detailResponse({ calories: 320, moving_time: 1800 }) });
+    try {
+      await connect(storage);
+      const jobId = await startAndReconcile(storage);
+      await fetchCalories(storage, jobId);
+      const before = calls.length;
+      expect(await (await listActivities(storage)).json()).toEqual({ data: { activities: [{
+        id: "1", name: "架空の運動", sportType: "Run", occurredAt: original.start_date,
+        distanceMeters: 5000, movingSeconds: 1800, elapsedSeconds: 2000, averageHeartrate: null,
+      }], nextPage: null } });
+      expect(calls).toHaveLength(before);
+      const firstSeen = seenAt(storage, "1");
+      vi.unstubAllGlobals();
+      stubStrava({ activities: [{ ...original, name: "変更後の運動", sport_type: "TrailRun", start_date: "2026-09-08T00:00:00Z", distance: 6000, moving_time: 2100, elapsed_time: 2400, average_heartrate: 145 }] });
+      await reconcile(storage, jobId);
+      expect(await (await listActivities(storage)).json()).toMatchObject({ data: { activities: [{
+        name: "変更後の運動", sportType: "TrailRun", occurredAt: "2026-09-08T00:00:00Z", distanceMeters: 6000,
+        movingSeconds: 2100, elapsedSeconds: 2400, averageHeartrate: 145,
+      }] } });
+      expect(storedRows(storage)).toEqual([{ activity_id: "1", status: "measured", calories_kcal: 320 }]);
+      expect(seenAt(storage, "1") >= firstSeen).toBe(true);
+    } finally { storage.database.close(); }
+  });
+
+  it("保存済み一覧を日本時間の期間と安定した順序でページングし、日付の索引を使う", async () => {
+    const storage = createJobStorage();
+    const calls = stubStrava({ activities: [] });
+    try {
+      await connect(storage);
+      const repository = createStravaCaloriesRepository(storage.binding);
+      const records = Array.from({ length: 101 }, (_, index) => ({
+        id: String(index).padStart(3, "0"), name: "架空の運動", sportType: "Run", occurredAt: "2026-09-07T00:00:00.000Z",
+        distanceMeters: 1200.5, movingSeconds: 600, elapsedSeconds: 650, averageHeartrate: 142.5,
+      }));
+      const boundaries = ["2026-09-06T14:59:59.999Z", "2026-09-06T15:00:00.000Z", "2026-09-13T14:59:59.999Z", "2026-09-13T15:00:00.000Z"];
+      expect(await repository.registerOrTouch([...records, ...boundaries.map((occurredAt, i) => ({ ...records[0]!, id: `boundary-${String(i)}`, occurredAt }))], "2026-09-14T00:00:00Z")).toMatchObject({ ok: true });
+      const first = await (await listActivities(storage)).json() as { data: { activities: { id: string }[]; nextPage: number | null } };
+      const second = await (await listActivities(storage, 2)).json() as typeof first;
+      expect(first.data.activities).toHaveLength(100);
+      expect(first.data.nextPage).toBe(2);
+      expect(second.data.activities).toHaveLength(3);
+      expect(second.data.nextPage).toBeNull();
+      expect([...first.data.activities, ...second.data.activities].map((row) => row.id)).toEqual(["boundary-2", ...records.toReversed().map((row) => row.id), "boundary-1"]);
+      const explain = storage.database.prepare("EXPLAIN QUERY PLAN SELECT * FROM strava_activities WHERE occurred_at >= ? AND occurred_at < ? ORDER BY occurred_at DESC, id DESC LIMIT 101").all(boundaries[1]!, boundaries[3]!);
+      expect(JSON.stringify(explain)).toContain("USING INDEX strava_activities_occurred_idx");
+      expect(JSON.stringify(explain)).not.toContain("TEMP B-TREE");
+      expect(calls).toEqual([]);
+    } finally { storage.database.close(); }
+  });
+
+  it("過去のカロリー同期が完了済みでも運動項目の遡りを一度だけやり直す", async () => {
     const storage = createJobStorage();
     stubStrava({ activities: [] });
     try {
       await connect(storage);
-      expect((await listActivities(storage)).status).toBe(200);
-      expect(storedRows(storage)).toEqual([]);
-      expect(jobIds(storage)).toEqual([]);
+      await requestSync(storage);
+      const jobId = jobIds(storage)[0]!;
+      await startSyncJob(storage, jobId);
+      setStartedAt(storage, jobId, "2026-09-14T01:00:00.000Z");
+      storage.database.prepare("INSERT INTO strava_calories_backfill (id, cursor_to, started_at, completed_at, updated_at) VALUES (1, '2009-03-01', '2026-09-01T00:00:00Z', '2026-09-02T00:00:00Z', '2026-09-02T00:00:00Z')").run();
+      const chunk = { from: "2026-05-18", to: "2026-08-15" };
+      expect(await (await plan(storage, jobId, "backfill")).json()).toEqual({ data: chunk });
+      expect(storage.database.prepare("SELECT includes_activities FROM strava_calories_backfill").get()).toEqual({ includes_activities: 1 });
+      await reconcile(storage, jobId, 1, chunk, true);
+      expect(await (await plan(storage, jobId, "backfill")).json()).toEqual({ data: { from: "2026-02-17", to: "2026-05-17" } });
     } finally { storage.database.close(); }
   });
 
-  it("一覧の再取得は行を増やさず seen_at だけ進める", async () => {
+  it("Strava 側の削除と詳細の 404 は表示用の運動も削除する", async () => {
     const storage = createJobStorage();
-    stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")] });
+    stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")], detail: () => new Response(null, { status: 404 }) });
     try {
       await connect(storage);
-      await listActivities(storage);
-      const first = seenAt(storage, "1");
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      await listActivities(storage);
-      expect(storedRows(storage)).toHaveLength(1);
-      expect(seenAt(storage, "1") > first).toBe(true);
+      const jobId = await startAndReconcile(storage);
+      expect(storage.database.prepare("SELECT id FROM strava_activities").all()).toHaveLength(1);
+      await fetchCalories(storage, jobId);
+      expect(storage.database.prepare("SELECT id FROM strava_activities").all()).toEqual([]);
+      await reconcile(storage, jobId);
+      storage.database.prepare("UPDATE strava_activity_calories SET seen_at = '2000-01-01T00:00:00Z'").run();
+      await reconcile(storage, jobId, 2);
+      expect(storage.database.prepare("SELECT id FROM strava_activities").all()).toEqual([]);
     } finally { storage.database.close(); }
   });
 
@@ -180,9 +253,7 @@ describe("Strava の消費カロリーの保存と同期", () => {
     stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")] });
     try {
       await connect(storage);
-      await listActivities(storage);
-      const jobId = jobIds(storage)[0]!;
-      await startSyncJob(storage, jobId);
+      const jobId = await startAndReconcile(storage);
       vi.unstubAllGlobals();
       stubStrava({ listStatus: 503 });
       expect((await reconcile(storage, jobId)).status).toBe(502);
@@ -200,9 +271,7 @@ describe("Strava の消費カロリーの保存と同期", () => {
     } });
     try {
       await connect(storage);
-      await listActivities(storage);
-      const jobId = jobIds(storage)[0]!;
-      await startSyncJob(storage, jobId);
+      const jobId = await startAndReconcile(storage);
       const first = await (await fetchCalories(storage, jobId)).json() as { data: Record<string, unknown> };
       expect(first.data).toEqual({ fetched: 8, unavailable: 1, deleted: 1, failed: 0, remaining: 2, retryAfterSeconds: null, dailyLimitReached: false });
       expect(detailCalls(calls)).toEqual(["12", "11", "10", "9", "8", "7", "6", "5", "4", "3"].map((id) => `/api/v3/activities/${id}`));
@@ -218,9 +287,7 @@ describe("Strava の消費カロリーの保存と同期", () => {
     stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z"), activity("2", "2026-09-08T00:00:00Z")], detail: () => new Response(null, { status: 429 }) });
     try {
       await connect(storage);
-      await listActivities(storage);
-      const jobId = jobIds(storage)[0]!;
-      await startSyncJob(storage, jobId);
+      const jobId = await startAndReconcile(storage);
       const result = await (await fetchCalories(storage, jobId)).json() as { data: { failed: number; remaining: number; retryAfterSeconds: number } };
       expect(result.data).toMatchObject({ fetched: 0, failed: 0, remaining: 2 });
       expect(result.data.retryAfterSeconds).toBeGreaterThan(0);
@@ -237,9 +304,7 @@ describe("Strava の消費カロリーの保存と同期", () => {
     });
     try {
       await connect(storage);
-      await listActivities(storage);
-      const jobId = jobIds(storage)[0]!;
-      await startSyncJob(storage, jobId);
+      const jobId = await startAndReconcile(storage);
       const quarterHour = await (await fetchCalories(storage, jobId)).json() as { data: { fetched: number; retryAfterSeconds: number | null; dailyLimitReached: boolean } };
       expect(quarterHour.data.fetched).toBe(1);
       expect(quarterHour.data.dailyLimitReached).toBe(false);
@@ -254,15 +319,15 @@ describe("Strava の消費カロリーの保存と同期", () => {
     const calls = stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")], detail: () => detailResponse({ calories: 300, moving_time: 1800 }) });
     try {
       await connect(storage);
-      await listActivities(storage);
+      await requestSync(storage);
       const jobId = jobIds(storage)[0]!;
       const queued = await fetchCalories(storage, jobId);
       expect(queued.status).toBe(403);
       await startSyncJob(storage, jobId);
       expect((await fetchCalories(storage, jobId, "22222222-2222-4222-8222-222222222222")).status).toBe(403);
       expect((await reconcile(storage, "unknown-job")).status).toBe(403);
-      expect(calls.filter((path) => path.startsWith("/api/v3/activities/"))).toEqual([]);
-      expect(storedRows(storage)).toEqual([{ activity_id: "1", status: "pending", calories_kcal: null }]);
+      expect(calls).toEqual([]);
+      expect(storedRows(storage)).toEqual([]);
     } finally { storage.database.close(); }
   });
 
@@ -271,9 +336,7 @@ describe("Strava の消費カロリーの保存と同期", () => {
     const calls = stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")], detail: () => detailResponse({ calories: 320, moving_time: 1800 }) });
     try {
       await connect(storage);
-      await listActivities(storage);
-      const jobId = jobIds(storage)[0]!;
-      await startSyncJob(storage, jobId);
+      const jobId = await startAndReconcile(storage);
       await fetchCalories(storage, jobId);
       // 期間は +09:00 の暦日で切る。9/7 の始まりは 09-06T15:00:00Z、9/13 の終わりは 09-13T15:00:00Z の直前。
       for (const [activityId, occurredAt] of [["before", "2026-09-06T14:59:59.999Z"], ["first", "2026-09-06T15:00:00.000Z"], ["last", "2026-09-13T14:59:59.999Z"], ["after", "2026-09-13T15:00:00.000Z"]]) {
@@ -281,9 +344,9 @@ describe("Strava の消費カロリーの保存と同期", () => {
       }
       const before = calls.length;
       expect(await (await storedCalories(storage)).json()).toEqual({ data: [
-        { activityId: "last", status: "measured", caloriesKcal: 500 },
-        { activityId: "1", status: "measured", caloriesKcal: 320 },
-        { activityId: "first", status: "measured", caloriesKcal: 500 },
+        { activityId: "last", occurredAt: "2026-09-13T14:59:59.999Z", status: "measured", caloriesKcal: 500 },
+        { activityId: "1", occurredAt: "2026-09-07T00:00:00Z", status: "measured", caloriesKcal: 320 },
+        { activityId: "first", occurredAt: "2026-09-06T15:00:00.000Z", status: "measured", caloriesKcal: 500 },
       ] });
       expect(calls).toHaveLength(before);
     } finally { storage.database.close(); }
@@ -294,14 +357,12 @@ describe("Strava の消費カロリーの保存と同期", () => {
     const calls = stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")], detail: () => detailResponse({ calories: 320, moving_time: 1800 }) });
     try {
       await connect(storage);
-      await listActivities(storage);
-      const jobId = jobIds(storage)[0]!;
-      await startSyncJob(storage, jobId);
+      const jobId = await startAndReconcile(storage);
       await reconcile(storage, jobId, 1);
       await reconcile(storage, jobId, 2);
       expect(await (await fetchCalories(storage, jobId)).json()).toMatchObject({ data: { fetched: 1, remaining: 0 } });
       const measured = storage.database.prepare("SELECT status, calories_kcal, fetched_at, seen_at FROM strava_activity_calories WHERE activity_id = '1'").get()!;
-      // 2 周目: 画面契機の登録と定期の reconcile が同じ活動を見ても、取得済みの行は seen_at だけ進む。
+      // 2 周目の同期でも、取得済みのカロリーは保持する。
       await listActivities(storage);
       await reconcile(storage, jobId, 1);
       await reconcile(storage, jobId, 2);
@@ -402,6 +463,7 @@ describe("Strava の消費カロリーの保存と同期", () => {
       expect(await storage.repository.createJob({ id: "sync", kind: "strava_calories_sync", idempotencyKey: "sync", payloadJson: "{}", now: "2026-09-14T10:00:00.000Z" })).toMatchObject({ ok: true });
       storage.database.prepare("UPDATE jobs SET status = 'expired', finished_at = '2026-09-14T12:00:00.000Z' WHERE id = 'sync'").run();
       storage.database.prepare("INSERT INTO strava_calories_backfill (id, cursor_to, started_at, completed_at, updated_at) VALUES (1, '2026-08-15', '2026-09-14T10:00:00.000Z', NULL, '2026-09-14T10:00:00.000Z')").run();
+      storage.database.prepare("UPDATE strava_calories_backfill SET includes_activities = 1").run();
       expect(await (await syncStatus(storage)).json()).toEqual({
         data: { lastJob: { status: "expired", at: "2026-09-14T12:00:00.000Z", errorCode: null }, backfill: { cursorTo: "2026-08-15", completedAt: null } },
       });
@@ -409,13 +471,13 @@ describe("Strava の消費カロリーの保存と同期", () => {
     } finally { storage.database.close(); }
   });
 
-  it("定期の job が実行待ちの間は、画面契機の予約を重ねない", async () => {
+  it("定期の job が実行待ちの間は、手動の同期依頼を重ねない", async () => {
     const storage = createJobStorage();
     stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")] });
     try {
       await connect(storage);
       expect(await storage.repository.createJobUnlessActive({ id: "scheduled", kind: "strava_calories_sync", idempotencyKey: "scheduled", payloadJson: "{}", now: new Date().toISOString() })).toMatchObject({ ok: true });
-      await listActivities(storage);
+      await requestSync(storage);
       expect(jobIds(storage)).toEqual(["scheduled"]);
     } finally { storage.database.close(); }
   });
@@ -439,7 +501,7 @@ describe("Strava の消費カロリーの保存と同期", () => {
     const disconnect = () => app.request("/api/v1/strava/connection", { method: "DELETE", headers: { Origin: "http://localhost" } }, environmentFor(storage));
     try {
       await connect(storage);
-      await listActivities(storage);
+      await startAndReconcile(storage);
       storage.database.prepare("INSERT INTO strava_calories_backfill (id, cursor_to, started_at, completed_at, updated_at) VALUES (1, '2026-08-15', '2026-09-14T00:00:00.000Z', NULL, '2026-09-14T00:00:00.000Z')").run();
       expect(storedRows(storage)).toHaveLength(1);
       expect((await disconnect()).status).toBe(502);
@@ -449,21 +511,22 @@ describe("Strava の消費カロリーの保存と同期", () => {
       stubStrava({ activities: [] });
       expect((await disconnect()).status).toBe(200);
       expect(storedRows(storage)).toEqual([]);
+      expect(storage.database.prepare("SELECT id FROM strava_activities").all()).toEqual([]);
       // 遡りの状態も消す。再接続後は初回からやり直す。
       expect(backfillRow(storage)).toBeNull();
     } finally { storage.database.close(); }
   });
 
-  it("ジョブが完了した後の表示では、取得待ちが残っていれば再び予約する", async () => {
+  it("ジョブ完了後の表示では予約せず、明示的な同期依頼で次のジョブを予約する", async () => {
     const storage = createJobStorage();
     stubStrava({ activities: [activity("1", "2026-09-07T00:00:00Z")] });
     try {
       await connect(storage);
-      await listActivities(storage);
-      const jobId = jobIds(storage)[0]!;
-      await startSyncJob(storage, jobId);
+      const jobId = await startAndReconcile(storage);
       expect(await storage.repository.completeJob(jobId, { runnerId: "test-runner", leaseToken, outcome: "succeeded", errorCode: null, summary: "1 日の上限で中断しました。" }, new Date().toISOString())).toMatchObject({ ok: true });
       await listActivities(storage);
+      expect(jobIds(storage)).toHaveLength(1);
+      await requestSync(storage);
       expect(jobIds(storage)).toHaveLength(2);
     } finally { storage.database.close(); }
   });

@@ -261,7 +261,7 @@ export const createJobExecutorUsecase = (dependencies: Dependencies): JobExecuto
     const counts = () => `取得 ${String(totals.fetched)} 件・値なし ${String(totals.unavailable)} 件・削除 ${String(totals.deleted)} 件。`;
     // 定期の job は待たずに終える。runner は 1 件ずつ実行するので、15 分待つと食事解析などが止まる。
     const waits = payload.kind === "period";
-    const resume = waits ? "次回の表示か『運動を更新』で再開します。" : "次の定期同期で再開します。";
+    const resume = waits ? "次の定期同期か『運動を同期』で再開します。" : "次の定期同期で再開します。";
     let backfillFloor: string | null = null;
     let backfillCompleted = false;
     const backfillSummary = () => backfillCompleted ? "遡り: 完了。" : backfillFloor === null ? "" : `遡り: ${backfillFloor} まで完了。`;

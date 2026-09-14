@@ -1,13 +1,16 @@
 import type { MonitorObservation, MonitorTarget } from "@life-console/contracts";
 import { nutritionCandidateSchema, type NutritionAnalysisPayload, type NutritionCandidate, type SaveNutritionEstimateInput } from "@life-console/contracts";
 import { stravaCaloriesFetchResultSchema, stravaCaloriesPlanResultSchema, stravaCaloriesReconcileResultSchema, type StravaCaloriesFetchInput, type StravaCaloriesFetchResult, type StravaCaloriesPlanInput, type StravaCaloriesPlanResult, type StravaCaloriesReconcileInput, type StravaCaloriesReconcileResult } from "@life-console/contracts";
-import { type WeightPoint, type Conversation, type CreateReplyDraftsInput, type SaveReplyDraftInput } from "@life-console/contracts";
+import { connectorKindSchema, conversationClassificationSchema, weightSourceSchema, type WeightPoint, type Conversation, type CreateReplyDraftsInput, type SaveReplyDraftInput } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
 import { z } from "zod";
 
 import type { RunnerConfig } from "../config";
 import { runnerError, type RunnerError } from "../errors";
 
+// runner は手動更新のため API より古い版で動きうる。
+// kind・status・provider を候補値で検証すると、新しい値を持つ job の claim 応答が parse できず、
+// claim 済みの job を完了報告できないまま lease 切れまで抱える。未対応の kind は job の実行時に失敗として報告する。
 const jobSchema = z.object({
   id: z.string(),
   taskId: z.string().nullable(),
@@ -143,8 +146,8 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
     reportObservation: (observation, historical) => jsonRequest("/api/v1/runner/monitoring/observations", z.null(), { observation, historical }),
     replyCandidates: (input) => request(`/api/v1/runner/reply-candidates?${new URLSearchParams({ connector: input.connector, period: input.period,
       ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }) }).toString()}`, z.array(z.object({
-      id: z.string(), connector: z.string(), sourceId: z.string(), externalMessageId: z.string(), authorLabel: z.string(),
-      excerpt: z.string(), sourceUrl: z.string().nullable(), classification: z.string(), occurredAt: z.string(),
+      id: z.string(), connector: connectorKindSchema, sourceId: z.string(), externalMessageId: z.string(), authorLabel: z.string(),
+      excerpt: z.string(), sourceUrl: z.string().nullable(), classification: conversationClassificationSchema, occurredAt: z.string(),
     }))),
     saveReplyDraft: (input) => jsonRequest("/api/v1/runner/reply-drafts", z.null(), input),
     registerRunner: async (orcaStatus) => {
@@ -191,7 +194,7 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
     ),
     importConversations: (input) => jsonRequest("/api/v1/runner/conversations/import", z.number(), input),
     listWeightsForExport: (signal) => request("/api/v1/runner/weights/export", z.array(z.object({
-      id: z.string(), source: z.string(), weightKg: z.number(),
+      id: z.string(), source: weightSourceSchema, weightKg: z.number(),
       occurredAt: z.iso.datetime({ offset: true }), recordedAt: z.iso.datetime({ offset: true }),
     })), { signal }),
     importWeightCsv: (csv) => request("/api/v1/weights/import", z.number(), {

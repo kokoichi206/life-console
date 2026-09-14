@@ -1,6 +1,6 @@
 import type { CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
-import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, JobStatus, AgentProvider, MealPhotoContentType, ConnectorKind, TaskArea, TaskStatus, SourceMappingConnector, SourceScope } from "@life-console/domain";
+import type { AgentProvider, AssetKind, ConnectorKind, ConversationClassification, FinanceEntryKind, JobCompletionOutcome, JobKind, JobStatus, MealPhotoContentType, OrcaStatus, RepositoryRole, SourceMappingConnector, SourceScope, TaskArea, TaskStatus, WeightSource } from "@life-console/domain";
 
 import type { AppError } from "../shared/app-error";
 
@@ -37,7 +37,7 @@ export type WeightPoint = {
   readonly id: string;
   readonly occurredAt: string;
   readonly recordedAt: string;
-  readonly source: string;
+  readonly source: WeightSource;
   readonly weightKg: number;
 };
 
@@ -48,10 +48,10 @@ export type FinanceSummary = {
   readonly netWorthYen: number;
   readonly byCategory: ReadonlyArray<{ readonly category: string; readonly amountYen: number }>;
   readonly byPaymentMethod: ReadonlyArray<{ readonly paymentMethod: string; readonly amountYen: number }>;
-  readonly assetAllocation: ReadonlyArray<{ readonly assetKind: string; readonly amountYen: number }>;
+  readonly assetAllocation: ReadonlyArray<{ readonly assetKind: AssetKind; readonly amountYen: number }>;
   readonly transactions: ReadonlyArray<{
     readonly id: string;
-    readonly kind: string;
+    readonly kind: FinanceEntryKind;
     readonly amountYen: number;
     readonly adjustedAmountYen: number;
     readonly category: string;
@@ -76,12 +76,12 @@ export type Job = {
   readonly id: string;
   readonly taskId: string | null;
   readonly repositoryId: string | null;
-  readonly kind: string;
+  readonly kind: JobKind;
   readonly status: JobStatus;
   readonly payloadJson: string;
   readonly leaseToken: string | null;
   readonly cancelRequestedAt: string | null;
-  readonly provider: string | null;
+  readonly provider: AgentProvider | null;
   readonly summary: string | null;
   readonly errorCode: string | null;
   readonly createdAt: string;

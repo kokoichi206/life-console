@@ -13,13 +13,29 @@ export const useStravaActivities = (from: string, to: string) => {
   } });
   const disconnect = useMutation({
     mutationFn: async () => {
-      await client.cancelQueries({ queryKey: ["strava-activities"] });
+      await Promise.all([
+        client.cancelQueries({ queryKey: ["strava-activities"] }),
+        client.cancelQueries({ queryKey: ["strava-calories"] }),
+        client.cancelQueries({ queryKey: ["strava-calories-sync-status"] }),
+      ]);
       await api.disconnectStrava();
     },
     onSuccess: async () => {
       client.setQueryData(stravaStatusQuery.queryKey, { configured: true, athleteId: null });
       client.removeQueries({ queryKey: ["strava-activities"] });
+      client.removeQueries({ queryKey: ["strava-calories"] });
+      client.removeQueries({ queryKey: ["strava-calories-sync-status"] });
       await client.invalidateQueries({ queryKey: stravaStatusQuery.queryKey });
+    },
+  });
+  const sync = useMutation({
+    mutationFn: () => api.syncStrava({ from, to }),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["strava-calories-sync-status"] }),
+        client.invalidateQueries({ queryKey: ["strava-activities"] }),
+        client.invalidateQueries({ queryKey: ["strava-calories"] }),
+      ]);
     },
   });
   const connected = status.isSuccess && status.data.athleteId !== null;
@@ -29,18 +45,18 @@ export const useStravaActivities = (from: string, to: string) => {
     initialPageParam: 1,
     getNextPageParam: (page) => page.nextPage,
     enabled: connected && !disconnect.isPending,
-    retry: false, gcTime: 0, staleTime: 0, refetchOnWindowFocus: false,
+    retry: false, gcTime: 5 * 60_000, staleTime: 60_000, refetchOnWindowFocus: false, refetchInterval: 60_000,
   });
   const { fetchNextPage, hasNextPage, isFetching, isError } = activities;
   useEffect(() => {
     if (connected && !disconnect.isPending && hasNextPage && !isFetching && !isError) void fetchNextPage();
   }, [connected, disconnect.isPending, hasNextPage, isFetching, isError, fetchNextPage]);
-  const complete = connected && activities.isSuccess && !activities.hasNextPage && !activities.isFetching && !disconnect.isPending;
+  const complete = connected && activities.isSuccess && !activities.hasNextPage && !disconnect.isPending;
   const pages = activities.data?.pages;
   // 応答が変わらない限り同じ配列を返し、収支の日別集計を再計算させない。
   const records = useMemo(
     () => complete && pages !== undefined ? [...new Map(pages.flatMap((page) => page.activities).map((activity) => [activity.id, activity])).values()] : [],
     [complete, pages],
   );
-  return { status, authorize, disconnect, connected, activities, complete, records };
+  return { status, authorize, disconnect, sync, connected, activities, complete, records };
 };

@@ -1,6 +1,6 @@
 # 消費カロリーの定期同期と初回の遡り
 
-作成日: 2026-09-14。状態: 設計案（未実装）。前提の設計は [calories-graph.md](calories-graph.md)（1.4〜1.7 節）。検証は [calories-graph-verification.md](calories-graph-verification.md) の 1.6 節と 2.4 節。
+作成日: 2026-09-14。定期同期は実装済み。画面表示時の取得・保存範囲は後続の [運動データの保存と表示](calorie-balance-loading.md) で変更した。以下は定期同期を設計した時点の記録。前提の設計は [calories-graph.md](calories-graph.md)（1.4〜1.7 節）。検証は [calories-graph-verification.md](calories-graph-verification.md) の 1.6 節と 2.4 節。
 
 ## 0. 背景と要件
 
