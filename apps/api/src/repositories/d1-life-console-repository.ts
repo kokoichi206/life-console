@@ -1,8 +1,8 @@
-import type { CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import { calculate7DayMovingAverage } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import { err, ok, safeTry } from "@life-console/core";
-import { agentQuestions, assetBalances, calorieBaseline, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
+import { abstinenceEvents, abstinenceGoal, agentQuestions, assetBalances, calorieBaseline, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
 import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType } from "@life-console/domain";
 import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -296,6 +296,32 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     const result = await safeTry(() => changes === null
       ? this.#database.delete(weightGoal).where(eq(weightGoal.id, 1)).run()
       : this.#database.insert(weightGoal).values({ id: 1, ...changes }).onConflictDoUpdate({ target: weightGoal.id, set: changes }).run());
+    return result.ok ? ok(undefined) : err(appError.storage(result.error));
+  }
+
+  async getAbstinenceGoal(): Promise<Result<AbstinenceGoal | null, AppError>> {
+    const result = await safeTry(() => this.#database.select({ name: abstinenceGoal.name, startedAt: abstinenceGoal.startedAt, targetDays: abstinenceGoal.targetDays, targetDate: abstinenceGoal.targetDate })
+      .from(abstinenceGoal).where(eq(abstinenceGoal.id, 1)).get());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value ?? null);
+  }
+
+  async saveAbstinenceGoal(input: AbstinenceGoal | null): Promise<Result<void, AppError>> {
+    const result = await safeTry(() => input === null
+      ? this.#database.delete(abstinenceGoal).where(eq(abstinenceGoal.id, 1)).run()
+      : this.#database.insert(abstinenceGoal).values({ id: 1, ...input }).onConflictDoUpdate({ target: abstinenceGoal.id, set: input }).run());
+    return result.ok ? ok(undefined) : err(appError.storage(result.error));
+  }
+
+  async listAbstinenceEvents(): Promise<Result<ReadonlyArray<AbstinenceEvent>, AppError>> {
+    const result = await safeTry(() => this.#database.select({ id: abstinenceEvents.id, occurredAt: abstinenceEvents.occurredAt, durationMinutes: abstinenceEvents.durationMinutes, memo: abstinenceEvents.memo, recordedAt: abstinenceEvents.recordedAt })
+      .from(abstinenceEvents).orderBy(desc(abstinenceEvents.occurredAt), desc(abstinenceEvents.id)).all());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value);
+  }
+
+  async createAbstinenceEvent(id: string, input: { readonly occurredAt: string; readonly durationMinutes: number | null; readonly memo: string }, now: string): Promise<Result<void, AppError>> {
+    const result = await safeTry(() => this.#database.insert(abstinenceEvents).values({ id, ...input, recordedAt: now }).run());
     return result.ok ? ok(undefined) : err(appError.storage(result.error));
   }
 

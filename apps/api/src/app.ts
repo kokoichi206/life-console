@@ -5,7 +5,7 @@ import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from
 import { calorieBaselineSchema, nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
 import { mealPeriodQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
 import { stravaCaloriesQuerySchema, stravaCaloriesReconcileSchema, stravaCaloriesFetchSchema, stravaCaloriesPlanSchema } from "@life-console/contracts";
-import { weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
+import { abstinenceEventSchema, abstinenceGoalSchema, weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
@@ -30,6 +30,7 @@ import { systemClock } from "./shared/clock";
 import { parseApiEnvironment, type ApiEnvironment } from "./shared/environment";
 import { cryptoIdGenerator } from "./shared/id-generator";
 import { cloudLogger } from "./shared/logger";
+import { createAbstinenceUsecase } from "./usecases/abstinence-usecase";
 import { createAgentQuestionUsecase } from "./usecases/agent-question-usecase";
 import { createConnectorScheduleUsecase } from "./usecases/connector-schedule-usecase";
 import { createConversationUsecase } from "./usecases/conversation-usecase";
@@ -76,6 +77,7 @@ const createHandlers = (environment: ApiEnvironment) => {
     dashboard: createDashboardUsecase(repository),
     finance: createFinanceUsecase(repository, systemClock, cryptoIdGenerator),
     health: createHealthUsecase(repository, systemClock, cryptoIdGenerator),
+    abstinence: createAbstinenceUsecase(repository, systemClock, cryptoIdGenerator),
     jobs: createJobUsecase(repository, systemClock, cryptoIdGenerator),
     mealPhotos: createMealPhotoUsecase(
       repository,
@@ -395,6 +397,9 @@ const _routes = app
   .post("/api/v1/weights", zValidator("json", createWeightSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createWeight(context.req.valid("json")));
   })
+  .get("/api/v1/abstinence", async (context) => respond(context, await createHandlers(context.get("environment")).abstinence()))
+  .put("/api/v1/abstinence/goal", zValidator("json", abstinenceGoalSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveAbstinenceGoal(context.req.valid("json"))))
+  .post("/api/v1/abstinence/events", zValidator("json", abstinenceEventSchema), async (context) => respond(context, await createHandlers(context.get("environment")).createAbstinenceEvent(context.req.valid("json"))))
   .post("/api/v1/weights/import", async (context) => {
     const parsed = parseWeightCsv(await context.req.text());
     if (!parsed.ok) return respond(context, parsed);

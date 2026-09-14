@@ -6,6 +6,7 @@ import { AppShell } from "./components/AppShell";
 import { Eyebrow, Panel } from "./components/DesignSystem";
 import { RouteError } from "./components/RouteError";
 import { buttonVariants } from "./components/ui/Button";
+import { abstinenceQuery } from "./features/abstinence/queries";
 import { jobsQuery } from "./features/jobs/queries";
 import { dashboardQuery } from "./features/overview/queries";
 import { repositoriesQuery } from "./features/repositories/queries";
@@ -37,7 +38,10 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  loader: ({ context }) => context.queryClient.ensureQueryData(dashboardQuery),
+  loader: ({ context }) => Promise.all([
+    context.queryClient.ensureQueryData(dashboardQuery),
+    context.queryClient.ensureQueryData(abstinenceQuery),
+  ]),
   component: lazyRouteComponent(() => import("./pages/dashboard/DashboardPage"), "DashboardPage"),
 });
 

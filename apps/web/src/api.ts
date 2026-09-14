@@ -2,7 +2,7 @@ import type { AppType } from "@life-console/api";
 import type { AgentQuestion } from "@life-console/contracts";
 import type { ConnectorScheduleStatus, CreateConnectorScheduleInput, UpdateConnectorScheduleInput } from "@life-console/contracts";
 import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contracts";
-import type { CalorieBaseline, MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
+import type { AbstinenceEventInput, AbstinenceGoalInput, AbstinenceOverview, CalorieBaseline, MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
 import type { StravaActivityCalories, StravaActivityPage, StravaCaloriesSyncStatus, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
   PushConfiguration,
@@ -119,6 +119,9 @@ export const api = {
   saveWeightGoal: async (input: WeightGoal | null) => unwrap<null>(await client.api.v1["weight-goal"].$put({ json: input })),
   calorieBaseline: async () => unwrap<CalorieBaseline | null>(await client.api.v1["calorie-baseline"].$get()),
   saveCalorieBaseline: async (input: CalorieBaseline | null) => unwrap<null>(await client.api.v1["calorie-baseline"].$put({ json: input })),
+  abstinence: async () => unwrap<AbstinenceOverview>(await client.api.v1.abstinence.$get()),
+  saveAbstinenceGoal: async (input: AbstinenceGoalInput | null) => unwrap<null>(await client.api.v1.abstinence.goal.$put({ json: input })),
+  createAbstinenceEvent: async (input: AbstinenceEventInput) => unwrap<null>(await client.api.v1.abstinence.events.$post({ json: input })),
   weights: async () => unwrap<ReadonlyArray<WeightPoint>>(await client.api.v1.weights.$get()),
   createWeight: async (input: Parameters<typeof client.api.v1.weights.$post>[0]["json"]) => unwrap<null>(await client.api.v1.weights.$post({ json: input })),
   importWeightCsv: async (csv: string) => unwrap<number>(await fetch("/api/v1/weights/import", {
