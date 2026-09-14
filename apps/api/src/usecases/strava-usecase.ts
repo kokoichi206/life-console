@@ -16,7 +16,7 @@ import { appError, type AppError } from "../shared/app-error";
 
 /** 1 回の fetch で詳細を取得する活動数。Worker の 1 リクエストあたりの subrequest 上限と CPU 時間に収める。 */
 const CALORIES_FETCH_BATCH = 10;
-/** 画面表示の一覧取得も同じ予算を使うため、Strava の上限より手前で中断する割合。 */
+/** 一覧取得と詳細取得で同じ予算を使うため、Strava の上限より手前で中断する割合。 */
 const FIFTEEN_MINUTE_PAUSE_RATIO = 0.8;
 const DAILY_PAUSE_RATIO = 0.9;
 const QUARTER_HOUR_MILLISECONDS = 900_000;
@@ -88,20 +88,7 @@ export const createStravaUsecase = (
     if (!execution.ok) return execution;
     return execution.value === null ? err(appError.invalidLease()) : ok(execution.value);
   };
-  const registerOrTouch = (activities: ReadonlyArray<StravaActivity>): Promise<Result<number, AppError>> => caloriesStore.registerOrTouch(
-    activities.map((activity) => ({ id: activity.id, occurredAt: activity.occurredAt })), clock.now().toISOString(),
-  );
-  const queueSyncIfPending = async (from: string, to: string): Promise<Result<void, AppError>> => {
-    // 新規登録がなくても、日次上限で中断して残った取得待ちを次の表示で再開できるようにする。
-    const pending = await caloriesStore.countPendingInPeriod(from, to);
-    if (!pending.ok) return pending;
-    if (pending.value === 0) return ok(undefined);
-    const id = ids.create();
-    return jobs.createJobUnlessActive({
-      id, kind: "strava_calories_sync", idempotencyKey: `strava-calories:${id}`,
-      payloadJson: JSON.stringify({ from, to }), now: clock.now().toISOString(),
-    });
-  };
+  const registerOrTouch = (activities: ReadonlyArray<StravaActivity>): Promise<Result<number, AppError>> => caloriesStore.registerOrTouch(activities, clock.now().toISOString());
   return {
     async status(): Promise<Result<StravaStatus, AppError>> {
       const current = await connections.read();
@@ -122,17 +109,18 @@ export const createStravaUsecase = (
         return connections.write({ athleteId: authorized.value.athlete.id, accessToken: authorized.value.access_token, refreshToken: authorized.value.refresh_token, expiresAt: authorized.value.expires_at }, lease, clock.now().getTime());
       });
     },
-    async activities(input: StravaActivityQuery): Promise<Result<StravaActivityPage, AppError>> {
-      const credentials = await refreshIfNeeded();
-      if (!credentials.ok) return credentials;
-      const page = await upstream.activities(credentials.value.accessToken, input);
-      if (!page.ok) return page;
-      // 画面表示側の登録は削除を行わない。期間全体を見終えたことをページ単位の 1 リクエストでは判定できない。
-      const registered = await registerOrTouch(page.value.activities);
-      if (!registered.ok) return registered;
-      const queued = await queueSyncIfPending(input.from, input.to);
-      // レート制限の使用率は同期の制御用で、画面へは返さない。
-      return queued.ok ? ok({ activities: page.value.activities, nextPage: page.value.nextPage }) : queued;
+    activities(input: StravaActivityQuery): Promise<Result<StravaActivityPage, AppError>> {
+      return caloriesStore.listActivities(input);
+    },
+    async requestSync(input: { readonly from: string; readonly to: string }): Promise<Result<void, AppError>> {
+      const current = await connections.read();
+      if (!current.ok) return current;
+      if (current.value === null) return err(appError.conflict("Strava に接続してください。"));
+      const id = ids.create();
+      return jobs.createJobUnlessActive({
+        id, kind: "strava_calories_sync", idempotencyKey: `strava-calories:${id}`,
+        payloadJson: JSON.stringify(input), now: clock.now().toISOString(),
+      });
     },
     activityCalories(input: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<StravaActivityCalories>, AppError>> {
       return caloriesStore.listByPeriod(input.from, input.to);
@@ -141,7 +129,7 @@ export const createStravaUsecase = (
       const lastJob = await jobs.findLatestJob("strava_calories_sync");
       if (!lastJob.ok) return lastJob;
       const backfill = await caloriesStore.readBackfill();
-      return backfill.ok ? ok({ lastJob: lastJob.value, backfill: backfill.value }) : backfill;
+      return backfill.ok ? ok({ lastJob: lastJob.value, backfill: backfill.value === null || !backfill.value.includesActivities ? null : { cursorTo: backfill.value.cursorTo, completedAt: backfill.value.completedAt } }) : backfill;
     },
     /**
      * 同期の窓を API の時計で決める。runner の時計や入力に日付を持たせない。
@@ -159,7 +147,7 @@ export const createStravaUsecase = (
       if (input.phase === "recent") return ok({ from: recentFrom, to: recentTo });
       const progress = await caloriesStore.readBackfill();
       if (!progress.ok) return progress;
-      const started = progress.value === null
+      const started = progress.value === null || !progress.value.includesActivities
         ? await caloriesStore.startBackfill(shiftDays(recentFrom, -1), clock.now().toISOString())
         : ok(progress.value);
       if (!started.ok) return started;

@@ -8,7 +8,7 @@ import { cn } from "../../../lib/class-names";
 import { RECENT_BALANCE_DAYS, type CalorieBalanceDay, type CalorieBalanceRow } from "../calorie-balance";
 
 /** 運動の取得状態。収支に運動を含められるかが状態ごとに変わる。 */
-export type ExerciseTrackingState = "untracked" | "loading" | "failed" | "tracked";
+export type ExerciseTrackingState = "untracked" | "loading" | "failed" | "tracked" | "stored" | "unsynced";
 
 const SCALE_STEP_KCAL = 500;
 const kcalFormat = new Intl.NumberFormat("ja-JP");
@@ -171,7 +171,9 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
       {exerciseState === "untracked" && <p className="text-xs text-muted-foreground">Strava 未接続のため、運動を含めていません。</p>}
       {exerciseState === "loading" && <p role="status" className="text-sm text-muted-foreground">運動を取得しています。取得後に収支を表示します。</p>}
       {exerciseState === "failed" && <p className="text-sm text-muted-foreground">運動を取得できていないため、収支を表示していません。</p>}
-      {exerciseState === "tracked" && pendingActivities > 0 && (
+      {exerciseState === "unsynced" && <p role="status" className="text-sm text-muted-foreground">運動の同期を待っています。「運動を同期」から開始できます。</p>}
+      {exerciseState === "stored" && <p role="status" className="text-sm text-muted-foreground">保存済みの運動で計算しています。未同期の運動は含まれません。</p>}
+      {(exerciseState === "tracked" || exerciseState === "stored") && pendingActivities > 0 && (
         <p role="status" className="text-sm text-muted-foreground">{`消費カロリーを取得中（残り ${pendingActivities} 件）。Mac の runner が順に取得します。`}</p>
       )}
       {nutritionPending && <p role="status" className="text-sm text-muted-foreground">カロリーを読み込んでいます。</p>}

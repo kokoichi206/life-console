@@ -8,7 +8,7 @@ export type ExerciseDayCalories = {
 };
 
 export const exerciseCaloriesByDay = (
-  activities: ReadonlyArray<StravaActivity>,
+  activities: ReadonlyArray<Pick<StravaActivity, "id" | "occurredAt">>,
   calories: ReadonlyArray<StravaActivityCalories>,
 ): ReadonlyMap<string, ExerciseDayCalories> => {
   const storedByActivity = new Map(calories.map((entry) => [entry.activityId, entry]));

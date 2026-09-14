@@ -1,6 +1,6 @@
 import { taskAreas, agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, stravaCaloriesStatuses, taskStatuses, weightSources } from "@life-console/domain";
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamps = {
   createdAt: text("created_at").notNull(),
@@ -311,10 +311,25 @@ export const stravaActivityCalories = sqliteTable("strava_activity_calories", {
   registeredAt: text("registered_at").notNull(),
   seenAt: text("seen_at").notNull(),
   fetchedAt: text("fetched_at"),
-}, (table) => [index("strava_activity_calories_pending_idx").on(table.status, table.occurredAt)]);
+}, (table) => [
+  index("strava_activity_calories_pending_idx").on(table.status, table.occurredAt),
+  index("strava_activity_calories_occurred_idx").on(table.occurredAt),
+]);
+
+export const stravaActivities = sqliteTable("strava_activities", {
+  id: text("id").primaryKey().references(() => stravaActivityCalories.activityId, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sportType: text("sport_type").notNull(),
+  occurredAt: text("occurred_at").notNull(),
+  distanceMeters: real("distance_meters").notNull(),
+  movingSeconds: integer("moving_seconds").notNull(),
+  elapsedSeconds: integer("elapsed_seconds").notNull(),
+  averageHeartrate: real("average_heartrate"),
+}, (table) => [index("strava_activities_occurred_idx").on(table.occurredAt, table.id)]);
 
 export const stravaCaloriesBackfill = sqliteTable("strava_calories_backfill", {
   id: integer("id").primaryKey(),
+  includesActivities: integer("includes_activities", { mode: "boolean" }).notNull().default(false),
   cursorTo: text("cursor_to").notNull(),
   startedAt: text("started_at").notNull(),
   completedAt: text("completed_at"),

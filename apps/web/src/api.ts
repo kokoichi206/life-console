@@ -75,6 +75,7 @@ export const api = {
   stravaStatus: async () => unwrap<StravaStatus>(await client.api.v1.strava.status.$get()),
   authorizeStrava: async () => unwrap<string>(await client.api.v1.strava.authorize.$post()),
   disconnectStrava: async () => unwrap<null>(await client.api.v1.strava.connection.$delete()),
+  syncStrava: async (period: { from: string; to: string }) => unwrap<void>(await client.api.v1.strava.sync.$post({ json: period })),
   stravaActivities: async (from: string, to: string, page: number, signal: AbortSignal) => unwrap<StravaActivityPage>(await client.api.v1.strava.activities.$get({ query: { from, to, page: String(page) } }, { init: { signal } })),
   stravaCaloriesSyncStatus: async () => unwrap<StravaCaloriesSyncStatus>(await client.api.v1.strava.calories["sync-status"].$get()),
   stravaCalories: async (from: string, to: string) => unwrap<ReadonlyArray<StravaActivityCalories>>(await client.api.v1.strava.calories.$get({ query: { from, to } })),
