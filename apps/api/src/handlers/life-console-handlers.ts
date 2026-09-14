@@ -1,3 +1,4 @@
+import type { AbstinenceUsecase } from "@api/usecases/abstinence-usecase";
 import type { ConversationUsecase } from "@api/usecases/conversation-usecase";
 import type { DashboardUsecase } from "@api/usecases/dashboard-usecase";
 import type { FinanceUsecase } from "@api/usecases/finance-usecase";
@@ -41,6 +42,7 @@ type Dependencies = {
   readonly dashboard: DashboardUsecase;
   readonly finance: FinanceUsecase;
   readonly health: HealthUsecase;
+  readonly abstinence: AbstinenceUsecase;
   readonly jobs: JobUsecase;
   readonly mealPhotos: MealPhotoUsecase;
   readonly notes: NoteUsecase;
@@ -76,6 +78,9 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   listWeightsForExport: () => dependencies.health.listWeightsForExport(),
   createWeight: (input: CreateWeightInput) => dependencies.health.createWeight(input),
   importWeights: (inputs: ReadonlyArray<CreateWeightInput>) => dependencies.health.importWeights(inputs),
+  abstinence: () => dependencies.abstinence.getOverview(),
+  saveAbstinenceGoal: (input: Parameters<AbstinenceUsecase["saveGoal"]>[0]) => dependencies.abstinence.saveGoal(input),
+  createAbstinenceEvent: (input: Parameters<AbstinenceUsecase["createEvent"]>[0]) => dependencies.abstinence.createEvent(input),
   financeSummary: () => dependencies.finance.summary(),
   createFinanceTransaction: (input: CreateFinanceTransactionInput) => dependencies.finance.createTransaction(input),
   createFinanceAdjustment: (input: CreateFinanceAdjustmentInput) => dependencies.finance.createAdjustment(input),

@@ -291,6 +291,22 @@ export const weightGoal = sqliteTable("weight_goal", {
   targetDate: text("target_date"),
 });
 
+export const abstinenceGoal = sqliteTable("abstinence_goal", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull(),
+  startedAt: text("started_at").notNull(),
+  targetDays: integer("target_days").notNull(),
+  targetDate: text("target_date"),
+});
+
+export const abstinenceEvents = sqliteTable("abstinence_events", {
+  id: text("id").primaryKey(),
+  occurredAt: text("occurred_at").notNull(),
+  durationMinutes: integer("duration_minutes"),
+  memo: text("memo").notNull(),
+  recordedAt: text("recorded_at").notNull(),
+}, (table) => [index("abstinence_events_occurred_idx").on(table.occurredAt)]);
+
 export const stravaConnection = sqliteTable("strava_connection", {
   id: integer("id").primaryKey(),
   credentials: text("credentials"),

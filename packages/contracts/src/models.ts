@@ -52,6 +52,29 @@ export type WeightPoint = {
   readonly weightKg: number;
 };
 
+export type AbstinenceGoal = {
+  readonly name: string;
+  readonly startedAt: string;
+  readonly targetDays: number;
+  readonly targetDate: string | null;
+};
+
+export type AbstinenceEvent = {
+  readonly id: string;
+  readonly occurredAt: string;
+  readonly durationMinutes: number | null;
+  readonly memo: string;
+  readonly recordedAt: string;
+};
+
+export type AbstinenceOverview = {
+  readonly goal: AbstinenceGoal | null;
+  readonly events: ReadonlyArray<AbstinenceEvent>;
+  readonly totalEventDurationMinutes: number;
+  readonly currentStreakDays: number;
+  readonly longestStreakDays: number;
+};
+
 export type FinanceSummary = {
   readonly incomeYen: number;
   readonly expenseYen: number;
