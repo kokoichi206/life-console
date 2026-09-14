@@ -27,6 +27,7 @@ export const stravaCaloriesQuerySchema = z.object({
 }).refine((value) => value.from <= value.to, { message: "開始日と終了日を確認してください。" });
 export const stravaActivityCaloriesSchema = z.object({
   activityId: z.string(),
+  occurredAt: z.iso.datetime(),
   status: z.enum(stravaCaloriesStatuses),
   caloriesKcal: z.number().int().nonnegative().nullable(),
 });

@@ -13,12 +13,18 @@ export const useStravaActivities = (from: string, to: string) => {
   } });
   const disconnect = useMutation({
     mutationFn: async () => {
-      await client.cancelQueries({ queryKey: ["strava-activities"] });
+      await Promise.all([
+        client.cancelQueries({ queryKey: ["strava-activities"] }),
+        client.cancelQueries({ queryKey: ["strava-calories"] }),
+        client.cancelQueries({ queryKey: ["strava-calories-sync-status"] }),
+      ]);
       await api.disconnectStrava();
     },
     onSuccess: async () => {
       client.setQueryData(stravaStatusQuery.queryKey, { configured: true, athleteId: null });
       client.removeQueries({ queryKey: ["strava-activities"] });
+      client.removeQueries({ queryKey: ["strava-calories"] });
+      client.removeQueries({ queryKey: ["strava-calories-sync-status"] });
       await client.invalidateQueries({ queryKey: stravaStatusQuery.queryKey });
     },
   });
@@ -29,7 +35,7 @@ export const useStravaActivities = (from: string, to: string) => {
     initialPageParam: 1,
     getNextPageParam: (page) => page.nextPage,
     enabled: connected && !disconnect.isPending,
-    retry: false, gcTime: 0, staleTime: 0, refetchOnWindowFocus: false,
+    retry: false, gcTime: 5 * 60_000, staleTime: 60_000, refetchOnWindowFocus: false,
   });
   const { fetchNextPage, hasNextPage, isFetching, isError } = activities;
   useEffect(() => {

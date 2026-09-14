@@ -1,6 +1,6 @@
 import { calculate7DayMovingAverage, weightCalendarDate, weightCalendarDayTimestamp } from "@life-console/contracts";
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 
 import { api } from "../../api";
 import { Eyebrow, Field, FormError, Panel } from "../../components/DesignSystem";
@@ -74,17 +74,30 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, c
   const meals = useQuery(mealsForPeriodQuery(periodFrom, periodTo));
   const nutrition = useQuery(nutritionQuery);
   const strava = useStravaActivities(periodFrom, periodTo);
-  const stravaCalories = useQuery(stravaCaloriesQuery(periodFrom, periodTo, strava.complete));
+  const stravaCalories = useQuery(stravaCaloriesQuery(periodFrom, periodTo, strava.connected && !strava.disconnect.isPending));
   const syncStatus = useQuery(stravaCaloriesSyncStatusQuery(strava.connected));
-  const exerciseTracking: ExerciseTrackingState = !strava.connected
-    ? "untracked"
-    : strava.activities.isError || stravaCalories.isError
-      ? "failed"
-      : strava.complete && stravaCalories.data !== undefined ? "tracked" : "loading";
-  const exerciseByDay = useMemo(
-    () => strava.complete && stravaCalories.data !== undefined ? exerciseCaloriesByDay(strava.records, stravaCalories.data) : undefined,
-    [strava.complete, strava.records, stravaCalories.data],
-  );
+  // 一覧で新しい活動が登録された後に、先に読んだ保存済みのカロリーを更新する。
+  useEffect(() => {
+    if (strava.complete) void queryClient.invalidateQueries({ queryKey: ["strava-calories", periodFrom, periodTo] });
+  }, [strava.complete, periodFrom, periodTo, queryClient]);
+  const exerciseByDay = useMemo(() => {
+    if (!strava.connected || strava.disconnect.isPending || stravaCalories.isError || stravaCalories.data === undefined) return undefined;
+    // 保存が空の間は「運動なし」と決めず、最新の一覧がそろうまで待つ。
+    if (!strava.complete && stravaCalories.data.length === 0) return undefined;
+    const activities = strava.complete ? strava.records : stravaCalories.data.map((entry) => ({ id: entry.activityId, occurredAt: entry.occurredAt }));
+    return exerciseCaloriesByDay(activities, stravaCalories.data);
+  }, [strava.connected, strava.disconnect.isPending, strava.complete, strava.records, stravaCalories.data, stravaCalories.isError]);
+  const exerciseTracking: ExerciseTrackingState = strava.status.isError
+    ? "failed"
+    : strava.status.isPending || strava.disconnect.isPending
+      ? "loading"
+      : !strava.connected
+          ? "untracked"
+          : stravaCalories.isError
+            ? "failed"
+            : exerciseByDay !== undefined
+              ? strava.complete ? "tracked" : "stored"
+              : strava.activities.isError ? "failed" : "loading";
   const untracked = exerciseTracking === "untracked";
   // 食事が未取得・取得失敗の間は行を組まない。空配列で組むと期間全体が「記録なし」の表になる。
   const nutritionMeals = nutrition.isError ? undefined : nutrition.data;
@@ -238,6 +251,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, c
         rows={balanceRows}
         baselineKcal={calorieBaseline?.dailyExpenditureKcal ?? null}
         exerciseState={exerciseTracking}
+        activityRefreshFailed={strava.activities.isError}
         pendingActivities={pendingActivities}
         nutritionPending={nutrition.isPending}
         nutritionErrorMessage={nutrition.error?.message ?? null}

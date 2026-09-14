@@ -281,9 +281,9 @@ describe("Strava の消費カロリーの保存と同期", () => {
       }
       const before = calls.length;
       expect(await (await storedCalories(storage)).json()).toEqual({ data: [
-        { activityId: "last", status: "measured", caloriesKcal: 500 },
-        { activityId: "1", status: "measured", caloriesKcal: 320 },
-        { activityId: "first", status: "measured", caloriesKcal: 500 },
+        { activityId: "last", occurredAt: "2026-09-13T14:59:59.999Z", status: "measured", caloriesKcal: 500 },
+        { activityId: "1", occurredAt: "2026-09-07T00:00:00Z", status: "measured", caloriesKcal: 320 },
+        { activityId: "first", occurredAt: "2026-09-06T15:00:00.000Z", status: "measured", caloriesKcal: 500 },
       ] });
       expect(calls).toHaveLength(before);
     } finally { storage.database.close(); }

@@ -95,7 +95,7 @@ export const createStravaCaloriesRepository = (database: D1Database): StravaCalo
     },
     async listByPeriod(from, to) {
       const result = await safeTry(() => db.select({
-        activityId: stravaActivityCalories.activityId, status: stravaActivityCalories.status, caloriesKcal: stravaActivityCalories.caloriesKcal,
+        activityId: stravaActivityCalories.activityId, occurredAt: stravaActivityCalories.occurredAt, status: stravaActivityCalories.status, caloriesKcal: stravaActivityCalories.caloriesKcal,
       }).from(stravaActivityCalories).where(withinPeriod(from, to)).orderBy(desc(stravaActivityCalories.occurredAt)).all());
       return result.ok ? ok(result.value) : err(appError.storage(result.error));
     },
