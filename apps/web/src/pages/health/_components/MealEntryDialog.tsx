@@ -1,6 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Camera, ImagePlus, RotateCw, X } from "lucide-react";
+import { Camera, ImagePlus, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { api } from "../../../api";
@@ -103,9 +103,9 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
             </div>
           )}
           {photo !== null && (
-            <Button type="button" variant="outline" className="h-11" disabled={photoPreview === undefined} onClick={() => setQuarterTurns((turns) => (turns + 1) % 4)}>
-              <RotateCw />
-              右に 90° 回転
+            <Button type="button" variant="outline" className="h-11" disabled={photoPreview === undefined} onClick={() => setQuarterTurns((turns) => (turns + 3) % 4)}>
+              <RotateCcw />
+              左に 90° 回転
             </Button>
           )}
           {photoError !== undefined && <FormError>{photoError}</FormError>}
