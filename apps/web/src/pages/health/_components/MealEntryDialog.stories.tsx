@@ -132,19 +132,19 @@ export const RotatePhoto: Story = {
     await userEvent.upload(await screen.findByLabelText("保存済みの写真"), photoFile());
     await expectPhotoPreview(canvasElement, { width: 80, height: 40, corners: ["red", "blue", "red", "blue"] });
     const rotations: Awaited<ReturnType<typeof photoPixels>>[] = [
-      { width: 40, height: 80, corners: ["red", "red", "blue", "blue"] },
-      { width: 80, height: 40, corners: ["blue", "red", "blue", "red"] },
       { width: 40, height: 80, corners: ["blue", "blue", "red", "red"] },
-      { width: 80, height: 40, corners: ["red", "blue", "red", "blue"] },
+      { width: 80, height: 40, corners: ["blue", "red", "blue", "red"] },
       { width: 40, height: 80, corners: ["red", "red", "blue", "blue"] },
+      { width: 80, height: 40, corners: ["red", "blue", "red", "blue"] },
+      { width: 40, height: 80, corners: ["blue", "blue", "red", "red"] },
     ];
     for (const expected of rotations) {
-      await userEvent.click(screen.getByRole("button", { name: "右に 90° 回転" }));
+      await userEvent.click(screen.getByRole("button", { name: "左に 90° 回転" }));
       await expectPhotoPreview(canvasElement, expected);
     }
     await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
     await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
-    await expect(uploadedPhoto).toHaveBeenCalledWith(expect.objectContaining({ width: 40, height: 80, corners: ["red", "red", "blue", "blue"] }));
+    await expect(uploadedPhoto).toHaveBeenCalledWith(expect.objectContaining({ width: 40, height: 80, corners: ["blue", "blue", "red", "red"] }));
     await expect(savedMeal).toHaveBeenCalledWith(expect.objectContaining({ photoId: "meal-photo" }));
   },
 };
@@ -155,8 +155,8 @@ export const RotatedPhotoDark: Story = {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.upload(await screen.findByLabelText("カメラで撮影する写真"), photoFile());
     await screen.findByRole("img", { name: "選択した食事の写真" });
-    await userEvent.click(screen.getByRole("button", { name: "右に 90° 回転" }));
-    await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["red", "red", "blue", "blue"] });
+    await userEvent.click(screen.getByRole("button", { name: "左に 90° 回転" }));
+    await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["blue", "blue", "red", "red"] });
   },
 };
 export const UnreadablePhoto: Story = {
@@ -181,13 +181,13 @@ export const SaveFailure: Story = {
     await userEvent.type(screen.getByLabelText("カロリー（kcal・任意）"), "520");
     await userEvent.upload(screen.getByLabelText("保存済みの写真"), photoFile());
     await screen.findByRole("img", { name: "選択した食事の写真" });
-    await userEvent.click(screen.getByRole("button", { name: "右に 90° 回転" }));
-    await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["red", "red", "blue", "blue"] });
+    await userEvent.click(screen.getByRole("button", { name: "左に 90° 回転" }));
+    await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["blue", "blue", "red", "red"] });
     await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
     await expect(await screen.findByRole("alert")).toHaveTextContent("保存できませんでした");
     await expect(screen.getByLabelText("メモ")).toHaveValue("カレー");
     await expect(screen.getByLabelText("カロリー（kcal・任意）")).toHaveValue(520);
-    await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["red", "red", "blue", "blue"] });
+    await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["blue", "blue", "red", "red"] });
   },
 };
 export const Saving: Story = {
@@ -207,7 +207,7 @@ export const Saving: Story = {
     await expect(screen.getByLabelText("保存済みの写真")).toBeDisabled();
     await expect(screen.getByRole("button", { name: "写真を選ぶ" })).toBeDisabled();
     await expect(screen.getByRole("button", { name: "カメラで撮る" })).toBeDisabled();
-    await expect(screen.getByRole("button", { name: "右に 90° 回転" })).toBeDisabled();
+    await expect(screen.getByRole("button", { name: "左に 90° 回転" })).toBeDisabled();
     await expect(screen.getByLabelText("メモ")).toBeDisabled();
   },
 };
@@ -218,8 +218,8 @@ export const ReplacePhoto: Story = {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.upload(await screen.findByLabelText("保存済みの写真"), photoFile());
     await expect(await screen.findByRole("img", { name: "選択した食事の写真" })).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "右に 90° 回転" }));
-    await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["red", "red", "blue", "blue"] });
+    await userEvent.click(screen.getByRole("button", { name: "左に 90° 回転" }));
+    await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["blue", "blue", "red", "red"] });
     await userEvent.upload(screen.getByLabelText("カメラで撮影する写真"), photoFile());
     await expectPhotoPreview(canvasElement, { width: 80, height: 40, corners: ["red", "blue", "red", "blue"] });
     await expect(screen.getAllByRole("img", { name: "選択した食事の写真" })).toHaveLength(1);
