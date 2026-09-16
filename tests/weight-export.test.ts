@@ -40,7 +40,7 @@ describe("体重の定期書き出しの API と runner", () => {
           nextRunAt: now, coalescing: "skip_if_pending", deadlineSeconds: 7200, payload: { dataDirectory: "data/weight" } }),
       }, environment);
       expect(created.status).toBe(200);
-      await repository.createWeight("measurement", { source: "manual", sourceKey: "measurement", weightKg: 70.25,
+      await repository.createWeight("measurement", { source: "manual", sourceKey: "measurement", weightKg: 70.25, bodyFatPercent: 21.3,
         occurredAt: "2026-09-08T00:15:00Z" }, now);
       expect(await repository.enqueueDueSchedules(now)).toMatchObject({ ok: true, value: 1 });
       vi.stubGlobal("fetch", (url: string, init: RequestInit) => app.request(url, init, environment));
@@ -53,7 +53,8 @@ describe("体重の定期書き出しの API と runner", () => {
       expect(await runner.register()).toBe(true);
       await runner.runOnce();
       expect(database.prepare("SELECT status, error_code FROM jobs").get()).toMatchObject({ status: "succeeded", error_code: null });
-      expect(await readFile(join(vaultPath, "data/weight/weight-trend.csv"), "utf8")).toContain("2026-09-08,70.25,70.25,1");
+      expect(await readFile(join(vaultPath, "data/weight/weight-trend.csv"), "utf8")).toContain("2026-09-08,70.25,70.25,1,21.3");
+      expect(await readFile(join(vaultPath, "data/weight/weight-data.js"), "utf8")).toContain("{d:\"2026-09-08\", w:70.25, bf:21.3}");
     } finally {
       database.close();
       await rm(vaultPath, { recursive: true, force: true });
