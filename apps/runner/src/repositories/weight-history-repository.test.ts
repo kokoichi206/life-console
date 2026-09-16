@@ -11,7 +11,7 @@ import { fileWeightHistoryRepository } from "./weight-history-repository";
 const temporaryDirectories: string[] = [];
 const header = "date,weight_kg,ma7_kg,window_samples\n";
 const measurement = (date: string, weightKg: number): WeightPoint => ({
-  id: date, source: "manual", occurredAt: `${date}T00:00:00+09:00`, recordedAt: `${date}T00:00:00+09:00`, weightKg,
+  id: date, source: "manual", occurredAt: `${date}T00:00:00+09:00`, recordedAt: `${date}T00:00:00+09:00`, weightKg, bodyFatPercent: null,
 });
 const prepareHistory = async () => {
   const directory = await mkdtemp(join(tmpdir(), "life-console-weight-history-"));

@@ -126,6 +126,7 @@ export const weights = sqliteTable("weights", {
   source: text("source", { enum: weightSources }).notNull(),
   sourceKey: text("source_key").notNull(),
   weightGrams: integer("weight_grams").notNull(),
+  bodyFatPercent: real("body_fat_percent"),
   occurredAt: text("occurred_at").notNull(),
   recordedAt: text("recorded_at").notNull(),
   sourceJobId: text("source_job_id"),

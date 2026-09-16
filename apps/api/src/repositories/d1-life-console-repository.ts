@@ -349,7 +349,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   async #readWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>> {
-    const result = await safeTry(() => this.#database.select({ id: weights.id, source: weights.source, weightGrams: weights.weightGrams,
+    const result = await safeTry(() => this.#database.select({ id: weights.id, source: weights.source, weightGrams: weights.weightGrams, bodyFatPercent: weights.bodyFatPercent,
       occurredAt: weights.occurredAt, recordedAt: weights.recordedAt,
     }).from(weights).where(isNull(weights.deletedAt)).orderBy(sql`julianday(${weights.occurredAt})`, asc(weights.id)).all());
     if (!result.ok) return err(appError.storage(result.error));
@@ -358,7 +358,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
 
   async createWeight(id: string, input: CreateWeightInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>> {
     const result = await safeTry(() => this.#database.insert(weights).values({ id, source: input.source, sourceKey: input.sourceKey,
-      weightGrams: Math.round(input.weightKg * 1000), occurredAt: input.occurredAt, recordedAt: now, sourceJobId: sourceJobId ?? null,
+      weightGrams: Math.round(input.weightKg * 1000), bodyFatPercent: input.bodyFatPercent ?? null, occurredAt: input.occurredAt, recordedAt: now, sourceJobId: sourceJobId ?? null,
     }).onConflictDoNothing().run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);

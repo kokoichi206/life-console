@@ -13,7 +13,7 @@ const meta = {
   component: WeightEntryDialog,
   args: {
     open: true,
-    previousWeight: { id: "previous", source: "manual", weightKg: 81.4, occurredAt: "2026-09-07T08:00:00+09:00", recordedAt: "2026-09-06T23:00:00Z" },
+    previousWeight: { id: "previous", source: "manual", bodyFatPercent: null, weightKg: 81.4, occurredAt: "2026-09-07T08:00:00+09:00", recordedAt: "2026-09-06T23:00:00Z" },
     onOpenChange: fn(),
   },
   render: function WeightEntryPreview(args) {
@@ -75,6 +75,7 @@ export const SaveSelectedWeightAndTime: Story = {
     await fireEvent.change(screen.getByLabelText("計測時刻"), { target: { value: "07:35" } });
     await userEvent.click(screen.getByRole("button", { name: "体重を保存" }));
     await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
+    await expect(savedWeight.mock.calls[0]![0]).not.toHaveProperty("bodyFatPercent");
     await expect(savedWeight).toHaveBeenCalledWith(expect.objectContaining({ weightKg: 81.5, occurredAt: new Date("2026-09-06T07:35").toISOString(), source: "manual" }));
   },
 };
@@ -83,8 +84,10 @@ export const SaveFailure: Story = {
   parameters: { msw: { handlers: [http.post("*/api/v1/weights", () => HttpResponse.json({ error: { message: "保存できませんでした。接続を確認して、もう一度お試しください。" } }, { status: 503 }))] } },
   play: async ({ canvasElement, userEvent }) => {
     const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.type(await screen.findByLabelText("体脂肪率（%・任意）"), "21.3");
     await userEvent.click(await screen.findByRole("button", { name: "体重を保存" }));
     await expect(await screen.findByRole("alert")).toHaveTextContent("保存できませんでした");
+    await expect(screen.getByLabelText("体脂肪率（%・任意）")).toHaveValue(21.3);
     await expect(screen.getByRole("spinbutton", { name: "体重の小数部" })).toHaveAttribute("aria-valuenow", "4");
   },
 };
@@ -98,5 +101,21 @@ export const Saving: Story = {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(await screen.findByRole("button", { name: "体重を保存" }));
     await expect(screen.getByRole("button", { name: "保存しています…" })).toBeDisabled();
+    await expect(screen.getByLabelText("体脂肪率（%・任意）")).toBeDisabled();
+  },
+};
+
+export const SaveBodyFat: Story = {
+  name: "体脂肪率を任意で記録",
+  play: async ({ canvasElement, userEvent, args }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    const input = await screen.findByLabelText("体脂肪率（%・任意）");
+    await expect(input).toHaveValue(null);
+    await userEvent.type(input, "21.3");
+    await userEvent.click(screen.getByRole("button", { name: "体重を保存" }));
+    await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
+    await expect(savedWeight).toHaveBeenCalledWith(expect.objectContaining({ weightKg: 81.4, bodyFatPercent: 21.3 }));
+    await userEvent.click(screen.getByRole("button", { name: "記録画面を開く" }));
+    await expect(await screen.findByLabelText("体脂肪率（%・任意）")).toHaveValue(null);
   },
 };

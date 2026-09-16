@@ -9,9 +9,9 @@ import { parseHealthSearch } from "./health-search";
 import { HealthRoutePage } from "./HealthRoutePage";
 
 const weights: WeightPoint[] = [
-  { id: "previous", source: "csv", weightKg: 84, occurredAt: "2026-08-31T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
-  { id: "csv", source: "csv", weightKg: 80, occurredAt: "2026-09-07T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
-  { id: "manual", source: "manual", weightKg: 81.4, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
+  { id: "previous", source: "csv", bodyFatPercent: null, weightKg: 84, occurredAt: "2026-08-31T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
+  { id: "csv", source: "csv", bodyFatPercent: null, weightKg: 80, occurredAt: "2026-09-07T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
+  { id: "manual", source: "manual", bodyFatPercent: null, weightKg: 81.4, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
 ];
 const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null, baseline: CalorieBaseline | null = null) => [
   http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: false, athleteId: null } })),
@@ -147,7 +147,7 @@ export const RangeControls: Story = {
 };
 
 const trendWeights: WeightPoint[] = Array.from({ length: 120 }, (_, index) => ({
-  id: `trend-${index}`, source: "manual", weightKg: Math.round((90 - index * 0.08 + Math.sin(index * 0.7) * 0.5) * 10) / 10,
+  id: `trend-${index}`, source: "manual", bodyFatPercent: null, weightKg: Math.round((90 - index * 0.08 + Math.sin(index * 0.7) * 0.5) * 10) / 10,
   occurredAt: new Date(Date.UTC(2026, 4, 1 + index)).toISOString(), recordedAt: "2026-09-01T00:00:00Z",
 }));
 export const GoalOverview: Story = {
@@ -269,7 +269,7 @@ const combinedTrendHandlers = [
   ...handlers(trendWeights),
 ];
 export const CombinedTrendOverview: Story = {
-  name: "体重の線と週の走行距離を重ねる",
+  name: "体重の線と週の走行距離",
   parameters: { initialUrl: "/health?running=show&from=2026-06-12&to=2026-09-09", msw: { handlers: combinedTrendHandlers } },
   play: async ({ canvas, userEvent }) => {
     const chart = await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" });
@@ -447,10 +447,11 @@ export const CalorieBalancePendingFilled: Story = {
 };
 
 export const OptionalRunningOverlay: Story = {
-  name: "必要なときだけ走行距離を重ねる",
+  name: "追加表示を切り替える",
   parameters: { initialUrl: "/health?from=2026-06-12&to=2026-09-09", msw: { handlers: combinedTrendHandlers } },
   play: async ({ canvas, userEvent }) => {
-    const toggle = await canvas.findByRole("button", { name: "走行距離を重ねる" });
+    const toggle = await canvas.findByRole("button", { name: "走行距離" });
+    await waitFor(() => expect(toggle).toBeEnabled());
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
     await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
     await userEvent.click(toggle);
@@ -460,13 +461,54 @@ export const OptionalRunningOverlay: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "30 日" }));
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
     await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "体脂肪率" }));
+    await expect(canvas.getByRole("img", { name: "体重と体脂肪率の推移" })).toBeVisible();
+    await expect(canvas.queryByLabelText("週ごとの走行距離")).not.toBeInTheDocument();
     const start = (canvas.getByLabelText("表示開始日") as HTMLInputElement).value;
     const end = (canvas.getByLabelText("表示終了日") as HTMLInputElement).value;
-    await userEvent.click(toggle);
+    await userEvent.click(canvas.getByRole("button", { name: "体脂肪率" }));
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
     await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
     await expect(canvas.queryByRole("button", { name: "この週のランと食事を見る" })).not.toBeInTheDocument();
     await expect(canvas.getByLabelText("表示開始日")).toHaveValue(start);
     await expect(canvas.getByLabelText("表示終了日")).toHaveValue(end);
+    await expect(within(canvas.getByRole("group", { name: "追加表示" })).getAllByRole("button")).toHaveLength(2);
+    await userEvent.click(toggle);
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
   },
 };
+
+export const BodyFatOverlay: Story = {
+  name: "体脂肪率と欠測を表示",
+  parameters: {
+    initialUrl: "/health?overlay=body-fat&from=2026-08-30&to=2026-09-09",
+    msw: { handlers: handlers(weights.map((point, index) => ({ ...point, bodyFatPercent: index === 1 ? null : 23 - index }))) },
+  },
+  play: async ({ canvas, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と体脂肪率の推移" });
+    const samples = within(chart).getByLabelText("体脂肪率の実測値");
+    await expect(samples.querySelectorAll("circle")).toHaveLength(2);
+    await expect(samples.querySelector("path")!.getAttribute("d")!.match(/M/g)).toHaveLength(2);
+    await expect(samples.querySelector("path")!.getAttribute("d")).not.toContain("L");
+    await expect(canvas.getByText("体脂肪率 21.0 %")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "走行距離" })).toBeDisabled();
+    await userEvent.click(canvas.getByRole("button", { name: "体脂肪率" }));
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "体脂肪率" }));
+    await expect(canvas.getByRole("img", { name: "体重と体脂肪率の推移" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "表で見る" }));
+    await expect(canvas.getByRole("table", { name: "体重の推移" })).toHaveTextContent("23.0 %");
+  },
+};
+export const BodyFatEmpty: Story = {
+  name: "体脂肪率の記録なし",
+  parameters: { initialUrl: "/health?overlay=body-fat" },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("この期間の体脂肪率の記録はありません。")).toBeVisible();
+    await expect(canvas.queryByLabelText("体脂肪率の実測値")).not.toBeInTheDocument();
+  },
+};
+export const BodyFatDark: Story = { ...BodyFatOverlay, name: "体脂肪率・ダーク", globals: { theme: "dark" } };

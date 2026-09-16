@@ -143,6 +143,7 @@ export const createWeightSchema = z.object({
   source: weightSourceSchema,
   sourceKey: z.string().trim().min(1).max(240),
   weightKg: z.number().positive().max(500),
+  bodyFatPercent: z.number().min(0).max(100).optional(),
   occurredAt: isoDateTimeSchema,
 });
 
