@@ -51,23 +51,23 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
       <fieldset disabled={createWeight.isPending}>
         <legend className="sr-only">体重・体脂肪率と計測日時</legend>
         <div className="grid grid-cols-[1.5fr_1fr] gap-3">
-          <label className="grid gap-2 text-xs text-muted-foreground dark:text-white/60">
+          <label className="grid gap-2 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <CalendarDays className="size-3.5" />
               日付
             </span>
-            <input required aria-label="計測日" type="date" value={date} onChange={(event) => setOccurredAt(`${event.target.value}T${time}`)} className="h-12 min-w-0 rounded-full bg-muted px-4 text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-white/10 dark:text-white dark:[color-scheme:dark]" />
+            <input required aria-label="計測日" type="date" value={date} onChange={(event) => setOccurredAt(`${event.target.value}T${time}`)} className="h-12 min-w-0 rounded-full bg-muted px-4 text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-input/30" />
           </label>
-          <label className="grid gap-2 text-xs text-muted-foreground dark:text-white/60">
+          <label className="grid gap-2 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <Clock3 className="size-3.5" />
               時刻
             </span>
-            <input required aria-label="計測時刻" type="time" value={time} onChange={(event) => setOccurredAt(`${date}T${event.target.value}`)} className="h-12 min-w-0 rounded-full bg-muted px-4 text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-white/10 dark:text-white dark:[color-scheme:dark]" />
+            <input required aria-label="計測時刻" type="time" value={time} onChange={(event) => setOccurredAt(`${date}T${event.target.value}`)} className="h-12 min-w-0 rounded-full bg-muted px-4 text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-input/30" />
           </label>
         </div>
         <div className="mt-5 text-center">
-          <p className="text-xs text-muted-foreground dark:text-white/60">
+          <p className="text-xs text-muted-foreground">
             {previousWeight === undefined ? "最初の体重を入力してください" : `前回 ${previousWeight.weightKg.toFixed(1)} kg から調整`}
           </p>
           {numericEntry
@@ -80,11 +80,11 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
               )
             : (
                 <div inert={createWeight.isPending} className="relative mt-1 grid grid-cols-[1fr_20px_1fr_48px] items-center" aria-label="体重の選択">
-                  <div className="pointer-events-none absolute inset-x-0 top-24 h-12 rounded-2xl bg-primary/8 dark:bg-white/10" />
+                  <div className="pointer-events-none absolute inset-x-0 top-24 h-12 rounded-2xl bg-primary/8 dark:bg-input/30" />
                   <WeightWheel label="体重の整数部" value={kilograms} minimum={0} maximum={500} onChange={(value) => setWeight((Math.min(5000, Math.max(1, value * 10 + decimal)) / 10).toFixed(1))} />
-                  <span className="z-10 text-3xl dark:text-white" aria-hidden="true">.</span>
+                  <span className="z-10 text-3xl" aria-hidden="true">.</span>
                   <WeightWheel label="体重の小数部" value={decimal} minimum={kilograms === 0 ? 1 : 0} maximum={kilograms === 500 ? 0 : 9} onChange={(value) => setWeight(((kilograms * 10 + value) / 10).toFixed(1))} />
-                  <span className="z-10 text-xl text-foreground dark:text-white/80" aria-hidden="true">kg</span>
+                  <span className="z-10 text-xl text-foreground" aria-hidden="true">kg</span>
                 </div>
               )}
           <Button
@@ -96,7 +96,7 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
               setWeight(Number(weight).toFixed(1));
               setNumericEntry((current) => !current);
             }}
-            className="text-xs text-muted-foreground dark:text-white/60"
+            className="text-xs text-muted-foreground"
           >
             {numericEntry ? "ホイールで選ぶ" : "数字で入力する"}
           </Button>
@@ -121,12 +121,12 @@ export const WeightEntryDialog = ({ open, previousWeight, onOpenChange }: {
   <Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Portal>
       <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm" />
-      <Dialog.Popup className="fixed inset-x-0 bottom-0 z-50 max-h-[95dvh] overflow-y-auto rounded-t-3xl bg-card px-6 pt-6 pb-[max(24px,env(safe-area-inset-bottom))] text-foreground shadow-2xl outline-none sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl dark:bg-[#2b2d40] dark:text-white">
-        <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-foreground/15 sm:hidden dark:bg-white/20" aria-hidden="true" />
+      <Dialog.Popup className="fixed inset-x-0 bottom-0 z-50 max-h-[95dvh] overflow-y-auto rounded-t-3xl bg-card px-6 pt-6 pb-[max(24px,env(safe-area-inset-bottom))] text-foreground shadow-2xl outline-none sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl">
+        <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-foreground/15 sm:hidden" aria-hidden="true" />
         <header className="flex items-start justify-between gap-3">
           <div>
             <Dialog.Title className="text-xl font-semibold tracking-tight">体重を記録</Dialog.Title>
-            <Dialog.Description className="mt-1.5 text-xs text-muted-foreground dark:text-white/60">計測した体重と日時を残しましょう。</Dialog.Description>
+            <Dialog.Description className="mt-1.5 text-xs text-muted-foreground">計測した体重と日時を残しましょう。</Dialog.Description>
           </div>
           <Dialog.Close render={<Button variant="ghost" size="icon" aria-label="体重の記録を閉じる" />}><X /></Dialog.Close>
         </header>
