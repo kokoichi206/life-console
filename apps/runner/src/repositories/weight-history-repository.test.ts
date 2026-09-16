@@ -9,15 +9,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import { fileWeightHistoryRepository } from "./weight-history-repository";
 
 const temporaryDirectories: string[] = [];
-const header = "date,weight_kg,ma7_kg,window_samples\n";
+const legacyHeader = "date,weight_kg,ma7_kg,window_samples\n";
+const header = "date,weight_kg,ma7_kg,window_samples,body_fat_percent\n";
 const measurement = (date: string, weightKg: number): WeightPoint => ({
   id: date, source: "manual", occurredAt: `${date}T00:00:00+09:00`, recordedAt: `${date}T00:00:00+09:00`, weightKg, bodyFatPercent: null,
 });
 const prepareHistory = async () => {
   const directory = await mkdtemp(join(tmpdir(), "life-console-weight-history-"));
   temporaryDirectories.push(directory);
-  await writeFile(join(directory, "weight-trend.csv"), `${header}2026-01-01,80.0,80.00,1\n2026-09-01,70.0,70.00,1\n`);
-  await writeFile(join(directory, "weight-2020-2021.csv"), `${header}2020-12-25,77.5,77.50,1\n`);
+  await writeFile(join(directory, "weight-trend.csv"), `${legacyHeader}2026-01-01,80.0,80.00,1\n2026-09-01,70.0,70.00,1\n`);
+  await writeFile(join(directory, "weight-2020-2021.csv"), `${legacyHeader}2020-12-25,77.5,77.50,1\n`);
   await writeFile(join(directory, "recalled-weight.csv"), "date,weight_kg\n2025-01-01,90.0\n");
   await writeFile(join(directory, "weight-trend.html"), "existing graph template");
   return directory;
@@ -36,7 +37,7 @@ describe("既存の体重 CSV とグラフへの同期", () => {
       ok: true, value: { changed: true, synchronizedDays: 2, totalMeasuredDays: 4 },
     });
     const csv = await readFile(join(directory, "weight-trend.csv"), "utf8");
-    expect(csv).toBe(`${header}2026-01-01,80.0,80.00,1\n2026-09-01,70.0,70.00,1\n2026-09-02,69.8,69.90,2\n`);
+    expect(csv).toBe(`${header}2026-01-01,80.0,80.00,1,\n2026-09-01,70.0,70.00,1,\n2026-09-02,69.8,69.90,2,\n`);
     const script = await readFile(join(directory, "weight-data.js"), "utf8");
     const graph = runInNewContext(`${script}\n({DATA, RECALLED})`) as { DATA: { d: string; w: number }[]; RECALLED: { d: string; w: number }[] };
     expect(graph.DATA.map((point) => point.d)).toEqual(["2020-12-25", "2026-01-01", "2026-09-01", "2026-09-02"]);
@@ -60,14 +61,14 @@ describe("既存の体重 CSV とグラフへの同期", () => {
     const directory = await prepareHistory();
     const before = await readFile(join(directory, "weight-trend.csv"), "utf8");
     expect(await fileWeightHistoryRepository.synchronize(directory, ".", [], new AbortController().signal)).toMatchObject({ ok: true });
-    expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toBe(before);
+    expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toBe(before.replace(legacyHeader, header).replace(/(\d)\n/g, "$1,\n"));
   });
 
   it("アーカイブの不正な行を検出した場合、CSV も JS も変更しない", async () => {
     const directory = await prepareHistory();
     const before = await readFile(join(directory, "weight-trend.csv"), "utf8");
     await writeFile(join(directory, "weight-data.js"), "original script");
-    await writeFile(join(directory, "weight-2020-2021.csv"), `${header}not-a-date,77.5,77.50,1\n`);
+    await writeFile(join(directory, "weight-2020-2021.csv"), `${header}not-a-date,77.5,77.50,1,\n`);
     expect(await fileWeightHistoryRepository.synchronize(directory, ".", [measurement("2026-09-02", 69.8)], new AbortController().signal)).toMatchObject({ ok: false });
     expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toBe(before);
     expect(await readFile(join(directory, "weight-data.js"), "utf8")).toBe("original script");
@@ -76,7 +77,7 @@ describe("既存の体重 CSV とグラフへの同期", () => {
     const directory = await prepareHistory();
     const points = [measurement("2026-09-01", 68), measurement("2026-09-02", 70)];
     expect(await fileWeightHistoryRepository.synchronize(directory, ".", points, new AbortController().signal)).toMatchObject({ ok: true });
-    expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toBe(`${header}2026-01-01,80.0,80.00,1\n2026-09-01,68.0,68.00,1\n2026-09-02,70.0,69.00,2\n`);
+    expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toBe(`${header}2026-01-01,80.0,80.00,1,\n2026-09-01,68.0,68.00,1,\n2026-09-02,70.0,69.00,2,\n`);
     expect(await readFile(join(directory, "weight-data.js"), "utf8")).toContain("{d:\"2026-09-01\", w:68.0}");
   });
 
@@ -88,7 +89,7 @@ describe("既存の体重 CSV とグラフへの同期", () => {
       { ...measurement("2026-09-02", 71), id: "morning", occurredAt: "2026-09-02T07:00:00+09:00", recordedAt: "2026-09-04T00:00:00Z" },
     ];
     expect(await fileWeightHistoryRepository.synchronize(directory, ".", points, new AbortController().signal)).toMatchObject({ ok: true, value: { synchronizedDays: 2 } });
-    expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toBe(`${header}2026-01-01,80.0,80.00,1\n2026-09-01,70.0,70.00,1\n2026-09-02,69.0,69.50,2\n2026-09-03,68.0,69.00,3\n`);
+    expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toBe(`${header}2026-01-01,80.0,80.00,1,\n2026-09-01,70.0,70.00,1,\n2026-09-02,69.0,69.50,2,\n2026-09-03,68.0,69.00,3,\n`);
     expect(await fileWeightHistoryRepository.synchronize(directory, ".", [...points].reverse(), new AbortController().signal)).toMatchObject({ ok: true, value: { changed: false } });
   });
 
@@ -102,6 +103,40 @@ describe("既存の体重 CSV とグラフへの同期", () => {
     expect(await fileWeightHistoryRepository.synchronize(directory, ".", points, new AbortController().signal)).toMatchObject({ ok: true });
     expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toContain("2026-09-02,68.0,69.00,2");
     expect(await fileWeightHistoryRepository.synchronize(directory, ".", [...points].reverse(), new AbortController().signal)).toMatchObject({ ok: true, value: { changed: false } });
+  });
+
+  it("体脂肪率を末尾列と bf に出力し、旧 CSV の過去分と既存の体脂肪率を保持する", async () => {
+    const directory = await prepareHistory();
+    await writeFile(join(directory, "weight-trend.csv"), `${header}2026-01-01,80.0,80.00,1,22.5\n2026-09-01,70.0,70.00,1,\n`);
+    const points = [{ ...measurement("2026-09-02", 69.8), bodyFatPercent: 21.3 }];
+    expect(await fileWeightHistoryRepository.synchronize(directory, ".", points, new AbortController().signal)).toMatchObject({ ok: true });
+    const csv = await readFile(join(directory, "weight-trend.csv"), "utf8");
+    expect(csv).toContain("2026-01-01,80.0,80.00,1,22.5");
+    expect(csv).toContain("2026-09-02,69.8,69.90,2,21.3");
+    const script = await readFile(join(directory, "weight-data.js"), "utf8");
+    const pointsForGraph = runInNewContext(`${script}\nDATA`) as { d: string; w: number; bf?: number }[];
+    expect(pointsForGraph.find((point) => point.d === "2026-09-02")).toEqual({ d: "2026-09-02", w: 69.8, bf: 21.3 });
+    expect(pointsForGraph.find((point) => point.d === "2020-12-25")).toEqual({ d: "2020-12-25", w: 77.5 });
+    expect(await fileWeightHistoryRepository.synchronize(directory, ".", points, new AbortController().signal)).toMatchObject({ ok: true, value: { changed: false } });
+  });
+
+  it("体脂肪率も同じ日の最後の測定から採用し、未入力への訂正を空欄に反映する", async () => {
+    const directory = await prepareHistory();
+    const morning = { ...measurement("2026-09-02", 70), bodyFatPercent: 21.3 };
+    const evening = { ...measurement("2026-09-02", 69), id: "evening", occurredAt: "2026-09-02T18:00:00+09:00", bodyFatPercent: 20.5 };
+    await fileWeightHistoryRepository.synchronize(directory, ".", [evening, morning], new AbortController().signal);
+    expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toContain("2026-09-02,69.0,69.50,2,20.5");
+    await fileWeightHistoryRepository.synchronize(directory, ".", [morning, { ...evening, bodyFatPercent: null }], new AbortController().signal);
+    expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toContain("2026-09-02,69.0,69.50,2,\n");
+    expect(await readFile(join(directory, "weight-data.js"), "utf8")).toContain("{d:\"2026-09-02\", w:69.0}");
+  });
+
+  it.each(["invalid", "-1", "101"])("CSV の不正な体脂肪率 %s を検出したら既存ファイルを変更しない", async (value) => {
+    const directory = await prepareHistory();
+    const csv = `${header}2026-09-01,70.0,70.00,1,${value}\n`;
+    await writeFile(join(directory, "weight-trend.csv"), csv);
+    expect(await fileWeightHistoryRepository.synchronize(directory, ".", [], new AbortController().signal)).toMatchObject({ ok: false, error: { code: "invalid_weight_csv" } });
+    expect(await readFile(join(directory, "weight-trend.csv"), "utf8")).toBe(csv);
   });
 
   it("中止された同期はファイルに触れない", async () => {

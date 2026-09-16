@@ -9,7 +9,8 @@ import { z } from "zod";
 
 import { runnerError, type RunnerError } from "../errors";
 
-type DailyWeights = ReadonlyMap<string, number>;
+type DailyMeasurement = { readonly weightKg: number; readonly bodyFatPercent: number | null };
+type DailyWeights = ReadonlyMap<string, DailyMeasurement>;
 export type WeightHistorySync = {
   readonly changed: boolean;
   readonly synchronizedDays: number;
@@ -22,6 +23,7 @@ export interface WeightHistoryRepository {
 const dailyWeightSchema = z.object({
   date: z.iso.date(),
   weight_kg: z.string().trim().min(1).transform(Number).pipe(z.number().positive()),
+  body_fat_percent: z.string().trim().transform((value) => value === "" ? null : Number(value)).pipe(z.number().min(0).max(100).nullable()),
 });
 
 const parseDailyWeights = async (csv: string): Promise<Result<DailyWeights, RunnerError>> => {
@@ -33,30 +35,31 @@ const parseDailyWeights = async (csv: string): Promise<Result<DailyWeights, Runn
   if (header?.[0] !== "date" || header[1] !== "weight_kg") {
     return err(runnerError("invalid_weight_csv", "体重 CSV の先頭 2 列は date,weight_kg である必要があります。"));
   }
-  const weights = new Map<string, number>();
+  const bodyFatColumn = header.indexOf("body_fat_percent");
+  const weights = new Map<string, DailyMeasurement>();
   for (const row of rows) {
-    const point = dailyWeightSchema.safeParse({ date: row[0], weight_kg: row[1] });
-    if (!point.success) return err(runnerError("invalid_weight_csv", "体重 CSV に不正な日付または体重があります。", point.error));
+    const point = dailyWeightSchema.safeParse({ date: row[0], weight_kg: row[1], body_fat_percent: bodyFatColumn === -1 ? "" : row[bodyFatColumn] });
+    if (!point.success) return err(runnerError("invalid_weight_csv", "体重 CSV に不正な日付・体重・体脂肪率があります。", point.error));
     if (weights.has(point.data.date)) return err(runnerError("duplicate_weight_csv_date", "体重 CSV に同じ日付の行が複数あります。"));
-    weights.set(point.data.date, point.data.weight_kg);
+    weights.set(point.data.date, { weightKg: point.data.weight_kg, bodyFatPercent: point.data.body_fat_percent });
   }
   return ok(weights);
 };
 
 const formatWeight = (weight: number): string => Number.isInteger(weight) ? weight.toFixed(1) : String(weight);
-const sortedWeights = (weights: DailyWeights): [string, number][] => [...weights].sort(([left], [right]) => left.localeCompare(right));
+const sortedWeights = (weights: DailyWeights): [string, DailyMeasurement][] => [...weights].sort(([left], [right]) => left.localeCompare(right));
 const renderWeightCsv = (weights: DailyWeights): string => {
   const records = sortedWeights(weights);
-  return ["date,weight_kg,ma7_kg,window_samples", ...records.map(([date, weight]) => {
+  return ["date,weight_kg,ma7_kg,window_samples,body_fat_percent", ...records.map(([date, weight]) => {
     const occurredAt = Date.parse(date);
     const window = records.filter(([candidate]) => Date.parse(candidate) > occurredAt - 7 * 86_400_000 && candidate <= date);
-    const average = window.reduce((sum, [, value]) => sum + value, 0) / window.length;
-    return `${date},${formatWeight(weight)},${average.toFixed(2)},${String(window.length)}`;
+    const average = window.reduce((sum, [, value]) => sum + value.weightKg, 0) / window.length;
+    return `${date},${formatWeight(weight.weightKg)},${average.toFixed(2)},${String(window.length)},${weight.bodyFatPercent === null ? "" : String(weight.bodyFatPercent)}`;
   }), ""].join("\n");
 };
 
 const renderWeightArray = (name: "DATA" | "RECALLED", weights: DailyWeights): string => {
-  const entries = sortedWeights(weights).map(([date, weight]) => `{d:"${date}", w:${formatWeight(weight)}}`);
+  const entries = sortedWeights(weights).map(([date, weight]) => `{d:"${date}", w:${formatWeight(weight.weightKg)}${weight.bodyFatPercent === null ? "" : `, bf:${String(weight.bodyFatPercent)}`}}`);
   if (entries.length === 0) return `const ${name} = [];`;
   const lines: string[] = [];
   for (let index = 0; index < entries.length; index += 3) {
@@ -92,24 +95,24 @@ export const fileWeightHistoryRepository: WeightHistoryRepository = {
         if (!parsed.ok) return parsed;
         histories.set(name, parsed.value);
       }
-      const daily = new Map<string, number>();
+      const daily = new Map<string, DailyMeasurement>();
       const chronologicalPoints = [...points].sort((left, right) =>
         Date.parse(left.occurredAt) - Date.parse(right.occurredAt)
         || Date.parse(left.recordedAt) - Date.parse(right.recordedAt)
         || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
       for (const point of chronologicalPoints) {
-        daily.set(weightCalendarDate(point.occurredAt), point.weightKg);
+        daily.set(weightCalendarDate(point.occurredAt), { weightKg: point.weightKg, bodyFatPercent: point.bodyFatPercent });
       }
       const merged = new Map(histories.get("weight-trend.csv")!);
       for (const [date, weight] of daily) {
         merged.set(date, weight);
       }
       histories.set("weight-trend.csv", merged);
-      const measured = new Map<string, number>();
+      const measured = new Map<string, DailyMeasurement>();
       for (const name of csvNames) {
         for (const [date, weight] of histories.get(name)!) measured.set(date, weight);
       }
-      const recalled = histories.get("recalled-weight.csv") ?? new Map<string, number>();
+      const recalled = histories.get("recalled-weight.csv") ?? new Map<string, DailyMeasurement>();
       const outputs = [
         { name: "weight-trend.csv", content: renderWeightCsv(merged) },
         { name: "weight-data.js", content: `${renderWeightArray("DATA", measured)}\n\n${renderWeightArray("RECALLED", recalled)}\n` },
