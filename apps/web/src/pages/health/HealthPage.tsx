@@ -34,10 +34,10 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
   day: "numeric",
 }).format(new Date(occurredAt));
 
-export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, caloriesExpanded, onCaloriesExpandedChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExpanded, onCaloriesExpandedChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
   readonly search: HealthSearch;
   readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
-  readonly onRunningVisibilityChange: (show: boolean) => void;
+  readonly onOverlayChange: (overlay: HealthSearch["overlay"]) => void;
   readonly caloriesExpanded: boolean;
   readonly onCaloriesExpandedChange: (expanded: boolean) => void;
   readonly goalEntryOpen: boolean;
@@ -109,7 +109,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, c
   const pendingActivities = exerciseByDay === undefined
     ? 0
     : [...exerciseByDay.values()].reduce((total, day) => total + day.pendingActivities, 0);
-  const showRunning = search.running === "show";
+  const showRunning = search.overlay === "running";
   const runningWeeks = showRunning && strava.complete ? exerciseWeeks(periodFrom, periodTo, strava.records, [], []) : undefined;
   const windowBounds = {
     start: Math.min(Date.parse(`${new Date(earliestDay).getUTCFullYear()}-01-01`), latestDay - 89 * WEIGHT_DAY_MS, visibleWindow.start),
@@ -155,7 +155,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, c
       <section className="mb-6">
         <header className="mb-4 flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">{showRunning && strava.connected ? "体重と走行距離の推移" : "体重の推移"}</h2>
+            <h2 className="text-xl font-semibold tracking-tight">{search.overlay === "body-fat" ? "体重と体脂肪率の推移" : showRunning && strava.connected ? "体重と走行距離の推移" : "体重の推移"}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               実測
               {" "}
@@ -175,12 +175,15 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, c
           </div>
         </header>
         <Panel className="overflow-hidden rounded-3xl py-0">
-          {strava.connected && (
-            <div className="flex justify-end px-4 pt-3">
-              <Button type="button" size="sm" variant={showRunning ? "default" : "outline"} aria-pressed={showRunning} onClick={() => onRunningVisibilityChange(!showRunning)}>走行距離を重ねる</Button>
-            </div>
-          )}
-          <WeightTrendChart runningWeeks={runningWeeks} onSelectWeek={onRangeChange} latestDay={latestDay} points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
+          <div className="flex justify-end gap-1 px-4 pt-3" role="group" aria-label="追加表示">
+            {([
+              { value: "running", label: "走行距離" },
+              { value: "body-fat", label: "体脂肪率" },
+            ] as const).map(({ value, label }) => (
+              <Button key={label} type="button" size="sm" variant={search.overlay === value ? "default" : "outline"} aria-pressed={search.overlay === value} disabled={value === "running" && !strava.connected} onClick={() => onOverlayChange(search.overlay === value ? undefined : value)}>{label}</Button>
+            ))}
+          </div>
+          <WeightTrendChart showBodyFat={search.overlay === "body-fat"} runningWeeks={runningWeeks} onSelectWeek={onRangeChange} latestDay={latestDay} points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
           <dl className="mx-4 my-3 grid grid-cols-2 gap-x-4 gap-y-4 rounded-2xl bg-muted/50 p-4 sm:grid-cols-4">
             {[
               { label: "最新", value: lastVisibleWeight?.weightKg.toFixed(1) ?? "—", unit: "kg", detail: lastVisibleWeight === undefined ? "記録なし" : shortDate(lastVisibleWeight.occurredAt) },
@@ -208,7 +211,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, c
               <table aria-label="体重の推移" className="w-full border-collapse text-xs tabular-nums">
                 <thead>
                   <tr className="bg-muted/60">
-                    {["日付", "体重", "種類", "7 日平均", "窓内件数"].map((heading) => <th key={heading} className="border-b px-3 py-2.5 text-right font-semibold whitespace-nowrap">{heading}</th>)}
+                    {["日付", "体重", "体脂肪率", "種類", "7 日平均", "窓内件数"].map((heading) => <th key={heading} className="border-b px-3 py-2.5 text-right font-semibold whitespace-nowrap">{heading}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -220,6 +223,7 @@ export const HealthPage = ({ search, onRangeChange, onRunningVisibilityChange, c
                         {" "}
                         kg
                       </td>
+                      <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">{point.bodyFatPercent === null ? "—" : `${point.bodyFatPercent.toFixed(1)} %`}</td>
                       <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">実測</td>
                       <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">
                         {point.movingAverage7DaysKg.toFixed(2)}

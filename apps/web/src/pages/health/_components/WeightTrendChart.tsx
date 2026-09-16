@@ -17,6 +17,7 @@ const calendarDate = (timestamp: number) => new Date(timestamp).toISOString().sl
 const tickDate = (timestamp: number) => new Intl.DateTimeFormat("ja-JP", { timeZone: "UTC", month: "numeric", day: "numeric" }).format(timestamp);
 
 type WeightTrendChartProps = {
+  readonly showBodyFat: boolean;
   readonly runningWeeks: ReadonlyArray<ExerciseWeek> | undefined;
   readonly onSelectWeek: (period: { from: string; to: string }) => void;
   readonly latestDay: number;
@@ -27,14 +28,14 @@ type WeightTrendChartProps = {
   readonly goal: WeightGoal | null;
 };
 
-export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal, latestDay, runningWeeks, onSelectWeek }: WeightTrendChartProps) => {
+export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal, latestDay, runningWeeks, onSelectWeek, showBodyFat }: WeightTrendChartProps) => {
   const container = useRef<HTMLDivElement>(null);
   const clipId = useId();
   const helpId = useId();
   const [chartWidth, setChartWidth] = useState(360);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [inspectedDay, setInspectedDay] = useState<number | null>(null);
-  const plotLeft = runningWeeks === undefined ? 12 : 44;
+  const plotLeft = runningWeeks === undefined && !showBodyFat ? 12 : 44;
   useEffect(() => {
     const element = container.current;
     if (element === null) return;
@@ -88,6 +89,13 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
   const distanceStep = Math.max(5, Math.ceil(maximumKilometers / 4 / 5) * 5);
   const distanceMaximum = distanceStep * 4;
   const distanceY = (kilometers: number) => PLOT_TOP + (1 - kilometers / distanceMaximum) * plotHeight;
+  const bodyFatValues = committedPoints.flatMap((point) => point.bodyFatPercent === null ? [] : [point.bodyFatPercent]);
+  const bodyFatMinimum = Math.max(0, Math.floor((Math.min(...bodyFatValues, 100) - 1) / 5) * 5);
+  const bodyFatMaximum = Math.min(100, Math.ceil((Math.max(...bodyFatValues, 0) + 1) / 5) * 5);
+  const bodyFatY = (percent: number) => PLOT_TOP + (bodyFatMaximum - percent) / (bodyFatMaximum - bodyFatMinimum) * plotHeight;
+  const bodyFatPath = positioned.map((point, index) => point.bodyFatPercent === null
+    ? ""
+    : `${index === 0 || positioned[index - 1]!.bodyFatPercent === null ? "M" : "L"}${point.x},${bodyFatY(point.bodyFatPercent)}`).join(" ");
   // 点が重なって線を隠さないよう、拡大して間隔が取れるときだけ各記録の点を描く。
   const showSampleMarkers = visiblePoints.length <= plotWidth / 8;
   const yTicks = Array.from({ length: Math.round((yMaximum - yMinimum) / tickStep) + 1 }, (_, index) => yMinimum + index * tickStep);
@@ -131,6 +139,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
                   <div className="grid gap-1 text-xs tabular-nums" role={hovered === undefined ? undefined : "tooltip"}>
                     <strong>{new Date(detailPoint.occurredAt).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" })}</strong>
                     <span>{`実測 ${detailPoint.weightKg.toFixed(1)} kg · 7 日平均 ${detailPoint.movingAverage7DaysKg.toFixed(2)} kg`}</span>
+                    {showBodyFat && <span>{detailPoint.bodyFatPercent === null ? "体脂肪率 未記録" : `体脂肪率 ${detailPoint.bodyFatPercent.toFixed(1)} %`}</span>}
                     <small className="text-muted-foreground">{`窓内 ${detailPoint.movingAverageWindowSamples} 件`}</small>
                   </div>
                 )}
@@ -151,7 +160,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
                 viewBox={`0 0 ${chartWidth} ${CHART_HEIGHT}`}
                 role="img"
                 tabIndex={0}
-                aria-label={runningWeeks === undefined ? "体重の実測値と 7 日移動平均の推移" : "体重と週ごとの走行距離の推移"}
+                aria-label={showBodyFat ? "体重と体脂肪率の推移" : runningWeeks === undefined ? "体重の実測値と 7 日移動平均の推移" : "体重と週ごとの走行距離の推移"}
                 aria-describedby={helpId}
                 {...pointerHandlers}
                 onKeyDown={(event) => {
@@ -187,6 +196,19 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
                     </g>
                   </>
                 )}
+                {showBodyFat && bodyFatValues.length > 0 && (
+                  <>
+                    <text className="fill-chart-5 dark:fill-chart-3 text-[11px]" x={0} y={14}>%</text>
+                    {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
+                      const percent = bodyFatMinimum + (bodyFatMaximum - bodyFatMinimum) * fraction;
+                      return <text key={fraction} className="fill-chart-5 dark:fill-chart-3 text-[11px]" x={plotLeft - 8} y={bodyFatY(percent) + 4} textAnchor="end">{Number(percent.toFixed(1))}</text>;
+                    })}
+                    <g clipPath={`url(#${clipId})`} aria-label="体脂肪率の実測値">
+                      <path className="fill-none stroke-chart-5 dark:stroke-chart-3 stroke-2" strokeLinejoin="round" d={bodyFatPath} />
+                      {visiblePoints.filter((point) => point.bodyFatPercent !== null).map((point) => <circle key={point.id} className="fill-chart-5 dark:fill-chart-3" cx={point.x} cy={bodyFatY(point.bodyFatPercent!)} r={3}><title>{`${tickDate(weightCalendarDayTimestamp(point.occurredAt))}: ${point.bodyFatPercent!.toFixed(1)} %`}</title></circle>)}
+                    </g>
+                  </>
+                )}
                 {[0, 0.5, 1].map((fraction) => {
                   const timestamp = displayedWindow.start + (displayedWindow.end - displayedWindow.start) * fraction;
                   return <text key={fraction} className="fill-muted-foreground text-[11px]" x={x(timestamp)} y={CHART_HEIGHT - 7} textAnchor={fraction === 0 ? "start" : fraction === 1 ? "end" : "middle"}>{tickDate(timestamp)}</text>;
@@ -218,6 +240,12 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
               週の走行距離
             </span>
           )}
+          {showBodyFat && (
+            <span className="inline-flex items-center gap-1.5">
+              <i className="h-0.5 w-4 bg-chart-5 dark:bg-chart-3" />
+              体脂肪率
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5">
             <i className="h-0.5 w-4 bg-primary" />
             実測値
@@ -229,9 +257,10 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
         </div>
         <p id={helpId} className="text-center text-xs text-muted-foreground">
           横にスワイプで移動・ピンチで拡大縮小
-          <span className="mt-1 block">{runningWeeks === undefined ? "タップで体重・長押しでなぞる" : "タップで体重と週の走行距離を確認・長押しでなぞる"}</span>
+          <span className="mt-1 block">{showBodyFat ? "タップで体重と体脂肪率を確認・長押しでなぞる" : runningWeeks === undefined ? "タップで体重・長押しでなぞる" : "タップで体重と週の走行距離を確認・長押しでなぞる"}</span>
           <span className="sr-only">。キーボードの左右キーで移動、プラス・マイナスで拡大縮小、End で最新へ戻ります。</span>
         </p>
+        {showBodyFat && bodyFatValues.length === 0 && <p className="text-center text-xs text-muted-foreground">この期間の体脂肪率の記録はありません。</p>}
         {runningWeeks !== undefined && <p className="text-center text-xs text-muted-foreground">走行距離は月曜始まり。期間の端の週は、表示されている日だけの合計です。Powered by Strava</p>}
         <details className="rounded-lg border px-3">
           <summary className="cursor-pointer py-3 text-xs">日付を指定・ボタンで移動</summary>

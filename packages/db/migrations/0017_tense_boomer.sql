@@ -1,0 +1,1 @@
+ALTER TABLE `weights` ADD `body_fat_percent` real;

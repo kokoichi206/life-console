@@ -6,7 +6,7 @@ export type HealthSearch = {
   readonly entry?: "weight" | "meal" | "goal" | "baseline" | undefined;
   readonly meal?: string | undefined;
   readonly range?: WeightRange | undefined;
-  readonly running?: "show" | undefined;
+  readonly overlay?: "running" | "body-fat" | undefined;
   readonly calories?: "all" | undefined;
   readonly from?: string | undefined;
   readonly to?: string | undefined;
@@ -20,7 +20,9 @@ export const parseHealthSearch = (search: Record<string, unknown>): HealthSearch
     ...(search.strava === "connected" || search.strava === "error" ? { strava: search.strava } : {}),
     ...(search.entry === "weight" || search.entry === "meal" || search.entry === "goal" || search.entry === "baseline" ? { entry: search.entry } : {}),
     ...(typeof search.meal === "string" && search.meal.length > 0 ? { meal: search.meal } : {}),
-    ...(search.running === "show" ? { running: search.running } : {}),
+    ...(search.overlay === "running" || search.overlay === "body-fat"
+      ? { overlay: search.overlay }
+      : search.running === "show" ? { overlay: "running" as const } : {}),
     ...(search.calories === "all" ? { calories: search.calories } : {}),
     ...(range === undefined ? {} : { range }),
     ...(from.success && to.success && from.data < to.data ? { from: from.data, to: to.data } : {}),

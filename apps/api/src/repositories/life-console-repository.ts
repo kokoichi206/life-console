@@ -39,6 +39,7 @@ export type WeightPoint = {
   readonly recordedAt: string;
   readonly source: WeightSource;
   readonly weightKg: number;
+  readonly bodyFatPercent: number | null;
 };
 
 export type FinanceSummary = {
