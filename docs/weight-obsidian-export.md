@@ -14,6 +14,8 @@
 
 グラフへの統合は既存の生成処理に合わせ、`weight-*.csv` をファイル名順に読み、日付が重なれば後のファイルの値を採用する。推定値は実測の移動平均に混ぜない。移動平均は直近 7 点ではなく、その日を含む直近 7 日で計算する。
 
+グラフの正本は Obsidian vault で Git 管理する `weight-trend.html`。グラフを変更するときはこの HTML を編集する。Simple アプリから取り込む旧 `sync-weight-trend` スキルと同梱テンプレートは廃止し、runner は HTML を上書きしない。
+
 ## 保存形式
 
 `weight-trend.csv` は `date,weight_kg,ma7_kg,window_samples,body_fat_percent` の 5 列。先頭 4 列は従来と同じで、体脂肪率の未入力は空欄にする。体脂肪率列がない旧 CSV も読み取れる。アーカイブは書き換えない。
