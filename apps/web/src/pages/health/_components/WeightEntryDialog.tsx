@@ -23,6 +23,7 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
 }) => {
   const queryClient = useQueryClient();
   const [weight, setWeight] = useState(() => previousWeight?.weightKg.toFixed(1) ?? "");
+  const [bodyFatPercent, setBodyFatPercent] = useState("");
   const [numericEntry, setNumericEntry] = useState(previousWeight === undefined);
   const [occurredAt, setOccurredAt] = useState(currentLocalDateTime);
   const [date, time] = occurredAt.split("T");
@@ -42,13 +43,13 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
   });
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    createWeight.mutate({ source: "manual", sourceKey: crypto.randomUUID(), weightKg: Number(weight), occurredAt: new Date(occurredAt).toISOString() });
+    createWeight.mutate({ source: "manual", sourceKey: crypto.randomUUID(), weightKg: Number(weight), ...(bodyFatPercent === "" ? {} : { bodyFatPercent: Number(bodyFatPercent) }), occurredAt: new Date(occurredAt).toISOString() });
   };
 
   return (
     <form onSubmit={submit} className="mt-6">
       <fieldset disabled={createWeight.isPending}>
-        <legend className="sr-only">体重と計測日時</legend>
+        <legend className="sr-only">体重・体脂肪率と計測日時</legend>
         <div className="grid grid-cols-[1.5fr_1fr] gap-3">
           <label className="grid gap-2 text-xs text-muted-foreground dark:text-white/60">
             <span className="flex items-center gap-1.5">
@@ -100,6 +101,9 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
             {numericEntry ? "ホイールで選ぶ" : "数字で入力する"}
           </Button>
         </div>
+        <Field label="体脂肪率（%・任意）" className="mt-4">
+          <Input type="number" min="0" max="100" step="0.1" inputMode="decimal" value={bodyFatPercent} onChange={(event) => setBodyFatPercent(event.target.value)} />
+        </Field>
         <Button type="submit" disabled={!validWeight || createWeight.isPending} className="mt-6 h-12 w-full rounded-2xl text-base">
           {createWeight.isPending ? "保存しています…" : "体重を保存"}
         </Button>
@@ -126,7 +130,7 @@ export const WeightEntryDialog = ({ open, previousWeight, onOpenChange }: {
           </div>
           <Dialog.Close render={<Button variant="ghost" size="icon" aria-label="体重の記録を閉じる" />}><X /></Dialog.Close>
         </header>
-        <WeightEntryForm previousWeight={previousWeight} onSaved={() => onOpenChange(false)} />
+        {open && <WeightEntryForm previousWeight={previousWeight} onSaved={() => onOpenChange(false)} />}
       </Dialog.Popup>
     </Dialog.Portal>
   </Dialog.Root>

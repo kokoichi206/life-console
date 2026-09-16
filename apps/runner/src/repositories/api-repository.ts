@@ -194,7 +194,7 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
     ),
     importConversations: (input) => jsonRequest("/api/v1/runner/conversations/import", z.number(), input),
     listWeightsForExport: (signal) => request("/api/v1/runner/weights/export", z.array(z.object({
-      id: z.string(), source: weightSourceSchema, weightKg: z.number(),
+      id: z.string(), source: weightSourceSchema, weightKg: z.number(), bodyFatPercent: z.number().nullable(),
       occurredAt: z.iso.datetime({ offset: true }), recordedAt: z.iso.datetime({ offset: true }),
     })), { signal }),
     importWeightCsv: (csv) => request("/api/v1/weights/import", z.number(), {

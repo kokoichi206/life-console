@@ -11,8 +11,8 @@ export const HealthRoutePage = () => {
       onRangeChange={(range) => {
         void navigate({ search: { ...search, range: undefined, from: undefined, to: undefined, ...range }, replace: true, resetScroll: false });
       }}
-      onRunningVisibilityChange={(show) => {
-        void navigate({ search: { ...search, running: show ? "show" : undefined }, replace: true, resetScroll: false });
+      onOverlayChange={(overlay) => {
+        void navigate({ search: { ...search, overlay }, replace: true, resetScroll: false });
       }}
       caloriesExpanded={search.calories === "all"}
       onCaloriesExpandedChange={(expanded) => {
