@@ -26,6 +26,10 @@ TypeScript のソース・テスト・設定ファイルには `projectService` 
 
 Web のソース・stories・設定には React Hooks の `rules-of-hooks` と `exhaustive-deps` も `error` で適用します。
 
+`@shadcn/lint` は `index.js` の Web 用設定（`apps/web/**/*.{ts,tsx}`）に `shadcn` として登録しています。新しいルールは有効にしていません。有効にする場合は、同じ設定の `rules` に `shadcn/<ルール名>` を追加します。[ルール一覧](https://github.com/shadcn-ui/lint/blob/main/README.md#rules)と[設定例](https://github.com/shadcn-ui/lint/blob/main/README.md#settings)を参照してください。
+
+コンポーネントとテーマの検出には `apps/web/components.json` を使います。UI の import は `@/components/ui`、Tailwind CSS のテーマは `apps/web/src/styles.css` です。検証コマンドはリポジトリルートの `pnpm lint` で、Web だけを確認する場合は `pnpm exec eslint apps/web --max-warnings 0` を使います。ルールを有効にするまでは、設定の読み込みと既存ルールの検証だけを行います。
+
 以下はプロジェクト固有のルールです。
 
 - [no-throw-statement](rules/no-throw-statement/README.md): handler / usecase / repository での throw を禁止
