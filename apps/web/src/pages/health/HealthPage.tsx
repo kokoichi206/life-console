@@ -61,7 +61,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
   const latestWeight = weightTrend.at(-1);
   const availableYears = useMemo(() => [...new Set(weightTrend.map((point) => weightCalendarDate(point.occurredAt).slice(0, 4)))].reverse(), [weightTrend]);
   const today = weightCalendarDayTimestamp(new Date().toISOString());
-  const latestDay = latestWeight === undefined ? today : weightCalendarDayTimestamp(latestWeight.occurredAt);
+  const latestDay = today;
   const earliestDay = weightTrend[0] === undefined ? latestDay : weightCalendarDayTimestamp(weightTrend[0].occurredAt);
   const requestedWindow: WeightWindow = (() => {
     if (search.from !== undefined && search.to !== undefined) return { start: Date.parse(search.from), end: Date.parse(search.to) };
