@@ -57,7 +57,7 @@ export const WeightWheel = ({ label, value, minimum, maximum, onChange }: {
           key={number}
           aria-hidden="true"
           onClick={() => selectValue(number)}
-          className={cn("flex h-12 cursor-pointer snap-center items-center justify-center text-3xl font-medium transition-[color,opacity] select-none", number === value ? "text-foreground dark:text-white" : "text-muted-foreground/60 dark:text-white/40")}
+          className={cn("flex h-12 cursor-pointer snap-center items-center justify-center text-3xl font-medium transition-[color,opacity] select-none", number === value ? "text-foreground" : "text-muted-foreground/60")}
         >
           {number}
         </div>
