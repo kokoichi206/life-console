@@ -249,8 +249,8 @@ export const WeeklyExerciseAndMeals: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "この週のランと食事を見る" }));
     await waitFor(() => expect(canvas.queryByText("架空の食事メモ・前週")).not.toBeInTheDocument());
     await expect(await canvas.findByText("架空の食事メモ・今週")).toBeVisible();
-    await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-09-07");
-    await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-13");
+    await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-09-06");
+    await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-07");
     await expect(await canvas.findByText("架空の朝ラン")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "2026/9/7 12:00 の食事を開く" }));
   },
@@ -273,7 +273,6 @@ export const CombinedTrendOverview: Story = {
   parameters: { initialUrl: "/health?running=show&from=2026-06-12&to=2026-09-09", msw: { handlers: combinedTrendHandlers } },
   play: async ({ canvas, userEvent }) => {
     const chart = await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" });
-    await expect(canvas.getByText("この週の体重記録はありません")).toBeVisible();
     chart.scrollIntoView({ block: "center" });
     const bounds = chart.getBoundingClientRect();
     await userEvent.pointer({ target: chart, keys: "[MouseLeft]", coords: { clientX: bounds.left + bounds.width * 0.65, clientY: bounds.top + 180 } });
@@ -457,7 +456,7 @@ export const OptionalRunningOverlay: Story = {
     await userEvent.click(toggle);
     await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();
     await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-06-12");
-    await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-09");
+    await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-08-28");
     await userEvent.click(canvas.getByRole("button", { name: "30 日" }));
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
     await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();

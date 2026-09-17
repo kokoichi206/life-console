@@ -38,7 +38,7 @@ Slack の検索結果で表示名が空の場合は、投稿者 ID を表示し�
 
 外部サービスで返信した後は、会話の下書きを再作成すると履歴と返信判定を更新できます。送信 job が `lost` になった場合は、再度送信する前に元のサービスで投稿の有無を確認します。
 
-体重 CSV の列は `date,weight_kg,ma7_kg,window_samples`。家計 CSV は [サンプル](../apps/runner/examples/finance.csv)、体重の Obsidian 連携は [書き出し設定](weight-obsidian-export.md) を参照します。実データ・資格情報・agent transcript はリポジトリへ含めず、設定例と検証資料には架空データを使います。
+Obsidian へ書き出す体重 CSV の列は `date,weight_kg,ma7_kg,window_samples,body_fat_percent`。体脂肪率は任意で、未記録は空欄。家計 CSV は [サンプル](../apps/runner/examples/finance.csv)、体重の Obsidian 連携は [書き出し設定](weight-obsidian-export.md) を参照します。実データ・資格情報・agent transcript はリポジトリへ含めず、設定例と検証資料には架空データを使います。
 
 ## 連絡の定期実行
 
