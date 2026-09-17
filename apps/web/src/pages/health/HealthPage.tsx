@@ -61,14 +61,21 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
   const latestWeight = weightTrend.at(-1);
   const availableYears = useMemo(() => [...new Set(weightTrend.map((point) => weightCalendarDate(point.occurredAt).slice(0, 4)))].reverse(), [weightTrend]);
   const today = weightCalendarDayTimestamp(new Date().toISOString());
-  const latestDay = latestWeight === undefined ? today : Math.max(today, weightCalendarDayTimestamp(latestWeight.occurredAt));
+  const latestDay = latestWeight === undefined ? today : weightCalendarDayTimestamp(latestWeight.occurredAt);
   const earliestDay = weightTrend[0] === undefined ? latestDay : weightCalendarDayTimestamp(weightTrend[0].occurredAt);
-  const visibleWindow: WeightWindow = (() => {
+  const requestedWindow: WeightWindow = (() => {
     if (search.from !== undefined && search.to !== undefined) return { start: Date.parse(search.from), end: Date.parse(search.to) };
     if (weightRange === "all") return { start: Math.min(earliestDay, latestDay - WEIGHT_DAY_MS), end: latestDay };
     if (weightRange.startsWith("year-")) return { start: Date.parse(`${weightRange.slice(5)}-01-01`), end: Date.parse(`${weightRange.slice(5)}-12-31`) };
     return { start: latestDay - (weightRange === "d30" ? 29 : 89) * WEIGHT_DAY_MS, end: latestDay };
   })();
+  const windowBounds = {
+    start: Math.min(Date.parse(`${new Date(earliestDay).getUTCFullYear()}-01-01`), latestDay - 89 * WEIGHT_DAY_MS, requestedWindow.start),
+    end: latestDay,
+  };
+  const visibleWindow: WeightWindow = requestedWindow.start < latestDay
+    ? { start: requestedWindow.start, end: Math.min(requestedWindow.end, latestDay) }
+    : { start: latestDay - WEIGHT_DAY_MS, end: latestDay };
   const periodFrom = new Date(visibleWindow.start).toISOString().slice(0, 10);
   const periodTo = new Date(visibleWindow.end).toISOString().slice(0, 10);
   const meals = useQuery(mealsForPeriodQuery(periodFrom, periodTo));
@@ -111,10 +118,6 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
     : [...exerciseByDay.values()].reduce((total, day) => total + day.pendingActivities, 0);
   const showRunning = search.overlay === "running";
   const runningWeeks = showRunning && strava.complete ? exerciseWeeks(periodFrom, periodTo, strava.records, [], []) : undefined;
-  const windowBounds = {
-    start: Math.min(Date.parse(`${new Date(earliestDay).getUTCFullYear()}-01-01`), latestDay - 89 * WEIGHT_DAY_MS, visibleWindow.start),
-    end: Math.max(Date.parse(`${new Date(latestDay).getUTCFullYear()}-12-31`), visibleWindow.end),
-  };
   const changeWindow = (window: WeightWindow) => onRangeChange({ from: new Date(window.start).toISOString().slice(0, 10), to: new Date(window.end).toISOString().slice(0, 10) });
   const visibleWeightTrend = weightTrend.filter((point) => {
     const day = weightCalendarDayTimestamp(point.occurredAt);

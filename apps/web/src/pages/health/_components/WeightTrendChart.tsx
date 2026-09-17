@@ -275,7 +275,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
             </label>
             <label className="grid min-w-0 gap-1 text-[0.65rem] text-muted-foreground">
               終了日
-              <Input aria-label="表示終了日" type="date" value={calendarDate(window.end)} min={calendarDate(window.start + WEIGHT_DAY_MS)} onChange={(event) => { if (event.target.validity.valid && event.target.value !== "") selectWindow({ start: window.start, end: Date.parse(event.target.value) }); }} />
+              <Input aria-label="表示終了日" type="date" value={calendarDate(window.end)} min={calendarDate(window.start + WEIGHT_DAY_MS)} max={calendarDate(bounds.end)} onChange={(event) => { if (event.target.validity.valid && event.target.value !== "") selectWindow({ start: window.start, end: Date.parse(event.target.value) }); }} />
             </label>
           </div>
         </details>
