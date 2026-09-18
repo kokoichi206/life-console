@@ -25,7 +25,8 @@ const preview: Preview = {
   decorators: [(Story, context) => {
     const client = useMemo(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }), []);
     document.documentElement.classList.toggle("dark", context.globals.theme === "dark");
-    return <QueryClientProvider client={client}><main className="min-h-screen bg-background p-4 text-foreground"><Suspense fallback={<p>読み込み中</p>}><Story /></Suspense></main></QueryClientProvider>;
+    const Canvas = context.parameters.hasMainLandmark === true ? "div" : "main";
+    return <QueryClientProvider client={client}><Canvas className="min-h-screen bg-background p-4 text-foreground"><Suspense fallback={<p>読み込み中</p>}><Story /></Suspense></Canvas></QueryClientProvider>;
   }],
 };
 

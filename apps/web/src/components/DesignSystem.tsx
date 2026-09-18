@@ -55,20 +55,13 @@ export const FormError = ({ children }: { readonly children: ReactNode }) => (
 
 type MetricTone = "primary" | "orange" | "gold" | "blue";
 
-const metricToneClass: Readonly<Record<MetricTone, string>> = {
-  primary: "before:bg-primary",
-  orange: "before:bg-chart-2",
-  gold: "before:bg-chart-3",
-  blue: "before:bg-chart-4",
-};
-
 export const MetricCard = ({ label, value, detail, tone }: {
   readonly label: string;
   readonly value: ReactNode;
   readonly detail: ReactNode;
   readonly tone: MetricTone;
 }) => (
-  <Card className={cn("relative min-h-32 gap-0 overflow-hidden px-5 py-5 before:absolute before:inset-y-0 before:left-0 before:w-0.75", metricToneClass[tone])}>
+  <Card className={cn("relative min-h-32 gap-0 overflow-hidden px-5 py-5 before:absolute before:inset-y-0 before:left-0 before:w-0.75", { "before:bg-primary": tone === "primary", "before:bg-chart-2": tone === "orange", "before:bg-chart-3": tone === "gold", "before:bg-chart-4": tone === "blue" })}>
     <span className="text-xs font-semibold text-muted-foreground">{label}</span>
     <strong className="mt-4 text-3xl leading-none font-semibold tracking-tight tabular-nums">{value}</strong>
     <small className="mt-2 text-[0.7rem] text-muted-foreground">{detail}</small>

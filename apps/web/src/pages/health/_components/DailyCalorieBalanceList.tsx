@@ -1,5 +1,6 @@
 import type { JobStatus, StravaCaloriesSyncStatus } from "@life-console/contracts";
 import { Link } from "@tanstack/react-router";
+import type { CSSProperties } from "react";
 
 import { FormError, Panel } from "../../../components/DesignSystem";
 import { Button } from "../../../components/ui/Button";
@@ -97,11 +98,10 @@ const BalanceRow = ({ day, scaleKcal, scaled }: { readonly day: CalorieBalanceDa
       {scaled && <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border" />}
       {day.balanceKcal !== null && (
         <span
-          className={`absolute inset-y-1 rounded-xs ${barClassName(day, day.balanceKcal)}`}
+          className={cn("absolute inset-y-1 w-(--balance-width) rounded-xs", day.balanceKcal < 0 ? "right-1/2" : "left-1/2", barClassName(day, day.balanceKcal))}
           style={{
-            width: `${Math.min(Math.abs(day.balanceKcal) / scaleKcal, 1) * 50}%`,
-            ...(day.balanceKcal < 0 ? { right: "50%" } : { left: "50%" }),
-          }}
+            "--balance-width": `${Math.min(Math.abs(day.balanceKcal) / scaleKcal, 1) * 50}%`,
+          } as CSSProperties}
         />
       )}
     </div>
@@ -122,7 +122,7 @@ const LegendSwatch = ({ className, label }: { readonly className: string; readon
   </span>
 );
 
-export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange, syncStatus }: {
+export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange, syncStatus, readOnly = false }: {
   readonly rows: ReadonlyArray<CalorieBalanceRow>;
   readonly baselineKcal: number | null;
   readonly exerciseState: ExerciseTrackingState;
@@ -130,6 +130,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
   readonly pendingActivities: number;
   readonly nutritionPending: boolean;
   readonly nutritionErrorMessage: string | null;
+  readonly readOnly?: boolean;
   readonly onEditBaseline: () => void;
   readonly expanded: boolean;
   /** 直近の窓から外れている日数。0 なら広げる先がないのでボタンを出さない。 */
@@ -144,7 +145,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
   // 基準消費量がなければ収支の棒を 1 本も描かないので、目盛り・ゼロ線・凡例も出さない。
   const scaled = baselineKcal !== null;
   return (
-    <Panel className="mb-6 gap-4 px-5" aria-label="日別のカロリー収支">
+    <Panel className="mb-6 gap-4 px-5 max-sm:border-t max-sm:px-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0" aria-label="日別のカロリー収支">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">カロリー収支</h2>
@@ -152,7 +153,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
             {baselineKcal === null ? "基準消費量が未設定・体重と同じ期間・日本時間" : `基準消費量 ${kcalFormat.format(baselineKcal)} kcal・体重と同じ期間・日本時間・新しい順`}
           </p>
         </div>
-        <Button size="sm" variant={baselineKcal === null ? "default" : "outline"} onClick={onEditBaseline}>
+        <Button disabled={readOnly} size="sm" variant={baselineKcal === null ? "default" : "outline"} onClick={onEditBaseline}>
           {baselineKcal === null ? "基準消費量を設定" : "基準消費量を編集"}
         </Button>
       </header>
@@ -163,7 +164,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
           {syncStatus.lastJob !== null && failedSyncStatuses.has(syncStatus.lastJob.status) && (
             <>
               {" "}
-              <Link to="/operations" className="underline underline-offset-4">実行状況を見る</Link>
+              {!readOnly && <Link to="/operations" className="underline underline-offset-4">実行状況を見る</Link>}
             </>
           )}
         </p>
@@ -171,7 +172,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
       {exerciseState === "untracked" && <p className="text-xs text-muted-foreground">Strava 未接続のため、運動を含めていません。</p>}
       {exerciseState === "loading" && <p role="status" className="text-sm text-muted-foreground">運動を取得しています。取得後に収支を表示します。</p>}
       {exerciseState === "failed" && <p className="text-sm text-muted-foreground">運動を取得できていないため、収支を表示していません。</p>}
-      {exerciseState === "unsynced" && <p role="status" className="text-sm text-muted-foreground">運動の同期を待っています。「運動を同期」から開始できます。</p>}
+      {exerciseState === "unsynced" && <p role="status" className="text-sm text-muted-foreground">{readOnly ? "運動の同期を待っています。" : "運動の同期を待っています。「運動を同期」から開始できます。"}</p>}
       {exerciseState === "stored" && <p role="status" className="text-sm text-muted-foreground">保存済みの運動で計算しています。未同期の運動は含まれません。</p>}
       {(exerciseState === "tracked" || exerciseState === "stored") && pendingActivities > 0 && (
         <p role="status" className="text-sm text-muted-foreground">{`消費カロリーを取得中（残り ${pendingActivities} 件）。Mac の runner が順に取得します。`}</p>
@@ -182,7 +183,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
         {/* 折りたたみ時は最大 7 行なので高さを制限しない。スクロールしない領域を tab 止まりにしないよう、
             キーボードで送るための role と tabIndex もスクロールする展開時だけ付ける。 */}
         <div
-          className={cn("rounded-xl border", expanded && "max-h-[28rem] overflow-auto focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none")}
+          className={cn("rounded-xl border max-sm:rounded-none max-sm:border-x-0", expanded && "max-h-[28rem] overflow-auto focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none")}
           {...(expanded ? { "role": "region", "aria-label": "日別の収支", "tabIndex": 0 } : {})}
         >
           <table className="w-full text-sm tabular-nums">

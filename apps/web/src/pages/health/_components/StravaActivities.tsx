@@ -13,10 +13,10 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek, strav
   readonly meals: ReadonlyArray<Meal> | undefined;
   readonly onSelectWeek: (period: { from: string; to: string }) => void;
 }) => {
-  const { status, authorize, disconnect, sync, connected, activities, complete, records } = strava;
+  const { readOnly, status, authorize, disconnect, sync, connected, activities, complete, records } = strava;
   const weeks = complete && meals !== undefined ? exerciseWeeks(from, to, records, weights, meals) : [];
   return (
-    <Panel className="mb-6 gap-4 px-5" aria-label="Strava の運動記録">
+    <Panel className="mb-6 gap-4 px-5 max-sm:border-t max-sm:px-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0" aria-label="Strava の運動記録">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">この期間の運動</h2>
@@ -24,18 +24,18 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek, strav
         </div>
         {connected && (
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" disabled={sync.isPending || disconnect.isPending} onClick={() => sync.mutate()}>運動を同期</Button>
-            <Button size="sm" variant="ghost" disabled={disconnect.isPending} onClick={() => disconnect.mutate()}>接続を解除</Button>
+            <Button size="sm" variant="outline" disabled={readOnly || sync.isPending || disconnect.isPending} onClick={() => sync.mutate()}>運動を同期</Button>
+            <Button size="sm" variant="ghost" disabled={readOnly || disconnect.isPending} onClick={() => disconnect.mutate()}>接続を解除</Button>
           </div>
         )}
       </header>
       {status.isPending && <p role="status">Strava の接続を確認しています。</p>}
       {status.error !== null && <FormError>{status.error.message}</FormError>}
-      {status.data?.configured === false && <p className="text-sm text-muted-foreground">Strava の接続設定がまだありません。設定後、ここから接続できます。</p>}
+      {status.data?.configured === false && <p className="text-sm text-muted-foreground">{readOnly ? "Strava は未接続です。" : "Strava の接続設定がまだありません。設定後、ここから接続できます。"}</p>}
       {status.data?.configured === true && !connected && (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">非公開の運動を含め、選んだ期間の記録を読み取ります。運動名・距離・時間・心拍数・消費カロリーを保存して表示します。接続情報は暗号化して保存します。接続はいつでも解除できます。</p>
-          <Button disabled={authorize.isPending} onClick={() => authorize.mutate()}>Connect with Strava</Button>
+          <p className="text-sm text-muted-foreground">{readOnly ? "Strava は未接続です。" : "非公開の運動を含め、選んだ期間の記録を読み取ります。運動名・距離・時間・心拍数・消費カロリーを保存して表示します。接続情報は暗号化して保存します。接続はいつでも解除できます。"}</p>
+          <Button disabled={readOnly || authorize.isPending} onClick={() => authorize.mutate()}>Connect with Strava</Button>
         </div>
       )}
       {connected && <p className="text-xs text-muted-foreground">保存済みの運動を表示しています。同期が完了すると新しい記録が反映されます。</p>}
@@ -58,13 +58,13 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek, strav
       {complete && meals === undefined && <p role="status">同じ期間の食事記録を取得しています。</p>}
       {weeks.length > 0 && (
         <>
-          <details className="rounded-xl border p-3">
+          <details className="rounded-xl border p-3 max-sm:rounded-none max-sm:border-x-0 max-sm:px-0">
             <summary className="cursor-pointer text-sm font-medium">週ごとの数字を見る</summary>
             <p className="my-3 text-xs text-muted-foreground">週を選ぶと、その週の体重・運動・食事に絞れます。平均体重は期間内の実測値から算出しています。</p>
-            <ul className="grid max-h-[36rem] gap-3 overflow-y-auto sm:hidden" aria-label="週ごとの運動・体重・食事">
+            <ul className="grid max-h-[36rem] divide-y overflow-y-auto sm:hidden" aria-label="週ごとの運動・体重・食事">
               {weeks.map((week) => (
-                <li key={week.from} className="rounded-xl border p-3">
-                  <Button variant="ghost" size="sm" className="mb-3 h-auto px-0 text-xs" onClick={() => onSelectWeek({ from: week.from, to: week.to })}>{`${week.visibleFrom} 〜 ${week.visibleTo}${week.partial ? "（一部）" : ""}`}</Button>
+                <li key={week.from} className="py-4">
+                  <Button variant="ghost" size="sm" className="mb-3 h-auto px-0 text-xs focus-visible:ring-inset" onClick={() => onSelectWeek({ from: week.from, to: week.to })}>{`${week.visibleFrom} 〜 ${week.visibleTo}${week.partial ? "（一部）" : ""}`}</Button>
                   <dl className="grid grid-cols-2 gap-x-3 gap-y-4 tabular-nums">
                     {[
                       ["ランの距離", `${(week.distanceMeters / 1000).toFixed(1)} km`], ["ランの回数", `${week.runCount} 回`],
@@ -102,7 +102,7 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek, strav
           {records.length === 0
             ? <p className="text-sm text-muted-foreground">この期間の保存済みの運動記録はありません。</p>
             : (
-                <details key={`${from}-${to}`} open={Date.parse(to) - Date.parse(from) <= 6 * 86_400_000} className="rounded-xl border p-3">
+                <details key={`${from}-${to}`} open={Date.parse(to) - Date.parse(from) <= 6 * 86_400_000} className="rounded-xl border p-3 max-sm:rounded-none max-sm:border-x-0 max-sm:px-0">
                   <summary className="cursor-pointer text-sm font-medium">{`期間内の運動 ${records.length} 件`}</summary>
                   <ul className="mt-3 max-h-96 divide-y overflow-y-auto">
                     {records.map((activity) => (

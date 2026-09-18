@@ -44,3 +44,15 @@ describe("アプリのルーティング", () => {
     expect(fetchResponse).toHaveBeenCalledTimes(8);
   });
 });
+
+it("共有ルートは共有 API だけを読み、編集用の URL 条件を除去する", async () => {
+  const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") || url.endsWith("calorie-baseline") ? null : [] })));
+  vi.stubGlobal("fetch", fetchResponse);
+  const token = "ab".repeat(32);
+  const testRouter = createTestRouter(`/share/health/${token}?entry=weight&strava=connected&range=d90&calories=all`);
+  await testRouter.load();
+  await testRouter.navigate({ to: "/share/health/$token", params: { token }, search: true, replace: true });
+  expect(testRouter.state.location.search).toEqual({ range: "d90", calories: "all" });
+  expect(fetchResponse.mock.calls.length).toBeGreaterThan(0);
+  expect(fetchResponse.mock.calls.every(([url]) => url.includes(`/api/v1/share/${token}/`))).toBe(true);
+});

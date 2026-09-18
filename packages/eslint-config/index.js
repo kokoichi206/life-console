@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import { plugin as shadcn } from "@shadcn/lint";
 import stylistic from "@stylistic/eslint-plugin";
 import importX from "eslint-plugin-import-x";
 import jsonc from "eslint-plugin-jsonc";
@@ -28,10 +29,15 @@ export default [
   },
   {
     files: ["apps/web/**/*.{ts,tsx}"],
-    plugins: { "react-hooks": reactHooks },
+    plugins: { "react-hooks": reactHooks, shadcn },
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
+      // fill-none は無色の SVG 指定であり、テーマ色への置換対象ではない。
+      "shadcn/no-raw-colors": ["error", { allow: ["fill-none"] }],
+      "shadcn/no-inline-styles": "error",
+      "shadcn/no-unknown-classes": "error",
+      "shadcn/require-static-classes": "error",
     },
   },
   {
@@ -84,6 +90,12 @@ export default [
   {
     files: ["apps/web/src/components/ui/*.tsx"],
     rules: { "custom/require-ui-storybook-story": "error" },
+  },
+  {
+    files: ["apps/web/src/components/ui/*.tsx"],
+    ignores: ["**/*.stories.tsx", "**/*.test.tsx"],
+    // 共通部品は利用側の className を受け取り、variant と合成する。
+    rules: { "shadcn/require-static-classes": "off" },
   },
   {
     files: ["apps/runner/src/config.ts", "**/*.config.{ts,mjs}", "packages/eslint-config/**/*.js"],

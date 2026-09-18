@@ -3,10 +3,11 @@ import { useEffect, useMemo } from "react";
 
 import { api } from "../../api";
 
-import { stravaStatusQuery } from "./queries";
+import { useHealthQueries } from "./queries";
 
 export const useStravaActivities = (from: string, to: string) => {
   const client = useQueryClient();
+  const { stravaStatusQuery, read, stravaActivitiesKey, readOnly } = useHealthQueries();
   const status = useQuery(stravaStatusQuery);
   const authorize = useMutation({ mutationFn: api.authorizeStrava, onSuccess: (url) => {
     window.location.assign(url);
@@ -40,8 +41,8 @@ export const useStravaActivities = (from: string, to: string) => {
   });
   const connected = status.isSuccess && status.data.athleteId !== null;
   const activities = useInfiniteQuery({
-    queryKey: ["strava-activities", status.data?.athleteId, from, to],
-    queryFn: ({ pageParam, signal }) => api.stravaActivities(from, to, pageParam, signal),
+    queryKey: stravaActivitiesKey(status.data?.athleteId, from, to),
+    queryFn: ({ pageParam, signal }) => read.stravaActivities(from, to, pageParam, signal),
     initialPageParam: 1,
     getNextPageParam: (page) => page.nextPage,
     enabled: connected && !disconnect.isPending,
@@ -58,5 +59,5 @@ export const useStravaActivities = (from: string, to: string) => {
     () => complete && pages !== undefined ? [...new Map(pages.flatMap((page) => page.activities).map((activity) => [activity.id, activity])).values()] : [],
     [complete, pages],
   );
-  return { status, authorize, disconnect, sync, connected, activities, complete, records };
+  return { readOnly, status, authorize, disconnect, sync, connected, activities, complete, records };
 };

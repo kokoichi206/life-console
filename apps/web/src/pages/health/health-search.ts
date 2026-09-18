@@ -28,3 +28,8 @@ export const parseHealthSearch = (search: Record<string, unknown>): HealthSearch
     ...(from.success && to.success && from.data < to.data ? { from: from.data, to: to.data } : {}),
   };
 };
+
+export const parseSharedHealthSearch = (search: Record<string, unknown>): HealthSearch => {
+  const { entry: _entry, strava: _strava, ...display } = parseHealthSearch(search);
+  return display;
+};

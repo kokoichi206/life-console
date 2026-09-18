@@ -131,7 +131,7 @@
   }
 
   body {
-    @apply min-w-80 bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased;
     min-height: 100vh;
   }
 

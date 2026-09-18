@@ -134,7 +134,7 @@ export const Saving: Story = {
     await expect(supermarket.getByLabelText("スーパーで買うもの")).toBeDisabled();
   },
 };
-export const Mobile: Story = { parameters: { initialEntry: "/todos?view=shopping" }, decorators: [(Story) => <div style={{ maxWidth: 350 }}><Story /></div>] };
+export const Mobile: Story = { parameters: { initialEntry: "/todos?view=shopping" }, decorators: [(Story) => <div className="max-w-87.5"><Story /></div>] };
 export const Dark: Story = { globals: { theme: "dark" }, parameters: { initialEntry: "/todos?view=shopping" } };
 
 let taskReadCount = 0;

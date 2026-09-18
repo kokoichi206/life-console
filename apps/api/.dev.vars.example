@@ -19,3 +19,6 @@ R2_SECRET_ACCESS_KEY=
 # STRAVA_CLIENT_SECRET=<client-secret>
 # STRAVA_TOKEN_KEY=<openssl-rand-hex-32>
 # STRAVA_REDIRECT_URI=http://localhost:5173/api/v1/strava/callback
+
+# 健康ページの共有。openssl rand -hex 32 で生成。未設定なら共有を拒否する。
+# HEALTH_SHARE_TOKEN=<openssl-rand-hex-32>

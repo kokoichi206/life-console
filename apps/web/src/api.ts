@@ -1,4 +1,4 @@
-import type { AppType } from "@life-console/api";
+import type { AppType, HealthReadApp } from "@life-console/api";
 import type { AgentQuestion } from "@life-console/contracts";
 import type { ConnectorScheduleStatus, CreateConnectorScheduleInput, UpdateConnectorScheduleInput } from "@life-console/contracts";
 import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contracts";
@@ -59,7 +59,26 @@ const unwrap = async <T>(response: HttpResponse): Promise<T> => {
   return payload.data as T;
 };
 
+export const createHealthReadApi = (baseUrl: string) => {
+  const readClient = hc<HealthReadApp>(baseUrl);
+  return {
+    stravaStatus: async () => unwrap<StravaStatus>(await readClient.strava.status.$get()),
+    stravaActivities: async (from: string, to: string, page: number, signal: AbortSignal) => unwrap<StravaActivityPage>(await readClient.strava.activities.$get({ query: { from, to, page: String(page) } }, { init: { signal } })),
+    stravaCaloriesSyncStatus: async () => unwrap<StravaCaloriesSyncStatus>(await readClient.strava.calories["sync-status"].$get()),
+    stravaCalories: async (from: string, to: string) => unwrap<ReadonlyArray<StravaActivityCalories>>(await readClient.strava.calories.$get({ query: { from, to } })),
+    mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await readClient.meals.$get({ query: { from, to } })),
+    nutrition: async () => unwrap<ReadonlyArray<MealNutrition>>(await readClient.nutrition.$get()),
+    meals: async () => unwrap<ReadonlyArray<Meal>>(await readClient.meals.$get({ query: {} })),
+    weightGoal: async () => unwrap<WeightGoal | null>(await readClient["weight-goal"].$get()),
+    calorieBaseline: async () => unwrap<CalorieBaseline | null>(await readClient["calorie-baseline"].$get()),
+    weights: async () => unwrap<ReadonlyArray<WeightPoint>>(await readClient.weights.$get()),
+    mealPhotoUrl: (photoId: string) => `${baseUrl}/meal-photos/${encodeURIComponent(photoId)}/content`,
+  };
+};
+
 export const api = {
+  ...createHealthReadApi("/api/v1"),
+  healthShare: async () => unwrap<string | null>(await client.api.v1["health-share"].$get()),
   agentQuestions: async () => unwrap<ReadonlyArray<AgentQuestion>>(await client.api.v1["agent-questions"].$get()),
   answerAgentQuestion: async (id: string, answer: string) => unwrap<null>(await client.api.v1["agent-questions"][":id"].answer.$post({ param: { id }, json: { answer } })),
   connectorSchedules: async () => unwrap<ReadonlyArray<ConnectorScheduleStatus>>(await client.api.v1["connector-schedules"].$get()),
@@ -72,15 +91,9 @@ export const api = {
   updateShoppingItem: async (id: string, input: UpdateShoppingItemInput) => unwrap<null>(await client.api.v1.shopping.items[":id"].$patch({ param: { id }, json: input })),
   deleteShoppingItem: async (id: string) => unwrap<null>(await client.api.v1.shopping.items[":id"].$delete({ param: { id } })),
   setShoppingPlace: async (id: string, placeId: string, linked: boolean) => unwrap<null>(await client.api.v1.shopping.items[":id"].places[":placeId"].$put({ param: { id, placeId }, json: { linked } })),
-  stravaStatus: async () => unwrap<StravaStatus>(await client.api.v1.strava.status.$get()),
   authorizeStrava: async () => unwrap<string>(await client.api.v1.strava.authorize.$post()),
   disconnectStrava: async () => unwrap<null>(await client.api.v1.strava.connection.$delete()),
   syncStrava: async (period: { from: string; to: string }) => unwrap<void>(await client.api.v1.strava.sync.$post({ json: period })),
-  stravaActivities: async (from: string, to: string, page: number, signal: AbortSignal) => unwrap<StravaActivityPage>(await client.api.v1.strava.activities.$get({ query: { from, to, page: String(page) } }, { init: { signal } })),
-  stravaCaloriesSyncStatus: async () => unwrap<StravaCaloriesSyncStatus>(await client.api.v1.strava.calories["sync-status"].$get()),
-  stravaCalories: async (from: string, to: string) => unwrap<ReadonlyArray<StravaActivityCalories>>(await client.api.v1.strava.calories.$get({ query: { from, to } })),
-  mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get({ query: { from, to } })),
-  nutrition: async () => unwrap<ReadonlyArray<MealNutrition>>(await client.api.v1.nutrition.$get()),
   saveMealCalories: async (input: { readonly mealId: string; readonly caloriesKcal: number }) => unwrap<void>(await client.api.v1.nutrition[":id"].calories.$put({ param: { id: input.mealId }, json: { caloriesKcal: input.caloriesKcal } })),
   analyzeNutrition: async (input: NutritionAnalysisPayload) => unwrap<Job>(await client.api.v1.nutrition.analyze.$post({ json: input })),
   monitoring: async () => unwrap<MonitoringSummary>(await client.api.v1.monitoring.$get()),
@@ -112,17 +125,13 @@ export const api = {
   syncConnector: async (connector: CreateConnectorSyncInput["connector"]) => unwrap<Job>(await client.api.v1.connectors.sync.$post({
     json: { connector },
   })),
-  meals: async () => unwrap<ReadonlyArray<Meal>>(await client.api.v1.meals.$get({ query: {} })),
   createMealUpload: async (input: { readonly clientId: string; readonly contentType: "image/jpeg" | "image/png" | "image/webp" }) => unwrap<{ readonly photoId: string; readonly uploadUrl: string; readonly expiresAt: string; readonly requiredHeaders: Readonly<Record<string, string>> }>(await client.api.v1["meal-photos"].upload.$post({ json: input })),
   createMeal: async (input: Parameters<typeof client.api.v1.meals.$post>[0]["json"]) => unwrap<Meal>(await client.api.v1.meals.$post({ json: input })),
-  weightGoal: async () => unwrap<WeightGoal | null>(await client.api.v1["weight-goal"].$get()),
   saveWeightGoal: async (input: WeightGoal | null) => unwrap<null>(await client.api.v1["weight-goal"].$put({ json: input })),
-  calorieBaseline: async () => unwrap<CalorieBaseline | null>(await client.api.v1["calorie-baseline"].$get()),
   saveCalorieBaseline: async (input: CalorieBaseline | null) => unwrap<null>(await client.api.v1["calorie-baseline"].$put({ json: input })),
   abstinence: async () => unwrap<AbstinenceOverview>(await client.api.v1.abstinence.$get()),
   saveAbstinenceGoal: async (input: AbstinenceGoalInput | null) => unwrap<null>(await client.api.v1.abstinence.goal.$put({ json: input })),
   createAbstinenceEvent: async (input: AbstinenceEventInput) => unwrap<null>(await client.api.v1.abstinence.events.$post({ json: input })),
-  weights: async () => unwrap<ReadonlyArray<WeightPoint>>(await client.api.v1.weights.$get()),
   createWeight: async (input: Parameters<typeof client.api.v1.weights.$post>[0]["json"]) => unwrap<null>(await client.api.v1.weights.$post({ json: input })),
   importWeightCsv: async (csv: string) => unwrap<number>(await fetch("/api/v1/weights/import", {
     method: "POST",
