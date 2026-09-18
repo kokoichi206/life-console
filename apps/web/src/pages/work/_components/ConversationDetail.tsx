@@ -57,7 +57,7 @@ export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, 
 
   return (
     <section aria-label="選択した会話" className="min-w-0 space-y-4">
-      <Panel className="gap-4 px-5">
+      <Panel mobileLayout="section" className="gap-4 px-5">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">{serviceLabels[conversation.connector]}</Badge>
           <time className="text-xs text-muted-foreground">{new Date(conversation.occurredAt).toLocaleString("ja-JP")}</time>

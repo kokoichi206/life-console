@@ -181,7 +181,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
             <Button type="button" size="sm" aria-pressed={weightRange === "all"} variant={weightRange === "all" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "all" })}>全期間</Button>
           </div>
         </header>
-        <Panel className="overflow-hidden rounded-3xl py-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0">
+        <Panel mobileLayout="section" className="overflow-hidden rounded-3xl py-0 max-sm:border-t-0">
           <div className="flex justify-end gap-1 pt-3 sm:px-4" role="group" aria-label="追加表示">
             {([
               { value: "running", label: "走行距離" },
@@ -271,7 +271,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
       {meals.error !== null && <FormError>{meals.error.message}</FormError>}
       {meals.data !== undefined && <MealGallery meals={meals.data} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} periodLabel={`${periodFrom} 〜 ${periodTo}・新しい順`} />}
       <div>
-        <Panel className="gap-4 px-5 max-sm:border-t max-sm:px-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0">
+        <Panel mobileLayout="section" className="gap-4 px-5">
           <div className="space-y-1.5">
             <Eyebrow className="max-sm:hidden">WEIGHT IMPORT</Eyebrow>
             <h2 className="text-xl font-semibold sm:text-base">体重の CSV 取り込み</h2>

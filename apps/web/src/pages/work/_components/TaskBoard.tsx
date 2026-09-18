@@ -126,8 +126,8 @@ export const TaskBoard = () => {
 
   return (
     <>
-      <div className="grid h-full min-h-0 content-start items-start gap-4 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)] xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden xl:[scrollbar-gutter:auto]">
-        <Panel className="min-h-0 xl:h-full xl:overflow-hidden">
+      <div className="grid h-full min-h-0 max-xl:auto-rows-max max-sm:p-1 content-start items-start gap-4 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)] xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden xl:[scrollbar-gutter:auto]">
+        <Panel mobileLayout="section" className="min-h-0 xl:h-full xl:overflow-hidden">
           <SectionHeading
             className="shrink-0"
             eyebrow="TASK LIST"
@@ -139,7 +139,7 @@ export const TaskBoard = () => {
               </CountBadge>
             )}
           />
-          <div role="region" aria-label="タスク一覧" tabIndex={0} className="min-h-0 px-5 focus-visible:outline-2 focus-visible:outline-ring xl:overflow-y-auto xl:overscroll-contain xl:[scrollbar-gutter:stable]">
+          <div role="region" aria-label="タスク一覧" tabIndex={0} className="min-h-0 sm:px-5 focus-visible:outline-2 focus-visible:outline-ring max-sm:focus-visible:-outline-offset-2 xl:overflow-y-auto xl:overscroll-contain xl:[scrollbar-gutter:stable]">
             {search.taskId !== undefined && <Link from="/tasks" to="/tasks" search={(previous) => ({ ...previous, taskId: undefined })} className={buttonVariants({ variant: "ghost", size: "sm" })}>すべてのタスクに戻る</Link>}
             {visibleTasks.map((task) => {
               const latestJob = latestJobByTaskId.get(task.id);
@@ -185,12 +185,12 @@ export const TaskBoard = () => {
             {visibleTasks.length === 0 && <EmptyState>表示するタスクはありません。</EmptyState>}
           </div>
         </Panel>
-        <aside aria-label="タスクの編集と起動設定" tabIndex={0} className="grid min-h-0 gap-4 focus-visible:outline-2 focus-visible:outline-ring xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:[scrollbar-gutter:stable]">
+        <aside aria-label="タスクの編集と起動設定" tabIndex={0} className="grid min-h-0 gap-4 focus-visible:outline-2 focus-visible:outline-ring max-sm:focus-visible:-outline-offset-2 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:[scrollbar-gutter:stable]">
           <form onSubmit={submit}>
-            <Panel className="gap-4 px-5">
+            <Panel mobileLayout={editingTaskId === null ? "section" : "card"} className="gap-4 px-5">
               <div className="space-y-1.5">
-                <Eyebrow>{editingTaskId === null ? "NEW TASK" : "EDIT TASK"}</Eyebrow>
-                <h2 className="text-base font-semibold">{editingTaskId === null ? "タスクを追加" : "タスクを編集"}</h2>
+                <Eyebrow className="max-sm:hidden">{editingTaskId === null ? "NEW TASK" : "EDIT TASK"}</Eyebrow>
+                <h2 className="text-xl font-semibold sm:text-base">{editingTaskId === null ? "タスクを追加" : "タスクを編集"}</h2>
               </div>
               <Field label="タイトル">
                 <Input required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} />
@@ -228,10 +228,10 @@ export const TaskBoard = () => {
               {editTask.error !== null && <FormError>{editTask.error.message}</FormError>}
             </Panel>
           </form>
-          <Panel className="gap-4 px-5">
+          <Panel mobileLayout="section" className="gap-4 px-5">
             <div className="space-y-1.5">
-              <Eyebrow>AGENT DEFAULT</Eyebrow>
-              <h2 className="text-base font-semibold">起動設定</h2>
+              <Eyebrow className="max-sm:hidden">AGENT DEFAULT</Eyebrow>
+              <h2 className="text-xl font-semibold sm:text-base">起動設定</h2>
             </div>
             <Field label="Provider">
               <NativeSelect className="w-full" value={provider} onChange={(event) => setProvider(event.target.value as "codex" | "claude")}>

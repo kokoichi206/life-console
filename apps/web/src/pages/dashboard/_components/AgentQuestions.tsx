@@ -53,9 +53,9 @@ export const AgentQuestions = () => {
   const questions = useQuery({ queryKey: ["agent-questions"], queryFn: api.agentQuestions, refetchInterval: 15_000 });
   const [answered, setAnswered] = useState(false);
   return (
-    <Panel className="mb-4">
+    <Panel mobileLayout="section" className="mb-4">
       <SectionHeading eyebrow="AGENT" title="あなたの確認待ち" />
-      <div className="px-5">
+      <div className="sm:px-5">
         <p className="text-xs text-muted-foreground">agent からの質問に回答・修正指示を返せます。回答は同じ作業を進めるために使われます。</p>
         {answered && <p role="status" className="mt-3 text-sm">回答を保存しました。</p>}
         {questions.isPending && <p className="py-4 text-sm">確認待ちを読み込んでいます。</p>}
