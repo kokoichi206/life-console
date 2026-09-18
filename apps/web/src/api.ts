@@ -2,7 +2,7 @@ import type { AppType, HealthReadApp } from "@life-console/api";
 import type { AgentQuestion } from "@life-console/contracts";
 import type { ConnectorScheduleStatus, CreateConnectorScheduleInput, UpdateConnectorScheduleInput } from "@life-console/contracts";
 import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contracts";
-import type { AbstinenceEventInput, AbstinenceGoalInput, AbstinenceOverview, CalorieBaseline, MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
+import type { AbstinenceEventInput, AbstinenceGoalInput, AbstinenceOverview, CalorieBaseline, MealDayCount, MealGalleryPage, MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
 import type { StravaActivityCalories, StravaActivityPage, StravaCaloriesSyncStatus, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
   PushConfiguration,
@@ -67,6 +67,8 @@ export const createHealthReadApi = (baseUrl: string) => {
     stravaCaloriesSyncStatus: async () => unwrap<StravaCaloriesSyncStatus>(await readClient.strava.calories["sync-status"].$get()),
     stravaCalories: async (from: string, to: string) => unwrap<ReadonlyArray<StravaActivityCalories>>(await readClient.strava.calories.$get({ query: { from, to } })),
     mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await readClient.meals.$get({ query: { from, to } })),
+    mealGallery: async (to: string) => unwrap<MealGalleryPage>(await readClient["meal-gallery"].$get({ query: { to } })),
+    mealDayCounts: async (from: string, to: string) => unwrap<ReadonlyArray<MealDayCount>>(await readClient["meal-day-counts"].$get({ query: { from, to } })),
     nutrition: async () => unwrap<ReadonlyArray<MealNutrition>>(await readClient.nutrition.$get()),
     meals: async () => unwrap<ReadonlyArray<Meal>>(await readClient.meals.$get({ query: {} })),
     weightGoal: async () => unwrap<WeightGoal | null>(await readClient["weight-goal"].$get()),

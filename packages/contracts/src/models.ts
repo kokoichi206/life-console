@@ -151,6 +151,16 @@ export type Meal = {
   readonly tags: ReadonlyArray<string>;
 };
 
+export type MealGalleryPage = {
+  readonly meals: ReadonlyArray<Meal>;
+  readonly nextTo: string | null;
+};
+
+export type MealDayCount = {
+  readonly occurredAt: string;
+  readonly count: number;
+};
+
 export type Repository = {
   readonly id: string;
   readonly name: string;

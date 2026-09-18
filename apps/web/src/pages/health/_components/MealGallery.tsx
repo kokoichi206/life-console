@@ -65,11 +65,14 @@ const MealCaloriesForm = ({ nutrition }: { readonly nutrition: MealNutrition }) 
   );
 };
 
-export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel = "新しい順・直近 100 件まで" }: {
+export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = false, loadingMore = false, onLoadMore, periodLabel = "新しい順・直近 7 日間" }: {
   readonly periodLabel?: string;
   readonly meals: ReadonlyArray<Meal>;
   readonly selectedMealId: string | undefined;
   readonly onSelectMeal: (id: string | undefined) => void;
+  readonly hasMore?: boolean;
+  readonly loadingMore?: boolean;
+  readonly onLoadMore?: () => void;
 }) => {
   const { nutritionQuery, readOnly } = useHealthQueries();
   const queryClient = useQueryClient();
@@ -151,6 +154,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
                 ))}
               </div>
             )}
+        {hasMore && <div className="mt-4 flex justify-center"><Button variant="outline" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? "読み込んでいます…" : "もっと見る"}</Button></div>}
       </div>
       <Dialog.Root open={selectedMealId !== undefined} onOpenChange={(open) => { if (!open) onSelectMeal(undefined); }}>
         <Dialog.Portal>

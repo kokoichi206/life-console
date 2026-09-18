@@ -1,4 +1,4 @@
-import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, MealDayCount, MealGalleryPage, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import type { AgentProvider, AssetKind, ConnectorKind, ConversationClassification, FinanceEntryKind, JobCompletionOutcome, JobKind, JobStatus, MealPhotoContentType, OrcaStatus, RepositoryRole, SourceMappingConnector, SourceScope, TaskArea, TaskStatus, WeightSource } from "@life-console/domain";
 
@@ -194,6 +194,8 @@ export interface LifeConsoleRepository {
   createTaskFromConversation(id: string, input: CreateTaskInput, conversationId: string, now: string): Promise<Result<Task, AppError>>;
   saveConversations(conversations: ReadonlyArray<NewConversation>, sourceLabel: string, watermark: string, now: string): Promise<Result<number, AppError>>;
   listMeals(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<Meal>, AppError>>;
+  listMealGallery(to: string): Promise<Result<MealGalleryPage, AppError>>;
+  listMealDayCounts(period: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<MealDayCount>, AppError>>;
   createMealAndQueueNutrition(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>>;
   createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>>;
   getMealPhoto(id: string): Promise<Result<{ readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>>;

@@ -1,5 +1,5 @@
 import { calculate7DayMovingAverage, weightCalendarDate, weightCalendarDayTimestamp } from "@life-console/contracts";
-import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState, type ChangeEvent } from "react";
 
 import { api } from "../../api";
@@ -35,6 +35,8 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
   day: "numeric",
 }).format(new Date(occurredAt));
 
+const currentJapanDate = (): string => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
+
 export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExpanded, onCaloriesExpandedChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
   readonly search: HealthSearch;
   readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
@@ -52,7 +54,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
   readonly weightEntryOpen: boolean;
   readonly onWeightEntryOpenChange: (open: boolean) => void;
 }) => {
-  const { readOnly, calorieBaselineQuery, mealsForPeriodQuery, nutritionQuery, stravaCaloriesQuery, stravaCaloriesSyncStatusQuery, weightsQuery, weightGoalQuery } = useHealthQueries();
+  const { read, readOnly, calorieBaselineQuery, mealDayCountsQuery, mealGalleryQueryKey, nutritionQuery, stravaCaloriesQuery, stravaCaloriesSyncStatusQuery, weightsQuery, weightGoalQuery } = useHealthQueries();
   const queryClient = useQueryClient();
   const { data: weights } = useSuspenseQuery(weightsQuery);
   const { data: weightGoal } = useSuspenseQuery(weightGoalQuery);
@@ -80,7 +82,14 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
     : { start: latestDay - WEIGHT_DAY_MS, end: latestDay };
   const periodFrom = new Date(visibleWindow.start).toISOString().slice(0, 10);
   const periodTo = new Date(visibleWindow.end).toISOString().slice(0, 10);
-  const meals = useQuery(mealsForPeriodQuery(periodFrom, periodTo));
+  const mealDayCounts = useQuery(mealDayCountsQuery(periodFrom, periodTo));
+  const mealGallery = useInfiniteQuery({
+    queryKey: mealGalleryQueryKey,
+    initialPageParam: currentJapanDate(),
+    queryFn: ({ pageParam }) => read.mealGallery(pageParam),
+    getNextPageParam: (page) => page.nextTo ?? undefined,
+  });
+  const galleryMeals = mealGallery.data?.pages.flatMap((page) => page.meals) ?? [];
   const nutrition = useQuery(nutritionQuery);
   const strava = useStravaActivities(periodFrom, periodTo);
   const stravaCalories = useQuery(stravaCaloriesQuery(periodFrom, periodTo, strava.connected && !strava.disconnect.isPending));
@@ -266,10 +275,11 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
         onExpandedChange={onCaloriesExpandedChange}
         syncStatus={syncStatus.data}
       />
-      <StravaActivities strava={strava} from={periodFrom} to={periodTo} weights={weights} meals={meals.data} onSelectWeek={onRangeChange} />
-      {meals.isPending && <p role="status">食事を読み込んでいます。</p>}
-      {meals.error !== null && <FormError>{meals.error.message}</FormError>}
-      {meals.data !== undefined && <MealGallery meals={meals.data} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} periodLabel={`${periodFrom} 〜 ${periodTo}・新しい順`} />}
+      <StravaActivities strava={strava} from={periodFrom} to={periodTo} weights={weights} mealDayCounts={mealDayCounts.data} onSelectWeek={onRangeChange} />
+      {mealDayCounts.error !== null && <FormError>{mealDayCounts.error.message}</FormError>}
+      {mealGallery.isPending && <p role="status">食事を読み込んでいます。</p>}
+      {mealGallery.error !== null && <FormError>{mealGallery.error.message}</FormError>}
+      {mealGallery.data !== undefined && <MealGallery meals={galleryMeals} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} hasMore={mealGallery.hasNextPage} loadingMore={mealGallery.isFetchingNextPage} onLoadMore={() => { void mealGallery.fetchNextPage(); }} periodLabel="新しい順・直近 7 日間" />}
       <div>
         <Panel className="gap-4 px-5 max-sm:border-t max-sm:px-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0">
           <div className="space-y-1.5">
