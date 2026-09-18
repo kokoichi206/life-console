@@ -168,6 +168,26 @@ export const MobileWeightOverview: Story = {
   globals: { viewport: { value: "weightMobile", isRotated: false } },
 };
 
+export const NarrowWeightOverview: Story = {
+  name: "狭い表示領域でもページが横にはみ出さない",
+  parameters: {
+    viewport: {
+      options: {
+        narrowWeight: { name: "体重グラフ · 300 × 840", styles: { width: "300px", height: "840px" }, type: "mobile" },
+      },
+    },
+  },
+  globals: { viewport: { value: "narrowWeight", isRotated: false } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await canvas.findByRole("img", { name: "体重の実測値と 7 日移動平均の推移" });
+    const root = canvasElement.ownerDocument.documentElement;
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+    await userEvent.click(canvas.getByRole("button", { name: "表で見る" }));
+    await expect(canvas.getByRole("table", { name: "体重の推移" })).toBeVisible();
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+  },
+};
+
 export const DragWeightPeriod: Story = {
   name: "グラフを直接動かし、最新の期間へ戻る",
   parameters: { ...GoalOverview.parameters },
@@ -384,6 +404,42 @@ export const CalorieBalanceWithStrava: Story = {
     await expect(canvas.getByText(/基準消費量 1,500 kcal/)).toBeVisible();
   },
 };
+
+export const NarrowHealthRecords: Story = {
+  name: "狭い画面で収支・運動・食事とフォーカスを確認する",
+  parameters: {
+    ...NarrowWeightOverview.parameters,
+    initialUrl: "/health?from=2026-09-01&to=2026-09-07",
+    msw: { handlers: [
+      http.get("*/api/v1/meals", () => HttpResponse.json({ data: calorieMeals.map((meal) => ({
+        id: meal.mealId, photoId: null, memo: "架空の食事", tags: [], occurredAt: meal.occurredAt, recordedAt: meal.occurredAt,
+      })) })),
+      ...calorieBalanceHandlers(() => measuredCalories),
+    ] },
+  },
+  globals: { viewport: { value: "narrowWeight", isRotated: false } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await expect(await canvas.findByText("+100")).toBeVisible();
+    await expect(await canvas.findByText("架空の朝ラン")).toBeVisible();
+    await expect(await canvas.findAllByText("架空の食事")).toHaveLength(3);
+    const root = canvasElement.ownerDocument.documentElement;
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+    await userEvent.click(canvas.getByText("週ごとの数字を見る", { selector: "summary" }));
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+    const goalButton = canvas.getByRole("button", { name: "目標を設定" });
+    goalButton.focus();
+    await expect(goalButton).toHaveFocus();
+    const buttonBounds = goalButton.getBoundingClientRect();
+    for (let ancestor = goalButton.parentElement; ancestor !== null && ancestor !== root; ancestor = ancestor.parentElement) {
+      if (["hidden", "clip", "auto", "scroll"].includes(getComputedStyle(ancestor).overflowX)) {
+        // 外側に描く 3 px のリングまで、祖先の切り取り領域に収まる必要がある。
+        await expect(ancestor.getBoundingClientRect().right).toBeGreaterThanOrEqual(buttonBounds.right + 3);
+      }
+    }
+  },
+};
+
+export const NarrowHealthRecordsDark: Story = { ...NarrowHealthRecords, globals: { ...NarrowHealthRecords.globals, theme: "dark" } };
 
 export const CalorieBalanceBeforeActivities: Story = {
   name: "運動一覧を待たず保存済みのカロリー収支を表示する",
