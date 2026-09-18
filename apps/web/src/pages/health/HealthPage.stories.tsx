@@ -61,7 +61,7 @@ export const Dark: Story = { globals: { theme: "dark" } };
 export const ChartTooltipMobile: Story = {
   name: "狭い画面でも体重の詳細が切れない",
   parameters: { msw: { handlers: handlers(weights.map((point) => point.id === "csv" ? { ...point, occurredAt: "2026-09-05T00:00:00+09:00" } : point)) } },
-  decorators: [(Story) => <div style={{ maxWidth: 360 }}><Story /></div>],
+  decorators: [(Story) => <div className="max-w-90"><Story /></div>],
   play: async ({ canvas, userEvent }) => {
     const chart = await canvas.findByRole("img", { name: "体重の実測値と 7 日移動平均の推移" });
     chart.scrollIntoView({ block: "center" });
@@ -170,7 +170,7 @@ export const MobileWeightOverview: Story = {
 export const DragWeightPeriod: Story = {
   name: "グラフを直接動かし、最新の期間へ戻る",
   parameters: { ...GoalOverview.parameters },
-  decorators: [(Story) => <div style={{ maxWidth: 390 }}><Story /></div>],
+  decorators: [(Story) => <div className="max-w-97.5"><Story /></div>],
   play: async ({ canvas, canvasElement, userEvent }) => {
     const chart = await canvas.findByRole("img", { name: "体重の実測値と 7 日移動平均の推移" });
     chart.scrollIntoView({ block: "center" });

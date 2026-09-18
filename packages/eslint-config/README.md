@@ -26,7 +26,28 @@ TypeScript のソース・テスト・設定ファイルには `projectService` 
 
 Web のソース・stories・設定には React Hooks の `rules-of-hooks` と `exhaustive-deps` も `error` で適用します。
 
-以下はプロジェクト固有のルールです。
+### Web のデザインルール
+
+`@shadcn/lint` の次のルールを `apps/web/**/*.{ts,tsx}`（stories を含む）に `error` で適用します。API と runner は対象外です。テーマと共通 UI は `apps/web/components.json` から解決します。
+
+| ルール | 検出する内容 | 修正方法 |
+| --- | --- | --- |
+| `no-raw-colors` | Tailwind の直接色、未定義の色 token、SVG の直接色 | `src/styles.css` のテーマ色、`currentColor` を使う |
+| `no-unknown-classes` | Tailwind が生成できないクラス | 既存の utility に直す |
+| `no-inline-styles` | `style` の通常プロパティ、`<style>` | 固定値はクラス、動的な値は CSS カスタムプロパティにする |
+| `require-static-classes` | 共通 UI に渡す、静的に解析できないクラス名 | 完全なクラス名を `cn` の条件式・オブジェクトで選ぶ |
+
+`fill-none` は SVG の塗りなしを示すため、`no-raw-colors` で許可します。共通 UI の実装は利用側の `className` を合成するため、`require-static-classes` だけ対象外です。そのディレクトリ内の stories とテストには適用します。
+
+`no-restyle` と `no-arbitrary-values` は有効にしていません。既存の `Panel` などは利用側で余白を指定し、グラフ・レスポンシブレイアウトは任意値を使っています。これらを制限する場合は、部品ごとの変更可能な範囲とテーマの寸法を先に定義します。
+
+```tsx
+<div className="w-(--bar-width) bg-primary" style={{ "--bar-width": `${percentage}%` } as CSSProperties} />
+```
+
+ルールの有効化と適用範囲は `shadcn-config.test.js` で、実際の ESLint 設定に通る例・違反例を入力して検証します。[公式のルール一覧](https://github.com/shadcn-ui/lint/blob/main/docs/rules.md)も参照してください。
+
+### プロジェクト固有のルール
 
 - [no-throw-statement](rules/no-throw-statement/README.md): handler / usecase / repository での throw を禁止
 - [require-result-return-type](rules/require-result-return-type/README.md): API の公開業務処理と factory が返すメソッドに Result を要求

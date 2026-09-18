@@ -37,7 +37,7 @@ export const Recorded: Story = {
   },
 };
 export const Dark: Story = { ...Recorded, globals: { theme: "dark" } };
-export const Narrow: Story = { ...Recorded, decorators: [(Story) => <div style={{ maxWidth: 350 }}><Story /></div>] };
+export const Narrow: Story = { ...Recorded, decorators: [(Story) => <div className="max-w-87.5"><Story /></div>] };
 export const NotConnected: Story = { parameters: { msw: { handlers: [http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: null } }))] } } };
 export const NotConfigured: Story = { parameters: { msw: { handlers: [http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: false, athleteId: null } }))] } } };
 export const Loading: Story = { parameters: { msw: { handlers: [connected, http.get("*/api/v1/strava/activities", async () => {

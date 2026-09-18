@@ -144,7 +144,7 @@ export const FinancePage = () => {
             {periodCategories.map((entry) => (
               <div key={entry.category} className="grid grid-cols-[90px_1fr_auto] items-center gap-3 text-xs">
                 <span className="truncate text-muted-foreground">{entry.category}</span>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted"><i className="block h-full rounded-full bg-primary" style={{ width: `${periodExpenseYen === 0 ? 0 : entry.amountYen / periodExpenseYen * 100}%` }} /></div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted"><i className="block h-full w-(--expense-width) rounded-full bg-primary" style={{ "--expense-width": `${periodExpenseYen === 0 ? 0 : entry.amountYen / periodExpenseYen * 100}%` } as CSSProperties} /></div>
                 <strong className="text-right tabular-nums">{money(entry.amountYen)}</strong>
               </div>
             ))}

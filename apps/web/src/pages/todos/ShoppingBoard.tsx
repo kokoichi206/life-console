@@ -1,7 +1,7 @@
 import type { ShoppingList } from "@life-console/contracts";
 import { useIsMutating, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 
 import { api } from "../../api";
 import { EmptyState, Field, FormError, Panel } from "../../components/DesignSystem";
@@ -76,8 +76,8 @@ const ShoppingRow = ({ item, places, changePurchase }: { readonly item: Shopping
         {offset >= 96 ? "離して確定" : action}
       </div>
       <div
-        className="relative touch-pan-y touch-pinch-zoom space-y-2 bg-card py-3"
-        style={{ transform: `translateX(${offset}px)` }}
+        className="relative transform-(--swipe-transform) touch-pan-y touch-pinch-zoom space-y-2 bg-card py-3"
+        style={{ "--swipe-transform": `translateX(${offset}px)` } as CSSProperties}
         onPointerDown={(event) => {
           if (busy || !event.isPrimary || event.button !== 0 || (event.target as HTMLElement).closest("button, a")) return;
           gesture.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, horizontal: false };
