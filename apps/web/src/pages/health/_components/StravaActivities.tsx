@@ -13,7 +13,7 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek, strav
   readonly meals: ReadonlyArray<Meal> | undefined;
   readonly onSelectWeek: (period: { from: string; to: string }) => void;
 }) => {
-  const { status, authorize, disconnect, sync, connected, activities, complete, records } = strava;
+  const { readOnly, status, authorize, disconnect, sync, connected, activities, complete, records } = strava;
   const weeks = complete && meals !== undefined ? exerciseWeeks(from, to, records, weights, meals) : [];
   return (
     <Panel className="mb-6 gap-4 px-5" aria-label="Strava の運動記録">
@@ -24,18 +24,18 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek, strav
         </div>
         {connected && (
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" disabled={sync.isPending || disconnect.isPending} onClick={() => sync.mutate()}>運動を同期</Button>
-            <Button size="sm" variant="ghost" disabled={disconnect.isPending} onClick={() => disconnect.mutate()}>接続を解除</Button>
+            <Button size="sm" variant="outline" disabled={readOnly || sync.isPending || disconnect.isPending} onClick={() => sync.mutate()}>運動を同期</Button>
+            <Button size="sm" variant="ghost" disabled={readOnly || disconnect.isPending} onClick={() => disconnect.mutate()}>接続を解除</Button>
           </div>
         )}
       </header>
       {status.isPending && <p role="status">Strava の接続を確認しています。</p>}
       {status.error !== null && <FormError>{status.error.message}</FormError>}
-      {status.data?.configured === false && <p className="text-sm text-muted-foreground">Strava の接続設定がまだありません。設定後、ここから接続できます。</p>}
+      {status.data?.configured === false && <p className="text-sm text-muted-foreground">{readOnly ? "Strava は未接続です。" : "Strava の接続設定がまだありません。設定後、ここから接続できます。"}</p>}
       {status.data?.configured === true && !connected && (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">非公開の運動を含め、選んだ期間の記録を読み取ります。運動名・距離・時間・心拍数・消費カロリーを保存して表示します。接続情報は暗号化して保存します。接続はいつでも解除できます。</p>
-          <Button disabled={authorize.isPending} onClick={() => authorize.mutate()}>Connect with Strava</Button>
+          <p className="text-sm text-muted-foreground">{readOnly ? "Strava は未接続です。" : "非公開の運動を含め、選んだ期間の記録を読み取ります。運動名・距離・時間・心拍数・消費カロリーを保存して表示します。接続情報は暗号化して保存します。接続はいつでも解除できます。"}</p>
+          <Button disabled={readOnly || authorize.isPending} onClick={() => authorize.mutate()}>Connect with Strava</Button>
         </div>
       )}
       {connected && <p className="text-xs text-muted-foreground">保存済みの運動を表示しています。同期が完了すると新しい記録が反映されます。</p>}

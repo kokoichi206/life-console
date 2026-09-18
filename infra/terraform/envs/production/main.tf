@@ -38,3 +38,9 @@ module "worker" {
   account_id  = local.cloudflare_account_id
   worker_name = local.worker_name
 }
+
+module "health_share_access" {
+  source          = "../../modules/services/health-share-access"
+  account_id      = local.cloudflare_account_id
+  worker_hostname = local.worker_hostname
+}

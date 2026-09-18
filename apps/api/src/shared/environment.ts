@@ -15,6 +15,7 @@ export const apiEnvironmentSchema = baseEnvSchema.extend({
   WEB_PUSH_PUBLIC_KEY: z.string().regex(/^[A-Za-z0-9_-]{87}$/u).optional(),
   WEB_PUSH_PRIVATE_KEY: z.string().regex(/^[A-Za-z0-9_-]{43}$/u).optional(),
   WEB_PUSH_SUBJECT: z.url().refine((value) => value.startsWith("mailto:") || value.startsWith("https://")).optional(),
+  HEALTH_SHARE_TOKEN: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
   RUNNER_TOKEN: z.string().min(1).optional(),
   R2_ACCESS_KEY_ID: z.string().min(1).optional(),
   R2_ACCOUNT_ID: z.string().min(1).optional(),

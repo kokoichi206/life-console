@@ -9,17 +9,18 @@ import { Field, FormError, EmptyState, Panel, SectionHeading } from "../../../co
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/input";
 import { nutritionIsPending, summarizeDailyNutrition } from "../nutrition-summary";
-import { nutritionQuery } from "../queries";
+import { useHealthQueries } from "../queries";
 
 const mealDateTime = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
 }).format(new Date(occurredAt));
 
 const MealPhoto = ({ photoId, alt, className }: { readonly photoId: string; readonly alt: string; readonly className: string }) => {
+  const { read } = useHealthQueries();
   const [failed, setFailed] = useState(false);
   return failed
     ? <p className="grid h-full min-h-32 place-items-center px-3 text-center text-xs text-destructive">写真を読み込めませんでした。</p>
-    : <img src={`/api/v1/meal-photos/${encodeURIComponent(photoId)}/content`} alt={alt} loading="lazy" className={className} onError={() => setFailed(true)} />;
+    : <img src={read.mealPhotoUrl(photoId)} alt={alt} loading="lazy" className={className} onError={() => setFailed(true)} />;
 };
 
 const mealCaloriesLabel = (nutrition: MealNutrition | undefined): string => {
@@ -29,6 +30,7 @@ const mealCaloriesLabel = (nutrition: MealNutrition | undefined): string => {
 };
 
 const MealCaloriesForm = ({ nutrition }: { readonly nutrition: MealNutrition }) => {
+  const { nutritionQuery, readOnly } = useHealthQueries();
   const queryClient = useQueryClient();
   const [caloriesKcal, setCaloriesKcal] = useState(String(nutrition.manualCaloriesKcal ?? nutrition.estimate?.caloriesKcal ?? ""));
   const save = useMutation({
@@ -49,14 +51,14 @@ const MealCaloriesForm = ({ nutrition }: { readonly nutrition: MealNutrition }) 
           min={0}
           step={1}
           value={caloriesKcal}
-          disabled={save.isPending}
+          disabled={readOnly || save.isPending}
           onChange={(event) => {
             setCaloriesKcal(event.target.value);
             save.reset();
           }}
         />
       </Field>
-      <Button type="submit" disabled={save.isPending || caloriesKcal === ""}>{save.isPending ? "保存しています…" : "カロリーを保存"}</Button>
+      <Button type="submit" disabled={readOnly || save.isPending || caloriesKcal === ""}>{save.isPending ? "保存しています…" : "カロリーを保存"}</Button>
       {save.isSuccess && <p role="status" className="text-sm text-muted-foreground">カロリーを保存しました。</p>}
       {save.error !== null && <FormError>{save.error.message}</FormError>}
     </form>
@@ -69,6 +71,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
   readonly selectedMealId: string | undefined;
   readonly onSelectMeal: (id: string | undefined) => void;
 }) => {
+  const { nutritionQuery, readOnly } = useHealthQueries();
   const queryClient = useQueryClient();
   const nutrition = useQuery(nutritionQuery);
   const analyze = useMutation({
@@ -87,8 +90,8 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
       <div className="px-5">
         <p className="mb-4 text-xs text-muted-foreground">{periodLabel}</p>
         <div className="mb-4 space-y-3">
-          <p className="text-xs text-muted-foreground">カロリーが未入力の写真付き食事は、保存後に自動で解析します。写真とメモは設定した AI サービスへ送られ、Mac の runner が起動している間に概算します。</p>
-          <Button variant="outline" size="sm" disabled={analyze.isPending || nutrition.data === undefined || nutrition.data.some((entry) => nutritionIsPending(entry.analysisStatus)) || !nutrition.data.some((entry) => entry.photoId !== null && entry.manualCaloriesKcal === null && entry.estimate === null)} onClick={() => analyze.mutate({})}>未解析の食事をまとめて解析</Button>
+          <p className="text-xs text-muted-foreground">{readOnly ? "保存済みの食事と栄養の推定値を表示しています。" : "カロリーが未入力の写真付き食事は、保存後に自動で解析します。写真とメモは設定した AI サービスへ送られ、Mac の runner が起動している間に概算します。"}</p>
+          <Button variant="outline" size="sm" disabled={readOnly || analyze.isPending || nutrition.data === undefined || nutrition.data.some((entry) => nutritionIsPending(entry.analysisStatus)) || !nutrition.data.some((entry) => entry.photoId !== null && entry.manualCaloriesKcal === null && entry.estimate === null)} onClick={() => analyze.mutate({})}>未解析の食事をまとめて解析</Button>
           {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}
           {nutrition.isPending && <p role="status" className="text-sm text-muted-foreground">推定結果を読み込み中…</p>}
           {nutrition.error !== null && <FormError>{nutrition.error.message}</FormError>}
@@ -120,7 +123,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
           )}
         </div>
         {meals.length === 0
-          ? <EmptyState>まだ食事記録がありません。『食事を記録』から写真やメモを残せます。</EmptyState>
+          ? <EmptyState>{readOnly ? "まだ食事記録がありません。" : "まだ食事記録がありません。『食事』から写真やメモを残せます。"}</EmptyState>
           : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                 {meals.map((meal) => (
@@ -169,7 +172,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
                   </div>
                 )}
                 {selectedNutrition !== undefined && <MealCaloriesForm key={selectedMeal.id} nutrition={selectedNutrition} />}
-                {(selectedMeal.photoId !== null || selectedMeal.memo.trim() !== "") && <Button disabled={analyze.isPending || pending || nutrition.data === undefined} onClick={() => analyze.mutate({ mealId: selectedMeal.id })}>{pending ? "解析待ち・解析中" : selectedNutrition?.estimate == null ? "栄養を解析" : "栄養を再解析"}</Button>}
+                {(selectedMeal.photoId !== null || selectedMeal.memo.trim() !== "") && <Button disabled={readOnly || analyze.isPending || pending || nutrition.data === undefined} onClick={() => analyze.mutate({ mealId: selectedMeal.id })}>{pending ? "解析待ち・解析中" : selectedNutrition?.estimate == null ? "栄養を解析" : "栄養を再解析"}</Button>}
                 {selectedNutrition?.manualCaloriesKcal != null && <p className="text-xs text-muted-foreground">解析しても手入力したカロリーは変わりません。</p>}
                 {pending && <p role="status" className="text-sm text-muted-foreground">Mac の runner で順番に解析します。結果は自動で更新されます。</p>}
                 {selectedNutrition?.analysisStatus === "failed" && <FormError>{selectedNutrition.analysisSummary ?? "解析に失敗しました。再解析できます。"}</FormError>}

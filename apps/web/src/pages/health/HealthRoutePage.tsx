@@ -1,10 +1,20 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
+import type { HealthSearch } from "./health-search";
 import { HealthPage } from "./HealthPage";
 
 export const HealthRoutePage = () => {
   const search = useSearch({ from: "/health" });
   const navigate = useNavigate({ from: "/health" });
+  return (
+    <HealthRouteContent search={search} navigate={(options) => { void navigate(options); }} />
+  );
+};
+
+export const HealthRouteContent = ({ search, navigate }: {
+  readonly search: HealthSearch;
+  readonly navigate: (options: { search: HealthSearch; replace: boolean; resetScroll: false }) => void;
+}) => {
   return (
     <HealthPage
       search={search}

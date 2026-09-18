@@ -1,7 +1,8 @@
 import { monitoringSearchSchema } from "@life-console/contracts";
 import { QueryClient } from "@tanstack/react-query";
-import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Link, redirect } from "@tanstack/react-router";
+import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 
+import { createHealthReadApi } from "./api";
 import { AppShell } from "./components/AppShell";
 import { Eyebrow, Panel } from "./components/DesignSystem";
 import { RouteError } from "./components/RouteError";
@@ -11,8 +12,8 @@ import { jobsQuery } from "./features/jobs/queries";
 import { dashboardQuery } from "./features/overview/queries";
 import { repositoriesQuery } from "./features/repositories/queries";
 import { financeQuery } from "./pages/finance/queries";
-import { parseHealthSearch } from "./pages/health/health-search";
-import { calorieBaselineQuery, mealsQuery, weightsQuery, weightGoalQuery } from "./pages/health/queries";
+import { parseHealthSearch, parseSharedHealthSearch } from "./pages/health/health-search";
+import { createHealthQueries, calorieBaselineQuery, mealsQuery, weightsQuery, weightGoalQuery } from "./pages/health/queries";
 import { sourceRepositoryMappingsQuery } from "./pages/operations/queries";
 import { parseTodoSearch } from "./pages/todos/todo-search";
 import { parseWorkSearch } from "./pages/work/work-search";
@@ -22,7 +23,10 @@ type RouterContext = {
 };
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
-  component: AppShell,
+  component: function RootLayout() {
+    const shared = useRouterState({ select: (state) => state.location.pathname === "/share/health" || state.location.pathname.startsWith("/share/health/") });
+    return shared ? <main className="mx-auto max-w-7xl px-4 py-8 sm:px-8"><Outlet /></main> : <AppShell />;
+  },
   errorComponent: RouteError,
   notFoundComponent: () => (
     <Panel className="mx-auto mt-20 max-w-xl gap-4 px-5">
@@ -72,6 +76,22 @@ const healthRoute = createRoute({
   component: lazyRouteComponent(() => import("./pages/health/HealthRoutePage"), "HealthRoutePage"),
 });
 
+const sharedHealthRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/share/health/$token",
+  validateSearch: parseSharedHealthSearch,
+  loader: async ({ context, params }) => {
+    const queries = createHealthQueries(createHealthReadApi(`/api/v1/share/${encodeURIComponent(params.token)}`), ["health-share", params.token], true);
+    await Promise.all([
+      context.queryClient.fetchQuery({ ...queries.weightsQuery, staleTime: 0 }),
+      context.queryClient.fetchQuery({ ...queries.weightGoalQuery, staleTime: 0 }),
+      context.queryClient.fetchQuery({ ...queries.calorieBaselineQuery, staleTime: 0 }),
+      context.queryClient.fetchQuery({ ...queries.mealsQuery, staleTime: 0 }),
+    ]);
+  },
+  component: lazyRouteComponent(() => import("./pages/health/SharedHealthRoutePage"), "SharedHealthRoutePage"),
+});
+
 const financeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/finance",
@@ -107,6 +127,7 @@ const routeTree = rootRoute.addChildren([
   tasksRoute,
   todosRoute,
   healthRoute,
+  sharedHealthRoute,
   financeRoute,
   operationsRoute,
 ]);

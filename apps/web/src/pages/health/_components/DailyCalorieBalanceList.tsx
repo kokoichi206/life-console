@@ -122,7 +122,7 @@ const LegendSwatch = ({ className, label }: { readonly className: string; readon
   </span>
 );
 
-export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange, syncStatus }: {
+export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange, syncStatus, readOnly = false }: {
   readonly rows: ReadonlyArray<CalorieBalanceRow>;
   readonly baselineKcal: number | null;
   readonly exerciseState: ExerciseTrackingState;
@@ -130,6 +130,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
   readonly pendingActivities: number;
   readonly nutritionPending: boolean;
   readonly nutritionErrorMessage: string | null;
+  readonly readOnly?: boolean;
   readonly onEditBaseline: () => void;
   readonly expanded: boolean;
   /** 直近の窓から外れている日数。0 なら広げる先がないのでボタンを出さない。 */
@@ -152,7 +153,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
             {baselineKcal === null ? "基準消費量が未設定・体重と同じ期間・日本時間" : `基準消費量 ${kcalFormat.format(baselineKcal)} kcal・体重と同じ期間・日本時間・新しい順`}
           </p>
         </div>
-        <Button size="sm" variant={baselineKcal === null ? "default" : "outline"} onClick={onEditBaseline}>
+        <Button disabled={readOnly} size="sm" variant={baselineKcal === null ? "default" : "outline"} onClick={onEditBaseline}>
           {baselineKcal === null ? "基準消費量を設定" : "基準消費量を編集"}
         </Button>
       </header>
@@ -163,7 +164,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
           {syncStatus.lastJob !== null && failedSyncStatuses.has(syncStatus.lastJob.status) && (
             <>
               {" "}
-              <Link to="/operations" className="underline underline-offset-4">実行状況を見る</Link>
+              {!readOnly && <Link to="/operations" className="underline underline-offset-4">実行状況を見る</Link>}
             </>
           )}
         </p>
@@ -171,7 +172,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
       {exerciseState === "untracked" && <p className="text-xs text-muted-foreground">Strava 未接続のため、運動を含めていません。</p>}
       {exerciseState === "loading" && <p role="status" className="text-sm text-muted-foreground">運動を取得しています。取得後に収支を表示します。</p>}
       {exerciseState === "failed" && <p className="text-sm text-muted-foreground">運動を取得できていないため、収支を表示していません。</p>}
-      {exerciseState === "unsynced" && <p role="status" className="text-sm text-muted-foreground">運動の同期を待っています。「運動を同期」から開始できます。</p>}
+      {exerciseState === "unsynced" && <p role="status" className="text-sm text-muted-foreground">{readOnly ? "運動の同期を待っています。" : "運動の同期を待っています。「運動を同期」から開始できます。"}</p>}
       {exerciseState === "stored" && <p role="status" className="text-sm text-muted-foreground">保存済みの運動で計算しています。未同期の運動は含まれません。</p>}
       {(exerciseState === "tracked" || exerciseState === "stored") && pendingActivities > 0 && (
         <p role="status" className="text-sm text-muted-foreground">{`消費カロリーを取得中（残り ${pendingActivities} 件）。Mac の runner が順に取得します。`}</p>

@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 import { zValidator } from "@hono/zod-validator";
 import { createAgentQuestionSchema, answerAgentQuestionSchema } from "@life-console/contracts";
 import { createConnectorScheduleSchema, updateConnectorScheduleSchema } from "@life-console/contracts";
@@ -218,19 +220,70 @@ app.use("/api/*", async (context, next) => {
 
 app.use("/api/v1/runner/*", runnerAuthentication);
 
-app.use("/api/v1/strava/*", async (context, next) => {
+const stravaConfiguration = createMiddleware<HonoEnvironment>(async (context, next) => {
   context.header("Cache-Control", "no-store");
   context.header("Referrer-Policy", "no-referrer");
   const environment = context.get("environment");
-  if (context.req.path !== "/api/v1/strava/status" && environment.STRAVA_CLIENT_ID === undefined) return respond(context, err(appError.validation("Strava の接続設定がまだありません。")));
-  if (context.req.method !== "GET" && context.req.header("Origin") !== new URL(environment.STRAVA_REDIRECT_URI!).origin) return respond(context, err(appError.forbidden("操作元の画面を確認できません。健康画面から操作してください。")));
+  if (!context.req.path.endsWith("/strava/status") && environment.STRAVA_CLIENT_ID === undefined) return respond(context, err(appError.validation("Strava の接続設定がまだありません。")));
+  if (!["GET", "HEAD"].includes(context.req.method) && context.req.header("Origin") !== new URL(environment.STRAVA_REDIRECT_URI!).origin) return respond(context, err(appError.forbidden("操作元の画面を確認できません。健康画面から操作してください。")));
   return next();
 });
 
-const _routes = app
-  .get("/api/v1/strava/status", async (context) => {
+app.use("/api/v1/strava/*", stravaConfiguration);
+
+app.use("/api/v1/share/:token/*", async (context, next) => {
+  const expected = context.get("environment").HEALTH_SHARE_TOKEN;
+  const token = context.req.param("token");
+  context.header("Cache-Control", "no-store");
+  context.header("Referrer-Policy", "no-referrer");
+  if (!["GET", "HEAD"].includes(context.req.method) || expected === undefined || !/^[a-f0-9]{64}$/u.test(token) || !timingSafeEqual(Buffer.from(token), Buffer.from(expected))) {
+    return respond(context, err(appError.notFound("共有リンクが無効です。")));
+  }
+  await next();
+  // 写真を含め、共有を停止した後の再取得でキャッシュを使わせない。
+  context.header("Cache-Control", "no-store");
+  context.header("Referrer-Policy", "no-referrer");
+  return;
+});
+app.use("/api/v1/share/:token/strava/*", stravaConfiguration);
+
+const healthReadRoutes = new Hono<HonoEnvironment>()
+  .get("/strava/status", async (context) => {
     const environment = context.get("environment");
     return environment.STRAVA_CLIENT_ID === undefined ? context.json({ data: { configured: false, athleteId: null } }) : respond(context, await createStravaHandlers(environment).status());
+  })
+  .get("/strava/activities", zValidator("query", stravaActivityQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activities(context.req.valid("query"))))
+  .get("/strava/calories", zValidator("query", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activityCalories(context.req.valid("query"))))
+  .get("/strava/calories/sync-status", async (context) => respond(context, await createStravaHandlers(context.get("environment")).syncStatus()))
+  .get("/nutrition", async (context) => respond(context, await createNutritionHandlers(context.get("environment")).list()))
+  .get("/meals", zValidator("query", mealPeriodQuerySchema), async (context) => {
+    const period = context.req.valid("query");
+    return respond(context, await createHandlers(context.get("environment")).listMeals(period.from === undefined ? undefined : { from: period.from, to: period.to }));
+  })
+  .get("/meal-photos/:id/content", zValidator("param", identifierParameterSchema), async (context) => {
+    const result = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id);
+    if (!result.ok) return respond(context, result);
+    return new Response(result.value.body, {
+      headers: {
+        "Cache-Control": "private, max-age=3600",
+        "Content-Type": result.value.contentType,
+        "ETag": result.value.etag,
+      },
+    });
+  })
+  .get("/weight-goal", async (context) => respond(context, await createHandlers(context.get("environment")).getWeightGoal()))
+  .get("/calorie-baseline", async (context) => respond(context, await createHandlers(context.get("environment")).getCalorieBaseline()))
+  .get("/weights", async (context) => respond(context, await createHandlers(context.get("environment")).listWeights()));
+export type HealthReadApp = typeof healthReadRoutes;
+
+app.route("/api/v1", healthReadRoutes);
+app.route("/api/v1/share/:token", healthReadRoutes);
+
+const _routes = app
+  .get("/api/v1/health-share", (context) => {
+    context.header("Cache-Control", "no-store");
+    const token = context.get("environment").HEALTH_SHARE_TOKEN;
+    return context.json({ data: token === undefined ? null : `/share/health/${token}` });
   })
   .post("/api/v1/strava/authorize", async (context) => {
     const environment = context.get("environment");
@@ -255,15 +308,11 @@ const _routes = app
     returnUrl.searchParams.set("strava", "connected");
     return context.redirect(returnUrl.toString(), 303);
   })
-  .get("/api/v1/strava/activities", zValidator("query", stravaActivityQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activities(context.req.valid("query"))))
-  .get("/api/v1/strava/calories", zValidator("query", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activityCalories(context.req.valid("query"))))
   .post("/api/v1/strava/sync", zValidator("json", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).requestSync(context.req.valid("json"))))
-  .get("/api/v1/strava/calories/sync-status", async (context) => respond(context, await createStravaHandlers(context.get("environment")).syncStatus()))
   .post("/api/v1/runner/strava/calories/plan", zValidator("json", stravaCaloriesPlanSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).planCalories(context.req.valid("json"))))
   .delete("/api/v1/strava/connection", async (context) => respond(context, await createStravaHandlers(context.get("environment")).disconnect()))
   .post("/api/v1/runner/strava/calories/reconcile", zValidator("json", stravaCaloriesReconcileSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).reconcileCalories(context.req.valid("json"))))
   .post("/api/v1/runner/strava/calories/fetch", zValidator("json", stravaCaloriesFetchSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).fetchCalories(context.req.valid("json"))))
-  .get("/api/v1/nutrition", async (context) => respond(context, await createNutritionHandlers(context.get("environment")).list()))
   .put("/api/v1/nutrition/:id/calories", zValidator("param", identifierParameterSchema), zValidator("json", saveMealCaloriesSchema), async (context) => {
     return respond(context, await createNutritionHandlers(context.get("environment")).saveManualCalories(context.req.valid("param").id, context.req.valid("json").caloriesKcal));
   })
@@ -347,10 +396,6 @@ const _routes = app
   .post("/api/v1/connectors/sync", zValidator("json", createConnectorSyncSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createConnectorSyncJob(context.req.valid("json")));
   })
-  .get("/api/v1/meals", zValidator("query", mealPeriodQuerySchema), async (context) => {
-    const period = context.req.valid("query");
-    return respond(context, await createHandlers(context.get("environment")).listMeals(period.from === undefined ? undefined : { from: period.from, to: period.to }));
-  })
   .post("/api/v1/meal-photos/upload", zValidator("json", createMealUploadSchema), async (context) => {
     const input = context.req.valid("json");
     return respond(context, await createHandlers(context.get("environment")).createMealPhotoUpload(
@@ -369,17 +414,6 @@ const _routes = app
       body,
     ));
   })
-  .get("/api/v1/meal-photos/:id/content", zValidator("param", identifierParameterSchema), async (context) => {
-    const result = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id);
-    if (!result.ok) return respond(context, result);
-    return new Response(result.value.body, {
-      headers: {
-        "Cache-Control": "private, max-age=3600",
-        "Content-Type": result.value.contentType,
-        "ETag": result.value.etag,
-      },
-    });
-  })
   .post("/api/v1/meals", zValidator("json", createMealSchema), async (context) => {
     const input = context.req.valid("json");
     const handlers = createHandlers(context.get("environment"));
@@ -389,11 +423,8 @@ const _routes = app
     }
     return respond(context, await handlers.createMeal(input));
   })
-  .get("/api/v1/weight-goal", async (context) => respond(context, await createHandlers(context.get("environment")).getWeightGoal()))
   .put("/api/v1/weight-goal", zValidator("json", weightGoalSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveWeightGoal(context.req.valid("json"))))
-  .get("/api/v1/calorie-baseline", async (context) => respond(context, await createHandlers(context.get("environment")).getCalorieBaseline()))
   .put("/api/v1/calorie-baseline", zValidator("json", calorieBaselineSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveCalorieBaseline(context.req.valid("json"))))
-  .get("/api/v1/weights", async (context) => respond(context, await createHandlers(context.get("environment")).listWeights()))
   .post("/api/v1/weights", zValidator("json", createWeightSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createWeight(context.req.valid("json")));
   })

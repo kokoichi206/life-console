@@ -40,6 +40,8 @@ infra/terraform/
 
 開発・本番の本人用 Access は、同じ root の `module.worker.worker_id` を `destinations` に指定する。本人用 Allow ポリシーは環境ごとに作成し、同じ root 内でその ID を Access に渡す。本番は既存ポリシーの ID・名前・条件を維持し、開発だけ別のポリシーに付け替える。環境間でポリシー ID や remote state を受け渡さない。開発・本番で異なる HttpOnly cookie 設定も維持する。
 
+健康共有用 Access は開発・本番それぞれの Worker ホスト名に対し、`share/health/*`・`api/v1/share/*` と表示に必要な `assets/*`・`icons/*`・`manifest.webmanifest` だけを Bypass にする。共有 API のトークン検証は Worker が行う。秘密値の設定・停止は [運用手順](../../docs/operations.md#健康ページの共有)を参照。
+
 本番の runner 用 Access は `/api/v1/runner/*` だけを対象に、既存 Service Token の ID を参照する Service Auth ポリシーを持つ。資格情報の発行・ローテーションや runner のジョブ実行は Terraform の対象外。
 
 ## state と資格情報
