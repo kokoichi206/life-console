@@ -239,7 +239,6 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
             </span>
           )}
           <span className="block">収支 = 基準消費量 + 運動 − 摂取。運動は Strava の記録の消費カロリーです。</span>
-          {exerciseState !== "untracked" && <span className="block">Powered by Strava</span>}
         </figcaption>
       </figure>
     </Panel>

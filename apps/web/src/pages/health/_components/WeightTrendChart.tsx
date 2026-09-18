@@ -116,7 +116,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
     selectWindow(constrainWeightWindow({ start: window.start + shift, end: window.end + shift }, bounds));
   };
   return (
-    <figure className="w-full pt-4 pb-2 sm:px-4">
+    <figure className="w-full pt-2 pb-2 sm:px-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">{`${tickDate(displayedWindow.start)} 〜 ${tickDate(displayedWindow.end)}`}</span>
         <div className="flex items-center gap-1" role="group" aria-label="グラフの拡大と移動">
@@ -127,7 +127,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
       </div>
       <div ref={container} className="relative min-w-0">
         {(points.length > 0 || detailWeek !== undefined) && (
-          <div className="mb-2 grid min-h-24 gap-3 py-2 sm:grid-cols-2 sm:rounded-lg sm:bg-muted/30 sm:px-3">
+          <div className="mb-1 grid items-start gap-2 py-2 sm:grid-cols-2 sm:rounded-lg sm:bg-muted/30 sm:px-3">
             {detailPoint === undefined
               ? (
                   <div className="space-y-1 text-xs text-muted-foreground">
@@ -136,7 +136,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
                   </div>
                 )
               : (
-                  <div className="grid gap-1 text-xs tabular-nums" role={hovered === undefined ? undefined : "tooltip"}>
+                  <div className="grid content-start gap-1 text-xs tabular-nums" role={hovered === undefined ? undefined : "tooltip"}>
                     <strong>{new Date(detailPoint.occurredAt).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" })}</strong>
                     <span>{`実測 ${detailPoint.weightKg.toFixed(1)} kg · 7 日平均 ${detailPoint.movingAverage7DaysKg.toFixed(2)} kg`}</span>
                     {showBodyFat && <span>{detailPoint.bodyFatPercent === null ? "体脂肪率 未記録" : `体脂肪率 ${detailPoint.bodyFatPercent.toFixed(1)} %`}</span>}
