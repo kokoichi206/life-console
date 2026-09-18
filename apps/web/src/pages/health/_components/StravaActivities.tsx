@@ -16,7 +16,7 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek, strav
   const { readOnly, status, authorize, disconnect, sync, connected, activities, complete, records } = strava;
   const weeks = complete && meals !== undefined ? exerciseWeeks(from, to, records, weights, meals) : [];
   return (
-    <Panel className="mb-6 gap-4 px-5 max-sm:border-t max-sm:px-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0" aria-label="Strava の運動記録">
+    <Panel mobileLayout="section" className="mb-6 gap-4 px-5" aria-label="Strava の運動記録">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">この期間の運動</h2>

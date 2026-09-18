@@ -129,7 +129,7 @@ const PlaceSection = ({ place, shopping, completed, changePurchase }: { readonly
   const existing = shopping.items.filter((item) => !item.placeIds.includes(place.id) && item.purchasedAt === null);
   return (
     <section aria-label={place.name}>
-      <Panel className="px-4">
+      <Panel mobileLayout="section" className="px-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="break-words font-semibold">
             {place.name}
@@ -242,7 +242,7 @@ export const ShoppingBoard = () => {
       </div>
       {search.placeId !== undefined && !shopping.places.some((place) => place.id === search.placeId) && <FormError>買う場所が見つかりません。『すべての場所』から開き直してください。</FormError>}
       {unassigned.length > 0 && (
-        <Panel className="px-4">
+        <Panel mobileLayout="section" className="px-4">
           <h3 className="font-semibold">場所なし</h3>
           <p className="mt-1 text-xs text-muted-foreground">編集から、買える場所を付けられます。</p>
           <ul>{unassigned.map((item) => <ShoppingRow key={item.id} item={item} places={shopping.places} changePurchase={changePurchase} />)}</ul>

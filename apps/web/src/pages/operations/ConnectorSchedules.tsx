@@ -60,9 +60,9 @@ export const ConnectorSchedulesView = ({ statuses, loading, error, notice, pendi
   readonly notice: string | null;
   readonly onReload: () => void;
 }) => (
-  <Panel className="mb-4">
+  <Panel mobileLayout="section" className="mb-4">
     <SectionHeading eyebrow="SCHEDULES" title="連絡の定期実行" action={<Button type="button" variant="outline" size="sm" onClick={onReload} disabled={pending}>再読み込み</Button>} />
-    <div className="space-y-4 px-5">
+    <div className="space-y-4 sm:px-5">
       <p className="text-sm text-muted-foreground">接続確認とは別に、連絡を取り込む予定を登録します。取得元と範囲は現在の接続設定を使います。</p>
       <p className="text-xs text-muted-foreground">停止しても予約済み・実行中の同期は中止しません。中止は実行履歴から操作してください。頻度変更・再開後の次回は、その時点から指定した間隔の後です。</p>
       {loading && <p role="status">定期実行を読み込み中です。</p>}

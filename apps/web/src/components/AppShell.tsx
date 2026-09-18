@@ -143,8 +143,7 @@ export const AppShell = () => {
         </footer>
       </aside>
       <main className={cn(
-        "mx-auto w-full max-w-[1440px] px-6 transition-[padding] duration-200 sm:px-8",
-        pathname === "/health" && "max-sm:px-4",
+        "mx-auto w-full max-w-[1440px] px-4 transition-[padding] duration-200 sm:px-8",
         pathname === "/tasks" ? "flex h-full min-h-0 flex-col overflow-hidden pt-4 pb-20 md:pb-4" : "min-h-screen py-8 pb-20 md:pb-16",
         sidebarCollapsed ? "md:pl-24" : "md:pl-64",
       )}

@@ -80,13 +80,13 @@ export const DashboardPage = () => {
         />
       </section>
       <div className="mb-4 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <Panel>
+        <Panel mobileLayout="section">
           <SectionHeading
             eyebrow="FOCUS"
             title="対応するタスク"
             action={<Link className={buttonVariants({ variant: "link", size: "sm" })} to="/todos">すべて見る</Link>}
           />
-          <div className="px-5">
+          <div className="sm:px-5">
             {data.todayTasks.slice(0, 5).map((task) => (
               <article key={task.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t py-3 first:border-t-0">
                 <StatusDot status={task.status} />
@@ -100,13 +100,13 @@ export const DashboardPage = () => {
             {data.todayTasks.length === 0 && <EmptyState>今日対応するタスクはありません。</EmptyState>}
           </div>
         </Panel>
-        <Panel>
+        <Panel mobileLayout="section">
           <SectionHeading
             eyebrow="WEIGHT"
             title="体重の推移"
             action={<Link className={buttonVariants({ variant: "link", size: "sm" })} to="/health">詳細</Link>}
           />
-          <div className="px-5">
+          <div className="sm:px-5">
             <LineChart
               points={data.weights.slice(-21).map((point) => ({
                 label: new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(new Date(point.occurredAt)),
@@ -118,10 +118,10 @@ export const DashboardPage = () => {
           </div>
         </Panel>
       </div>
-      <Panel className="grid gap-5 px-5 lg:grid-cols-[1.2fr_repeat(4,1fr)] lg:items-center">
+      <Panel mobileLayout="section" className="grid gap-5 px-5 lg:grid-cols-[1.2fr_repeat(4,1fr)] lg:items-center">
         <div>
-          <Eyebrow>LOCAL SYSTEM</Eyebrow>
-          <h2 className="mt-1.5 text-base font-semibold">Runner と connector</h2>
+          <Eyebrow className="max-sm:hidden">LOCAL SYSTEM</Eyebrow>
+          <h2 className="mt-1.5 text-xl font-semibold sm:text-base">Runner と connector</h2>
         </div>
         <HealthItem healthy={runner !== undefined} label={runner?.name ?? "runner 未登録"} detail={runner === undefined ? "Mac runner を起動してください" : `最終 heartbeat ${new Date(runner.lastHeartbeatAt).toLocaleString("ja-JP")}`} />
         <HealthItem healthy={runner?.orcaStatus === "healthy"} label="Orca" detail={runner?.orcaStatus ?? "unknown"} />

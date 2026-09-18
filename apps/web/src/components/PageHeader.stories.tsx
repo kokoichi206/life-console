@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 
 import { CountBadge, Field } from "./DesignSystem";
 import { PageHeader } from "./PageHeader";
@@ -17,3 +18,16 @@ export const Finance: Story = {
   },
 };
 export const Operations: Story = { args: { title: "同期・実行状況" } };
+
+export const NarrowFinance: Story = {
+  ...Finance,
+  parameters: { viewport: { options: { mobile: { name: "幅 320 px", styles: { width: "320px", height: "840px" } } } } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
+  play: async ({ canvas, canvasElement }) => {
+    const heading = canvas.getByRole("heading", { name: "収支と資産" });
+    await expect(heading.getBoundingClientRect().height).toBeLessThan(50);
+    await expect(canvas.getByLabelText("集計月").getBoundingClientRect().top).toBeGreaterThanOrEqual(heading.getBoundingClientRect().bottom);
+    const root = canvasElement.ownerDocument.documentElement;
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+  },
+};
