@@ -10,12 +10,13 @@ const STRAVA_CALORIES_POLL_INTERVAL_MS = 30_000;
 export const createHealthQueries = (read: ReturnType<typeof createHealthReadApi>, scope: ReadonlyArray<string>, readOnly = false) => ({
   readOnly,
   read,
+  mealGalleryQueryKey: [...scope, "meal-gallery"],
   mealsQuery: queryOptions({ queryKey: [...scope, "meals"], queryFn: read.meals }),
   weightsQuery: queryOptions({ queryKey: [...scope, "weights"], queryFn: read.weights }),
   weightGoalQuery: queryOptions({ queryKey: [...scope, "weight-goal"], queryFn: read.weightGoal }),
   calorieBaselineQuery: queryOptions({ queryKey: [...scope, "calorie-baseline"], queryFn: read.calorieBaseline }),
   stravaStatusQuery: queryOptions({ queryKey: [...scope, "strava-status"], queryFn: read.stravaStatus, retry: false }),
-  mealsForPeriodQuery: (from: string, to: string) => queryOptions({ queryKey: [...scope, "meals", from, to], queryFn: () => read.mealsForPeriod(from, to) }),
+  mealDayCountsQuery: (from: string, to: string) => queryOptions({ queryKey: [...scope, "meal-day-counts", from, to], queryFn: () => read.mealDayCounts(from, to) }),
   nutritionQuery: queryOptions({
     queryKey: [...scope, "nutrition"], queryFn: read.nutrition,
     refetchInterval: (query) => query.state.data?.some((meal) => meal.analysisStatus !== null && activeJobStatuses.has(meal.analysisStatus)) === true ? 5_000 : 60_000,
@@ -33,6 +34,6 @@ export const createHealthQueries = (read: ReturnType<typeof createHealthReadApi>
 });
 
 const ownerHealthQueries = createHealthQueries(api, []);
-export const { mealsQuery, weightsQuery, weightGoalQuery, calorieBaselineQuery, stravaStatusQuery, mealsForPeriodQuery, nutritionQuery, stravaCaloriesSyncStatusQuery, stravaCaloriesQuery } = ownerHealthQueries;
+export const { mealsQuery, weightsQuery, weightGoalQuery, calorieBaselineQuery, stravaStatusQuery, mealGalleryQueryKey, mealDayCountsQuery, nutritionQuery, stravaCaloriesSyncStatusQuery, stravaCaloriesQuery } = ownerHealthQueries;
 export const HealthQueriesContext = createContext(ownerHealthQueries);
 export const useHealthQueries = () => useContext(HealthQueriesContext);

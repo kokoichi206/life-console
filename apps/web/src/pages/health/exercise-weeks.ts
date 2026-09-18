@@ -1,4 +1,4 @@
-import { weightCalendarDate, type Meal, type StravaActivity, type WeightPoint } from "@life-console/contracts";
+import { weightCalendarDate, type MealDayCount, type StravaActivity, type WeightPoint } from "@life-console/contracts";
 
 const DAY = 86_400_000;
 const dayString = (timestamp: number) => new Date(timestamp).toISOString().slice(0, 10);
@@ -10,7 +10,7 @@ export const runningPace = (distanceMeters: number, movingSeconds: number): stri
   const seconds = Math.round(movingSeconds / (distanceMeters / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} /km`;
 };
-export const exerciseWeeks = (from: string, to: string, activities: ReadonlyArray<StravaActivity>, weights: ReadonlyArray<WeightPoint>, meals: ReadonlyArray<Meal>) => {
+export const exerciseWeeks = (from: string, to: string, activities: ReadonlyArray<StravaActivity>, weights: ReadonlyArray<WeightPoint>, mealDayCounts: ReadonlyArray<MealDayCount>) => {
   const start = Date.parse(from);
   const monday = start - (new Date(start).getUTCDay() + 6) % 7 * DAY;
   const uniqueActivities = [...new Map(activities.map((activity) => [activity.id, activity])).values()];
@@ -32,7 +32,7 @@ export const exerciseWeeks = (from: string, to: string, activities: ReadonlyArra
       runCount: runs.length, distanceMeters: runs.reduce((sum, run) => sum + run.distanceMeters, 0), movingSeconds: runs.reduce((sum, run) => sum + run.movingSeconds, 0),
       otherCount: weekActivities.length - runs.length,
       averageWeight: weekWeights.length === 0 ? null : weekWeights.reduce((sum, weight) => sum + weight.weightKg, 0) / weekWeights.length,
-      mealCount: meals.filter((meal) => within(meal.occurredAt)).length,
+      mealCount: mealDayCounts.filter((meal) => meal.occurredAt >= visibleFrom && meal.occurredAt <= visibleTo).reduce((sum, meal) => sum + meal.count, 0),
     });
   }
   return weeks.reverse();

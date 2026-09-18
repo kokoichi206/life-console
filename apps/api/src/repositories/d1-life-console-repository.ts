@@ -242,6 +242,36 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok(result.value.map((row) => ({ ...row, tags: JSON.parse(row.tagsJson) as ReadonlyArray<string> })));
   }
 
+  async listMealGallery(to: string) {
+    const from = new Date(Date.parse(to) - 6 * 86_400_000).toISOString().slice(0, 10);
+    const startsAt = `${from}T00:00:00+09:00`;
+    const endsAt = `${to}T00:00:00+09:00`;
+    const query = this.#database.select(mealColumns).from(meals).where(and(isNull(meals.deletedAt),
+      gte(sql`julianday(${meals.occurredAt})`, sql`julianday(${startsAt})`),
+      sql`julianday(${meals.occurredAt}) < julianday(${endsAt}, '+1 day')`,
+    )).orderBy(desc(meals.occurredAt));
+    const [result, previous] = await Promise.all([
+      safeTry(() => query.all()),
+      safeTry(() => this.#database.select({ id: meals.id }).from(meals).where(and(isNull(meals.deletedAt), sql`julianday(${meals.occurredAt}) < julianday(${startsAt})`)).limit(1).get()),
+    ]);
+    if (!result.ok) return err(appError.storage(result.error));
+    if (!previous.ok) return err(appError.storage(previous.error));
+    return ok({
+      meals: result.value.map((row) => ({ ...row, tags: JSON.parse(row.tagsJson) as ReadonlyArray<string> })),
+      nextTo: previous.value === undefined ? null : new Date(Date.parse(from) - 86_400_000).toISOString().slice(0, 10),
+    });
+  }
+
+  async listMealDayCounts(period: { readonly from: string; readonly to: string }) {
+    const occurredAt = sql<string>`date(${meals.occurredAt}, '+9 hours')`;
+    const result = await safeTry(() => this.#database.select({ occurredAt, count: count() }).from(meals).where(and(isNull(meals.deletedAt),
+      gte(sql`julianday(${meals.occurredAt})`, sql`julianday(${`${period.from}T00:00:00+09:00`})`),
+      sql`julianday(${meals.occurredAt}) < julianday(${`${period.to}T00:00:00+09:00`}, '+1 day')`,
+    )).groupBy(occurredAt).all());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value);
+  }
+
   async createMealAndQueueNutrition(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>> {
     const initialJobId = sql`'nutrition-initial:' || ${meals.id}`;
     const initialJob = this.#database.insert(jobs).select(this.#database.select(queuedJobSelection({

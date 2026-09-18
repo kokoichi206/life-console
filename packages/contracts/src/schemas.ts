@@ -322,7 +322,13 @@ export const abstinenceEventSchema = z.object({
 export type AbstinenceGoalInput = z.infer<typeof abstinenceGoalSchema>;
 export type AbstinenceEventInput = z.infer<typeof abstinenceEventSchema>;
 
+export const mealRangeQuerySchema = z.object({ from: z.iso.date(), to: z.iso.date() }).refine((value) => value.from <= value.to);
+
 export const mealPeriodQuerySchema = z.union([
-  z.object({ from: z.iso.date(), to: z.iso.date() }).refine((value) => value.from <= value.to),
+  mealRangeQuerySchema,
   z.object({}).strict(),
 ]);
+
+export const mealGalleryQuerySchema = z.object({
+  to: z.iso.date(),
+});

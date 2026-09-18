@@ -1,20 +1,20 @@
-import type { Meal, WeightPoint } from "@life-console/contracts";
+import type { MealDayCount, WeightPoint } from "@life-console/contracts";
 
 import { FormError, Panel } from "../../../components/DesignSystem";
 import { Button } from "../../../components/ui/Button";
 import { exerciseWeeks, isRunning, runningPace, sportLabel } from "../exercise-weeks";
 import type { useStravaActivities } from "../use-strava-activities";
 
-export const StravaActivities = ({ from, to, weights, meals, onSelectWeek, strava }: {
+export const StravaActivities = ({ from, to, weights, mealDayCounts, onSelectWeek, strava }: {
   readonly strava: ReturnType<typeof useStravaActivities>;
   readonly from: string;
   readonly to: string;
   readonly weights: ReadonlyArray<WeightPoint>;
-  readonly meals: ReadonlyArray<Meal> | undefined;
+  readonly mealDayCounts: ReadonlyArray<MealDayCount> | undefined;
   readonly onSelectWeek: (period: { from: string; to: string }) => void;
 }) => {
   const { readOnly, status, authorize, disconnect, sync, connected, activities, complete, records } = strava;
-  const weeks = complete && meals !== undefined ? exerciseWeeks(from, to, records, weights, meals) : [];
+  const weeks = complete && mealDayCounts !== undefined ? exerciseWeeks(from, to, records, weights, mealDayCounts) : [];
   return (
     <Panel mobileLayout="section" className="mb-6 gap-4 px-5" aria-label="Strava の運動記録">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -55,7 +55,7 @@ export const StravaActivities = ({ from, to, weights, meals, onSelectWeek, strav
       )}
       {disconnect.isPending && <p role="status">Strava の接続を解除しています。</p>}
       {connected && !disconnect.isPending && !activities.isError && !complete && <p role="status">期間内の運動を取得しています。全件の取得後に週の合計を表示します。</p>}
-      {complete && meals === undefined && <p role="status">同じ期間の食事記録を取得しています。</p>}
+      {complete && mealDayCounts === undefined && <p role="status">同じ期間の食事記録を取得しています。</p>}
       {weeks.length > 0 && (
         <>
           <details className="rounded-xl border p-3 max-sm:rounded-none max-sm:border-x-0 max-sm:px-0">

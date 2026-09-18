@@ -18,7 +18,7 @@ const StoryStravaActivities = (props: Omit<ComponentProps<typeof StravaActivitie
 const meta = {
   title: "Pages/健康/Strava の運動記録",
   component: StoryStravaActivities,
-  args: { from: "2026-08-31", to: "2026-09-13", weights: [], meals: [], onSelectWeek: fn() },
+  args: { from: "2026-08-31", to: "2026-09-13", weights: [], mealDayCounts: [], onSelectWeek: fn() },
   parameters: { msw: { handlers: [connected, pages] } },
 } satisfies Meta<typeof StoryStravaActivities>;
 export default meta;
