@@ -30,6 +30,7 @@ describe("体重グラフの表示期間", () => {
     expect(parseHealthSearch({ running: "hide" })).toEqual({});
     expect(parseHealthSearch({ overlay: "body-fat" })).toEqual({ overlay: "body-fat" });
     expect(parseHealthSearch({ overlay: "running" })).toEqual({ overlay: "running" });
+    expect(parseHealthSearch({ overlay: "exercise-calories" })).toEqual({ overlay: "exercise-calories" });
     expect(parseHealthSearch({ overlay: "invalid" })).toEqual({});
     expect(parseHealthSearch({ overlay: "body-fat", running: "show" })).toEqual({ overlay: "body-fat" });
   });

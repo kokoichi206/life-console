@@ -65,7 +65,7 @@ export const createHealthReadApi = (baseUrl: string) => {
     stravaStatus: async () => unwrap<StravaStatus>(await readClient.strava.status.$get()),
     stravaActivities: async (from: string, to: string, page: number, signal: AbortSignal) => unwrap<StravaActivityPage>(await readClient.strava.activities.$get({ query: { from, to, page: String(page) } }, { init: { signal } })),
     stravaCaloriesSyncStatus: async () => unwrap<StravaCaloriesSyncStatus>(await readClient.strava.calories["sync-status"].$get()),
-    stravaCalories: async (from: string, to: string) => unwrap<ReadonlyArray<StravaActivityCalories>>(await readClient.strava.calories.$get({ query: { from, to } })),
+    stravaCalories: async (from: string, to: string, signal: AbortSignal) => unwrap<ReadonlyArray<StravaActivityCalories>>(await readClient.strava.calories.$get({ query: { from, to } }, { init: { signal } })),
     mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await readClient.meals.$get({ query: { from, to } })),
     mealGallery: async (to: string) => unwrap<MealGalleryPage>(await readClient["meal-gallery"].$get({ query: { to } })),
     mealDayCounts: async (from: string, to: string) => unwrap<ReadonlyArray<MealDayCount>>(await readClient["meal-day-counts"].$get({ query: { from, to } })),

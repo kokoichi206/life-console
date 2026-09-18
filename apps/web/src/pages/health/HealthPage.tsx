@@ -20,6 +20,7 @@ import { WeightGoalProgress } from "./_components/WeightGoalProgress";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
 import { calorieBalanceRows, recentBalanceWindow, type ExerciseInput } from "./calorie-balance";
 import { exerciseCaloriesByDay } from "./exercise-calories";
+import { exerciseChartWeeks } from "./exercise-chart-weeks";
 import { exerciseWeeks } from "./exercise-weeks";
 import type { HealthSearch } from "./health-search";
 import { useHealthQueries } from "./queries";
@@ -128,7 +129,13 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
     ? 0
     : [...exerciseByDay.values()].reduce((total, day) => total + day.pendingActivities, 0);
   const showRunning = search.overlay === "running";
-  const runningWeeks = showRunning && strava.complete ? exerciseWeeks(periodFrom, periodTo, strava.records, [], []) : undefined;
+  const showExerciseCalories = search.overlay === "exercise-calories";
+  const chartExerciseCalories = showExerciseCalories && strava.complete && exerciseTracking === "stored" && stravaCalories.data !== undefined
+    ? exerciseCaloriesByDay(strava.records, stravaCalories.data)
+    : undefined;
+  const chartWeeks = strava.complete && (showRunning || chartExerciseCalories !== undefined)
+    ? exerciseChartWeeks(exerciseWeeks(periodFrom, periodTo, strava.records, [], []), chartExerciseCalories === undefined ? { kind: "running" } : { kind: "calories", byDay: chartExerciseCalories }, currentJapanDate())
+    : undefined;
   const changeWindow = (window: WeightWindow) => onRangeChange({ from: new Date(window.start).toISOString().slice(0, 10), to: new Date(window.end).toISOString().slice(0, 10) });
   const visibleWeightTrend = weightTrend.filter((point) => {
     const day = weightCalendarDayTimestamp(point.occurredAt);
@@ -170,7 +177,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
       <WeightGoalProgress goal={weightGoal} latestWeight={latestWeight?.weightKg} readOnly={readOnly} onEdit={() => onGoalEntryOpenChange(true)} />
       <section className="mb-6">
         <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <h2 className="text-xl font-semibold tracking-tight">{search.overlay === "body-fat" ? "体重と体脂肪率の推移" : showRunning && strava.connected ? "体重と走行距離の推移" : "体重の推移"}</h2>
+          <h2 className="text-xl font-semibold tracking-tight">{search.overlay === "body-fat" ? "体重と体脂肪率の推移" : showExerciseCalories && strava.connected ? "体重と消費カロリーの推移" : showRunning && strava.connected ? "体重と走行距離の推移" : "体重の推移"}</h2>
           <div className="ml-auto flex max-w-full flex-wrap items-center gap-2 max-sm:w-full">
             <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border bg-card p-1" role="group" aria-label="表示期間">
               <Button type="button" size="sm" aria-pressed={weightRange === "d30"} variant={weightRange === "d30" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d30" })}>30 日</Button>
@@ -182,16 +189,24 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
             </div>
             <div className="ml-auto flex shrink-0 gap-1" role="group" aria-label="追加表示">
               {([
+                { value: "exercise-calories", label: "消費カロリー" },
                 { value: "running", label: "走行距離" },
                 { value: "body-fat", label: "体脂肪率" },
               ] as const).map(({ value, label }) => (
-                <Button key={label} type="button" size="sm" variant={search.overlay === value ? "default" : "outline"} aria-pressed={search.overlay === value} disabled={value === "running" && !strava.connected} onClick={() => onOverlayChange(search.overlay === value ? undefined : value)}>{label}</Button>
+                <Button key={label} type="button" size="sm" variant={search.overlay === value ? "default" : "outline"} aria-pressed={search.overlay === value} disabled={value !== "body-fat" && !strava.connected} onClick={() => onOverlayChange(search.overlay === value ? undefined : value)}>{label}</Button>
               ))}
             </div>
           </div>
         </header>
         <Panel mobileLayout="section" className="overflow-hidden rounded-3xl py-0 max-sm:border-t-0">
-          <WeightTrendChart showBodyFat={search.overlay === "body-fat"} runningWeeks={runningWeeks} onSelectWeek={onRangeChange} latestDay={latestDay} points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
+          {showExerciseCalories && strava.connected && chartWeeks === undefined && (
+            <p role="status" className="px-1 pt-3 text-sm text-muted-foreground sm:px-4">
+              {exerciseTracking === "failed" || strava.activities.isError
+                ? "消費カロリーを取得できませんでした。週の合計は表示していません。"
+                : exerciseTracking === "unsynced" ? "運動はまだ同期されていません。週の合計は同期後に表示します。" : "週の消費カロリーを読み込んでいます。"}
+            </p>
+          )}
+          <WeightTrendChart showExerciseCalories={showExerciseCalories} showBodyFat={search.overlay === "body-fat"} chartWeeks={chartWeeks} onSelectWeek={onRangeChange} latestDay={latestDay} points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
           <dl className="my-3 grid grid-cols-2 gap-x-4 gap-y-4 border-t py-4 sm:mx-4 sm:grid-cols-4 sm:rounded-2xl sm:border-0 sm:bg-muted/50 sm:p-4">
             {[
               { label: "最新", value: lastVisibleWeight?.weightKg.toFixed(1) ?? "—", unit: "kg", detail: lastVisibleWeight === undefined ? "記録なし" : shortDate(lastVisibleWeight.occurredAt) },
