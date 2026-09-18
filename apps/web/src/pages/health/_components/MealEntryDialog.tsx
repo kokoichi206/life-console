@@ -95,7 +95,7 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
       <fieldset disabled={createMeal.isPending} className="grid min-w-0 gap-4">
         <legend className="sr-only">食事の内容と日時</legend>
         <div className="grid gap-3">
-          <p className="text-xs text-muted-foreground">写真</p>
+          <p className="text-xs text-muted-foreground">写真（任意）</p>
           {photo !== null && (
             <div className="relative overflow-hidden rounded-xl border bg-muted">
               {photoPreview !== undefined
@@ -128,7 +128,7 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
         <Field label="食事の日時"><Input required type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></Field>
         <Field label="カロリー（kcal・任意）"><Input type="number" inputMode="numeric" min={0} step={1} value={caloriesKcal} onChange={(event) => setCaloriesKcal(event.target.value)} aria-describedby="meal-calories-help" /></Field>
         <p id="meal-calories-help" className="text-xs text-muted-foreground">入力した場合は画像解析しません。空欄なら写真から自動で推定します。</p>
-        <Field label="メモ"><Textarea rows={3} maxLength={2_000} placeholder="食べたものを記録" value={memo} onChange={(event) => setMemo(event.target.value)} /></Field>
+        <Field label="メモ"><Textarea rows={3} maxLength={2_000} placeholder="例：おにぎり 2 個、味噌汁" value={memo} onChange={(event) => setMemo(event.target.value)} /></Field>
         <Button type="submit" disabled={createMeal.isPending || (photo !== null && photoPreview === undefined) || (photo === null && memo.trim() === "")} className="h-12 w-full rounded-2xl text-base">
           {createMeal.isPending ? "保存しています…" : "食事を保存"}
         </Button>
@@ -150,7 +150,7 @@ export const MealEntryDialog = ({ open, onOpenChange }: {
         <header className="flex items-start justify-between gap-3">
           <div>
             <Dialog.Title className="text-xl font-semibold tracking-tight">食事を記録</Dialog.Title>
-            <Dialog.Description className="mt-1.5 text-xs text-muted-foreground">写真やメモで、食べたものを残しましょう。</Dialog.Description>
+            <Dialog.Description className="mt-1.5 text-xs text-muted-foreground">写真なしでも、食べたものをメモに入力して記録できます。</Dialog.Description>
           </div>
           <Dialog.Close render={<Button variant="ghost" size="icon" aria-label="食事の記録を閉じる" />}><X /></Dialog.Close>
         </header>
