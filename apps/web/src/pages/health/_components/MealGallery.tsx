@@ -5,7 +5,7 @@ import { Utensils, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { api } from "../../../api";
-import { Field, FormError, EmptyState, Panel, SectionHeading } from "../../../components/DesignSystem";
+import { Field, FormError, EmptyState, Eyebrow, Panel } from "../../../components/DesignSystem";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/input";
 import { nutritionIsPending, summarizeDailyNutrition } from "../nutrition-summary";
@@ -85,9 +85,12 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
   const pending = nutritionIsPending(selectedNutrition?.analysisStatus ?? null);
   const selectedMeal = meals.find((meal) => meal.id === selectedMealId);
   return (
-    <Panel className="mb-6" id="meals">
-      <SectionHeading eyebrow="MEALS" title="食事の記録" />
-      <div className="px-5">
+    <Panel className="mb-6 max-sm:border-t max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0" id="meals">
+      <header className="space-y-1.5 pb-4 sm:px-5">
+        <Eyebrow className="max-sm:hidden">MEALS</Eyebrow>
+        <h2 className="text-xl font-semibold sm:text-base">食事の記録</h2>
+      </header>
+      <div className="sm:px-5">
         <p className="mb-4 text-xs text-muted-foreground">{periodLabel}</p>
         <div className="mb-4 space-y-3">
           <p className="text-xs text-muted-foreground">{readOnly ? "保存済みの食事と栄養の推定値を表示しています。" : "カロリーが未入力の写真付き食事は、保存後に自動で解析します。写真とメモは設定した AI サービスへ送られ、Mac の runner が起動している間に概算します。"}</p>

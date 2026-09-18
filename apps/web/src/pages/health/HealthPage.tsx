@@ -181,8 +181,8 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
             <Button type="button" size="sm" aria-pressed={weightRange === "all"} variant={weightRange === "all" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "all" })}>全期間</Button>
           </div>
         </header>
-        <Panel className="overflow-hidden rounded-3xl py-0">
-          <div className="flex justify-end gap-1 px-4 pt-3" role="group" aria-label="追加表示">
+        <Panel className="overflow-hidden rounded-3xl py-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0">
+          <div className="flex justify-end gap-1 pt-3 sm:px-4" role="group" aria-label="追加表示">
             {([
               { value: "running", label: "走行距離" },
               { value: "body-fat", label: "体脂肪率" },
@@ -191,7 +191,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
             ))}
           </div>
           <WeightTrendChart showBodyFat={search.overlay === "body-fat"} runningWeeks={runningWeeks} onSelectWeek={onRangeChange} latestDay={latestDay} points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
-          <dl className="mx-4 my-3 grid grid-cols-2 gap-x-4 gap-y-4 rounded-2xl bg-muted/50 p-4 sm:grid-cols-4">
+          <dl className="my-3 grid grid-cols-2 gap-x-4 gap-y-4 border-t py-4 sm:mx-4 sm:grid-cols-4 sm:rounded-2xl sm:border-0 sm:bg-muted/50 sm:p-4">
             {[
               { label: "最新", value: lastVisibleWeight?.weightKg.toFixed(1) ?? "—", unit: "kg", detail: lastVisibleWeight === undefined ? "記録なし" : shortDate(lastVisibleWeight.occurredAt) },
               { label: "期間内の変化", value: periodChange === undefined ? "—" : `${periodChange > 0 ? "+" : ""}${periodChange.toFixed(1)}`, unit: "kg", detail: "期間の最初との比較" },
@@ -208,13 +208,13 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
               </div>
             ))}
           </dl>
-          <div className="flex justify-end px-5 pb-3">
+          <div className="flex justify-end pb-3 sm:px-5">
             <Button type="button" variant="outline" size="sm" aria-expanded={showWeightTable} onClick={() => setShowWeightTable((current) => !current)}>
               {showWeightTable ? "表を閉じる" : "表で見る"}
             </Button>
           </div>
           {showWeightTable && (
-            <div className="mx-5 mb-4 max-h-96 overflow-auto rounded-lg border">
+            <div role="region" aria-label="体重の推移の表" tabIndex={0} className="mb-4 max-h-96 overflow-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:mx-5">
               <table aria-label="体重の推移" className="w-full border-collapse text-xs tabular-nums">
                 <thead>
                   <tr className="bg-muted/60">
@@ -248,7 +248,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
               </table>
             </div>
           )}
-          <p className="rounded-b-xl border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
+          <p className="py-3 text-[0.7rem] leading-5 text-muted-foreground sm:rounded-b-xl sm:border-t sm:bg-muted/30 sm:px-5">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
         </Panel>
       </section>
       {!readOnly && <CalorieBaselineDialog open={baselineEntryOpen} onOpenChange={onBaselineEntryOpenChange} baseline={calorieBaseline} />}
@@ -271,10 +271,10 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
       {meals.error !== null && <FormError>{meals.error.message}</FormError>}
       {meals.data !== undefined && <MealGallery meals={meals.data} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} periodLabel={`${periodFrom} 〜 ${periodTo}・新しい順`} />}
       <div>
-        <Panel className="gap-4 px-5">
+        <Panel className="gap-4 px-5 max-sm:border-t max-sm:px-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0">
           <div className="space-y-1.5">
-            <Eyebrow>WEIGHT IMPORT</Eyebrow>
-            <h2 className="text-base font-semibold">体重の CSV 取り込み</h2>
+            <Eyebrow className="max-sm:hidden">WEIGHT IMPORT</Eyebrow>
+            <h2 className="text-xl font-semibold sm:text-base">体重の CSV 取り込み</h2>
           </div>
           <Field label="CSV を取り込む"><Input disabled={readOnly} type="file" accept=".csv,text/csv" onChange={selectWeightCsv} /></Field>
           {importCsv.error !== null && <FormError>{importCsv.error.message}</FormError>}

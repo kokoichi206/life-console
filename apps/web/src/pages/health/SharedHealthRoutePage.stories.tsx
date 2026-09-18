@@ -61,4 +61,4 @@ export const ReadOnly: Story = {
   },
 };
 export const Dark: Story = { globals: { theme: "dark" } };
-export const Narrow: Story = { decorators: [(Story) => <div style={{ maxWidth: 375 }}><Story /></div>] };
+export const Narrow: Story = { decorators: [(Story) => <div className="max-w-[375px]"><Story /></div>] };

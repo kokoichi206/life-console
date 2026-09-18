@@ -10,9 +10,9 @@ export const WeightGoalProgress = ({ goal, latestWeight, onEdit, readOnly = fals
   readonly onEdit: () => void;
 }) => {
   if (goal === null) return (
-    <Panel className="mb-4 flex-row items-center justify-between gap-3 rounded-3xl px-5">
+    <Panel className="mb-4 flex-row items-center justify-between gap-3 rounded-3xl px-5 max-sm:border-b max-sm:px-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0">
       <div>
-        <h2 className="text-sm font-semibold">体重の目標</h2>
+        <h2 className="text-xl font-semibold sm:text-sm">体重の目標</h2>
         <p className="mt-1 text-xs text-muted-foreground">目標体重と期限を決めて、進捗を確認</p>
       </div>
       <Button disabled={readOnly} variant="outline" className="h-11 rounded-xl" onClick={onEdit}>目標を設定</Button>
@@ -22,9 +22,9 @@ export const WeightGoalProgress = ({ goal, latestWeight, onEdit, readOnly = fals
   const goalDifference = goal.targetWeightKg - goal.startWeightKg;
   const progress = difference === undefined ? 0 : goalDifference === 0 ? (latestWeight === goal.targetWeightKg ? 1 : 0) : Math.min(1, Math.max(0, difference / goalDifference));
   return (
-    <Panel className="mb-4 rounded-3xl px-5">
+    <Panel className="mb-4 rounded-3xl px-5 max-sm:border-b max-sm:px-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0">
       <header className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">体重の目標</h2>
+        <h2 className="text-xl font-semibold sm:text-sm">体重の目標</h2>
         <Button disabled={readOnly} variant="ghost" className="h-10 text-primary" onClick={onEdit}>目標を編集</Button>
       </header>
       <div className="relative mx-auto mt-2 w-full max-w-80">

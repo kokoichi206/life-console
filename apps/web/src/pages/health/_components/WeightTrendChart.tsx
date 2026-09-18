@@ -116,7 +116,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
     selectWindow(constrainWeightWindow({ start: window.start + shift, end: window.end + shift }, bounds));
   };
   return (
-    <figure className="w-full px-4 pt-4 pb-2">
+    <figure className="w-full pt-4 pb-2 sm:px-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">{`${tickDate(displayedWindow.start)} 〜 ${tickDate(displayedWindow.end)}`}</span>
         <div className="flex items-center gap-1" role="group" aria-label="グラフの拡大と移動">
@@ -127,7 +127,7 @@ export const WeightTrendChart = ({ points, window, bounds, onWindowChange, goal,
       </div>
       <div ref={container} className="relative min-w-0">
         {(points.length > 0 || detailWeek !== undefined) && (
-          <div className="mb-2 grid min-h-24 gap-3 rounded-lg bg-muted/30 px-3 py-2 sm:grid-cols-2">
+          <div className="mb-2 grid min-h-24 gap-3 py-2 sm:grid-cols-2 sm:rounded-lg sm:bg-muted/30 sm:px-3">
             {detailPoint === undefined
               ? (
                   <div className="space-y-1 text-xs text-muted-foreground">
