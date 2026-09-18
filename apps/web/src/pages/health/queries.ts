@@ -27,7 +27,7 @@ export const createHealthQueries = (read: ReturnType<typeof createHealthReadApi>
     refetchInterval: STRAVA_CALORIES_POLL_INTERVAL_MS,
   }),
   stravaCaloriesQuery: (from: string, to: string, enabled: boolean) => queryOptions({
-    queryKey: [...scope, "strava-calories", from, to], queryFn: () => read.stravaCalories(from, to), enabled, retry: false,
+    queryKey: [...scope, "strava-calories", from, to], queryFn: ({ signal }) => read.stravaCalories(from, to, signal), enabled, retry: false,
     refetchInterval: (query) => query.state.data?.some((entry) => entry.status === "pending") === true ? STRAVA_CALORIES_POLL_INTERVAL_MS : 60_000,
   }),
   stravaActivitiesKey: (athleteId: number | null | undefined, from: string, to: string) => [...scope, "strava-activities", athleteId, from, to],
