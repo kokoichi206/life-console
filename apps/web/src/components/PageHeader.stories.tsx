@@ -10,6 +10,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Health: Story = {};
+export const SharedHealth: Story = { args: { title: "体重・運動・食事", shared: true } };
 export const Home: Story = { args: { title: "ホーム", actions: <CountBadge>2026 年 9 月 8 日</CountBadge> } };
 export const Finance: Story = {
   args: {

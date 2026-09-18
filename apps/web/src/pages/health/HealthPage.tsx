@@ -147,7 +147,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
 
   return (
     <>
-      <PageHeader title="体重・運動・食事" />
+      <PageHeader title="体重・運動・食事" shared={readOnly} />
       {readOnly && <p className="mb-4 rounded-xl border bg-muted/40 px-4 py-3 text-sm">読み取り専用です。期間や表示条件は変更できます。記録・編集・同期はできません。</p>}
       {search.strava === "error" && <FormError>Strava に接続できませんでした。読み取り権限を確認して、もう一度接続してください。</FormError>}
       <div className={`mb-4 grid gap-2 sm:ml-auto ${readOnly ? "grid-cols-2 sm:max-w-sm" : "grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(0,1fr))] sm:max-w-xl"}`}>

@@ -12,11 +12,11 @@ import {
   Sun,
   WalletCards,
 } from "lucide-react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 
 import { MonitoringAlert } from "../features/monitoring/MonitoringAlert";
 import { cn } from "../lib/class-names";
-import { applyTheme, storedTheme, type Theme } from "../theme";
+import { applyTheme, useTheme, type Theme } from "../theme";
 
 import { Button } from "./ui/Button";
 
@@ -39,16 +39,7 @@ const SIDEBAR_STORAGE_KEY = "life-console-sidebar-collapsed";
 export const AppShell = () => {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
-  const [theme, setTheme] = useState<Theme>(storedTheme);
-
-  useEffect(() => {
-    applyTheme(theme);
-    if (theme !== "system") return undefined;
-    const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
-    const followSystemTheme = () => applyTheme("system");
-    colorScheme.addEventListener("change", followSystemTheme);
-    return () => colorScheme.removeEventListener("change", followSystemTheme);
-  }, [theme]);
+  const theme = useTheme();
 
   const toggleSidebar = () => {
     setSidebarCollapsed((collapsed) => {
@@ -134,7 +125,7 @@ export const AppShell = () => {
                 aria-label={item.label}
                 aria-pressed={theme === item.value}
                 title={item.label}
-                onClick={() => setTheme(item.value)}
+                onClick={() => applyTheme(item.value)}
               >
                 <item.icon aria-hidden="true" />
               </Button>
