@@ -65,6 +65,8 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   createTaskFromConversation: (id: string) => dependencies.conversations.createTask(id),
   importConversations: (input: ImportConversationsInput) => dependencies.conversations.import(input),
   listMeals: (period?: { readonly from: string; readonly to: string }) => dependencies.health.listMeals(period),
+  listMealGallery: (to: string) => dependencies.health.listMealGallery(to),
+  listMealDayCounts: (period: { readonly from: string; readonly to: string }) => dependencies.health.listMealDayCounts(period),
   createMeal: (input: CreateMealInput) => dependencies.health.createMeal(input),
   createMealPhotoUpload: (clientId: string, contentType: MealPhotoContentType) => dependencies.mealPhotos.createUpload(clientId, contentType),
   confirmMealPhotoUploaded: (photoId: string) => dependencies.mealPhotos.confirmUploaded(photoId),

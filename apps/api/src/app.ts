@@ -5,7 +5,7 @@ import { createAgentQuestionSchema, answerAgentQuestionSchema } from "@life-cons
 import { createConnectorScheduleSchema, updateConnectorScheduleSchema } from "@life-console/contracts";
 import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from "@life-console/contracts";
 import { calorieBaselineSchema, nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
-import { mealPeriodQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
+import { mealGalleryQuerySchema, mealPeriodQuerySchema, mealRangeQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
 import { stravaCaloriesQuerySchema, stravaCaloriesReconcileSchema, stravaCaloriesFetchSchema, stravaCaloriesPlanSchema } from "@life-console/contracts";
 import { abstinenceEventSchema, abstinenceGoalSchema, weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
@@ -259,6 +259,11 @@ const healthReadRoutes = new Hono<HonoEnvironment>()
   .get("/meals", zValidator("query", mealPeriodQuerySchema), async (context) => {
     const period = context.req.valid("query");
     return respond(context, await createHandlers(context.get("environment")).listMeals(period.from === undefined ? undefined : { from: period.from, to: period.to }));
+  })
+  .get("/meal-gallery", zValidator("query", mealGalleryQuerySchema), async (context) => respond(context, await createHandlers(context.get("environment")).listMealGallery(context.req.valid("query").to)))
+  .get("/meal-day-counts", zValidator("query", mealRangeQuerySchema), async (context) => {
+    const period = context.req.valid("query");
+    return respond(context, await createHandlers(context.get("environment")).listMealDayCounts(period));
   })
   .get("/meal-photos/:id/content", zValidator("param", identifierParameterSchema), async (context) => {
     const result = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id);

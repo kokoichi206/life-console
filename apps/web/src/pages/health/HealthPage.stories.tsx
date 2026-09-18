@@ -1,4 +1,4 @@
-import type { CalorieBaseline, MealNutrition, StravaActivityCalories, WeightPoint, WeightGoal } from "@life-console/contracts";
+import type { CalorieBaseline, Meal, MealNutrition, StravaActivityCalories, WeightPoint, WeightGoal } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { delay, http, HttpResponse } from "msw";
@@ -31,6 +31,8 @@ const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null, baseli
   http.get("*/api/v1/weights", () => HttpResponse.json({ data: entries })),
   http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: [] })),
   http.get("*/api/v1/meals", () => HttpResponse.json({ data: [] })),
+  http.get("*/api/v1/meal-day-counts", () => HttpResponse.json({ data: [] })),
+  http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [], nextTo: null } })),
 ];
 const meta = {
   title: "Pages/健康",
@@ -58,6 +60,24 @@ export const Recorded: Story = {
   },
 };
 export const Empty: Story = { parameters: { msw: { handlers: handlers([]) } } };
+const galleryMeal = (id: string, occurredAt: string): Meal => ({ id, photoId: null, memo: "", occurredAt, recordedAt: occurredAt, tags: [] });
+export const LoadOlderMeals: Story = {
+  name: "食事は 1 週間ずつ追加で読み込む",
+  parameters: { msw: { handlers: [
+    http.get("*/api/v1/meal-gallery", ({ request }) => {
+      const to = new URL(request.url).searchParams.get("to");
+      if (to === "2026-09-06") return HttpResponse.json({ data: { meals: [galleryMeal("older", "2026-09-01T09:00:00+09:00")], nextTo: null } });
+      return HttpResponse.json({ data: { meals: [galleryMeal("recent", "2026-09-07T09:00:00+09:00")], nextTo: "2026-09-06" } });
+    }),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(await canvas.findByRole("button", { name: "2026/9/7 09:00 の食事を開く" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "もっと見る" }));
+    await expect(await canvas.findByRole("button", { name: "2026/9/1 09:00 の食事を開く" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "もっと見る" })).not.toBeInTheDocument();
+  },
+};
 export const Dark: Story = { globals: { theme: "dark" } };
 export const ChartTooltipMobile: Story = {
   name: "狭い画面でも体重の詳細が切れない",
@@ -254,13 +274,11 @@ export const WeeklyExerciseAndMeals: Story = {
           activities: [{ id: "123", name: "架空の朝ラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 15000, movingSeconds: 5400, elapsedSeconds: 5500, averageHeartrate: 145 }], nextPage: 2,
         }
       : { activities: [], nextPage: null } })),
-    http.get("*/api/v1/meals", ({ request }) => {
-      const from = new URL(request.url).searchParams.get("from")!;
-      return HttpResponse.json({ data: [
-        { id: "current-meal", photoId: null, memo: "架空の食事メモ・今週", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
-        { id: "previous-meal", photoId: null, memo: "架空の食事メモ・前週", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
-      ].filter((meal) => meal.occurredAt.slice(0, 10) >= from) });
-    }),
+    http.get("*/api/v1/meal-day-counts", () => HttpResponse.json({ data: [{ occurredAt: "2026-09-07", count: 1 }, { occurredAt: "2026-08-31", count: 1 }] })),
+    http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [
+      { id: "current-meal", photoId: null, memo: "架空の食事メモ・今週", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
+      { id: "previous-meal", photoId: null, memo: "架空の食事メモ・前週", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
+    ], nextTo: null } })),
     ...handlers(weights),
   ] } },
   play: async ({ canvas, userEvent }) => {
@@ -268,7 +286,7 @@ export const WeeklyExerciseAndMeals: Story = {
     await expect(chart).toHaveTextContent("15.0 km ・ 1 回");
     await expect(canvas.getByText("架空の食事メモ・前週")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "この週のランと食事を見る" }));
-    await waitFor(() => expect(canvas.queryByText("架空の食事メモ・前週")).not.toBeInTheDocument());
+    await expect(canvas.getByText("架空の食事メモ・前週")).toBeVisible();
     await expect(await canvas.findByText("架空の食事メモ・今週")).toBeVisible();
     await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-09-07");
     await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-13");
@@ -411,9 +429,9 @@ export const NarrowHealthRecords: Story = {
     ...NarrowWeightOverview.parameters,
     initialUrl: "/health?from=2026-09-01&to=2026-09-07",
     msw: { handlers: [
-      http.get("*/api/v1/meals", () => HttpResponse.json({ data: calorieMeals.map((meal) => ({
+      http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: calorieMeals.map((meal) => ({
         id: meal.mealId, photoId: null, memo: "架空の食事", tags: [], occurredAt: meal.occurredAt, recordedAt: meal.occurredAt,
-      })) })),
+      })), nextTo: null } })),
       ...calorieBalanceHandlers(() => measuredCalories),
     ] },
   },

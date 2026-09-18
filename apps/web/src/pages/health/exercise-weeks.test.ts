@@ -1,4 +1,4 @@
-import type { Meal, StravaActivity, WeightPoint } from "@life-console/contracts";
+import type { StravaActivity, WeightPoint } from "@life-console/contracts";
 import { describe, expect, it } from "vitest";
 
 import { exerciseWeeks, runningPace } from "./exercise-weeks";
@@ -15,8 +15,8 @@ describe("週の健康記録", () => {
   });
   it("期間の端は一部と示し、同じ期間の実測値と食事だけを含める", () => {
     const weights = [{ id: "w1", weightKg: 80, occurredAt: "2026-09-09T00:00:00Z" }, { id: "w2", weightKg: 82, occurredAt: "2026-09-10T00:00:00Z" }, { id: "w3", weightKg: 90, occurredAt: "2026-09-08T00:00:00Z" }] as WeightPoint[];
-    const meals = [{ occurredAt: "2026-09-09T00:00:00Z" }, { occurredAt: "2026-09-11T00:00:00Z" }] as Meal[];
-    expect(exerciseWeeks("2026-09-09", "2026-09-10", [run("outside", "2026-09-07T00:00:00Z")], weights, meals)[0]).toMatchObject({ partial: true, runCount: 0, averageWeight: 81, mealCount: 1 });
+    const mealDayCounts = [{ occurredAt: "2026-09-09", count: 1 }, { occurredAt: "2026-09-11", count: 1 }];
+    expect(exerciseWeeks("2026-09-09", "2026-09-10", [run("outside", "2026-09-07T00:00:00Z")], weights, mealDayCounts)[0]).toMatchObject({ partial: true, runCount: 0, averageWeight: 81, mealCount: 1 });
   });
   it("ペースは端数を繰り上げ、距離や移動時間がなければ補わない", () => {
     expect(runningPace(1000, 359.8)).toBe("6:00 /km");
