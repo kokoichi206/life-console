@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import { plugin as shadcn } from "@shadcn/lint";
 import stylistic from "@stylistic/eslint-plugin";
 import importX from "eslint-plugin-import-x";
 import jsonc from "eslint-plugin-jsonc";
@@ -28,7 +29,7 @@ export default [
   },
   {
     files: ["apps/web/**/*.{ts,tsx}"],
-    plugins: { "react-hooks": reactHooks },
+    plugins: { "react-hooks": reactHooks, shadcn },
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
