@@ -14,6 +14,7 @@ const weights: WeightPoint[] = [
   { id: "manual", source: "manual", bodyFatPercent: null, weightKg: 81.4, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
 ];
 const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null, baseline: CalorieBaseline | null = null) => [
+  http.get("*/api/v1/health-share", () => HttpResponse.json({ data: null })),
   http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: false, athleteId: null } })),
   http.get("*/api/v1/weight-goal", () => HttpResponse.json({ data: goal })),
   http.put("*/api/v1/weight-goal", async ({ request }) => {
@@ -49,7 +50,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Recorded: Story = {
   play: async ({ canvas, userEvent }) => {
-    await expect(await canvas.findByRole("button", { name: "体重を記録" })).toBeVisible();
+    await expect(await canvas.findByRole("button", { name: /^体重$/ })).toBeVisible();
     await expect(canvas.getByRole("group", { name: "表示期間" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "表で見る" }));
     await expect(canvas.getByRole("table", { name: "体重の推移" })).toHaveTextContent("80.70");
@@ -100,7 +101,7 @@ export const MealEntryOpen: Story = {
     await expect(screen.queryByRole("dialog", { name: "体重を記録" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "食事の記録を閉じる" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: "体重を記録" }));
+    await userEvent.click(screen.getByRole("button", { name: /^体重$/ }));
     await expect(await screen.findByRole("dialog", { name: "体重を記録" })).toBeVisible();
   },
 };
@@ -139,7 +140,7 @@ export const RangeControls: Story = {
     await expect(start).toHaveValue("2026-08-31");
     await userEvent.click(canvas.getByRole("button", { name: "表示期間を狭める" }));
     await expect(start).not.toHaveValue("2026-08-31");
-    await userEvent.click(canvas.getByRole("button", { name: "体重を記録" }));
+    await userEvent.click(canvas.getByRole("button", { name: /^体重$/ }));
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(await screen.findByRole("button", { name: "体重の記録を閉じる" }));
     await expect(start).not.toHaveValue("2026-08-31");
@@ -189,7 +190,7 @@ export const DragWeightPeriod: Story = {
     const shiftedStart = (start as HTMLInputElement).value;
     const shiftedEnd = (end as HTMLInputElement).value;
     await expect(Date.parse(shiftedEnd) - Date.parse(shiftedStart)).toBe(Date.parse(initialEnd) - Date.parse(initialStart));
-    await userEvent.click(canvas.getByRole("button", { name: "体重を記録" }));
+    await userEvent.click(canvas.getByRole("button", { name: /^体重$/ }));
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(await screen.findByRole("button", { name: "体重の記録を閉じる" }));
     await expect(start).toHaveValue(shiftedStart);

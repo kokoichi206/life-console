@@ -10,6 +10,7 @@ import { Input } from "../../components/ui/input";
 
 import { CalorieBaselineDialog } from "./_components/CalorieBaselineDialog";
 import { DailyCalorieBalanceList, type ExerciseTrackingState } from "./_components/DailyCalorieBalanceList";
+import { HealthShareButton } from "./_components/HealthShareButton";
 import { MealEntryDialog } from "./_components/MealEntryDialog";
 import { MealGallery } from "./_components/MealGallery";
 import { StravaActivities } from "./_components/StravaActivities";
@@ -21,7 +22,7 @@ import { calorieBalanceRows, recentBalanceWindow, type ExerciseInput } from "./c
 import { exerciseCaloriesByDay } from "./exercise-calories";
 import { exerciseWeeks } from "./exercise-weeks";
 import type { HealthSearch } from "./health-search";
-import { calorieBaselineQuery, mealsForPeriodQuery, nutritionQuery, stravaCaloriesQuery, stravaCaloriesSyncStatusQuery, weightsQuery, weightGoalQuery } from "./queries";
+import { useHealthQueries } from "./queries";
 import { useStravaActivities } from "./use-strava-activities";
 import { WEIGHT_DAY_MS, type WeightWindow } from "./weight-window";
 
@@ -51,6 +52,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
   readonly weightEntryOpen: boolean;
   readonly onWeightEntryOpenChange: (open: boolean) => void;
 }) => {
+  const { readOnly, calorieBaselineQuery, mealsForPeriodQuery, nutritionQuery, stravaCaloriesQuery, stravaCaloriesSyncStatusQuery, weightsQuery, weightGoalQuery } = useHealthQueries();
   const queryClient = useQueryClient();
   const { data: weights } = useSuspenseQuery(weightsQuery);
   const { data: weightGoal } = useSuspenseQuery(weightGoalQuery);
@@ -146,15 +148,17 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
   return (
     <>
       <PageHeader title="体重・運動・食事" />
+      {readOnly && <p className="mb-4 rounded-xl border bg-muted/40 px-4 py-3 text-sm">読み取り専用です。期間や表示条件は変更できます。記録・編集・同期はできません。</p>}
       {search.strava === "error" && <FormError>Strava に接続できませんでした。読み取り権限を確認して、もう一度接続してください。</FormError>}
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:ml-auto sm:max-w-sm">
-        <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => onMealEntryOpenChange(true)}>食事を記録</Button>
-        <Button className="h-11 rounded-xl px-5" onClick={() => onWeightEntryOpenChange(true)}>体重を記録</Button>
+      <div className={`mb-4 grid gap-2 sm:ml-auto ${readOnly ? "grid-cols-2 sm:max-w-sm" : "grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(0,1fr))] sm:max-w-xl"}`}>
+        {!readOnly && <HealthShareButton search={search} />}
+        <Button disabled={readOnly} variant="outline" className="h-11 min-w-0 rounded-xl px-1 text-xs whitespace-normal sm:px-5 sm:text-sm" onClick={() => onMealEntryOpenChange(true)}>食事</Button>
+        <Button disabled={readOnly} className="h-11 min-w-0 rounded-xl px-1 text-xs whitespace-normal sm:px-5 sm:text-sm" onClick={() => onWeightEntryOpenChange(true)}>体重</Button>
       </div>
-      <MealEntryDialog open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />
-      <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />
-      <WeightGoalDialog open={goalEntryOpen} onOpenChange={onGoalEntryOpenChange} goal={weightGoal} initialWeight={weightTrend[0]?.weightKg} />
-      <WeightGoalProgress goal={weightGoal} latestWeight={latestWeight?.weightKg} onEdit={() => onGoalEntryOpenChange(true)} />
+      {!readOnly && <MealEntryDialog open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />}
+      {!readOnly && <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />}
+      {!readOnly && <WeightGoalDialog open={goalEntryOpen} onOpenChange={onGoalEntryOpenChange} goal={weightGoal} initialWeight={weightTrend[0]?.weightKg} />}
+      <WeightGoalProgress goal={weightGoal} latestWeight={latestWeight?.weightKg} readOnly={readOnly} onEdit={() => onGoalEntryOpenChange(true)} />
       <section className="mb-6">
         <header className="mb-4 flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
           <div>
@@ -247,8 +251,9 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
           <p className="rounded-b-xl border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
         </Panel>
       </section>
-      <CalorieBaselineDialog open={baselineEntryOpen} onOpenChange={onBaselineEntryOpenChange} baseline={calorieBaseline} />
+      {!readOnly && <CalorieBaselineDialog open={baselineEntryOpen} onOpenChange={onBaselineEntryOpenChange} baseline={calorieBaseline} />}
       <DailyCalorieBalanceList
+        readOnly={readOnly}
         rows={balanceRows}
         baselineKcal={calorieBaseline?.dailyExpenditureKcal ?? null}
         exerciseState={exerciseTracking}
@@ -271,7 +276,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
             <Eyebrow>WEIGHT IMPORT</Eyebrow>
             <h2 className="text-base font-semibold">体重の CSV 取り込み</h2>
           </div>
-          <Field label="CSV を取り込む"><Input type="file" accept=".csv,text/csv" onChange={selectWeightCsv} /></Field>
+          <Field label="CSV を取り込む"><Input disabled={readOnly} type="file" accept=".csv,text/csv" onChange={selectWeightCsv} /></Field>
           {importCsv.error !== null && <FormError>{importCsv.error.message}</FormError>}
         </Panel>
       </div>
