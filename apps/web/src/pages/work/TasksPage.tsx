@@ -1,6 +1,7 @@
 import { useSearch, Link } from "@tanstack/react-router";
 import { Suspense } from "react";
 
+import { ThemeMenu } from "../../components/ThemeMenu";
 import { buttonVariants } from "../../components/ui/Button";
 import { cn } from "../../lib/class-names";
 
@@ -14,7 +15,10 @@ export const TasksPage = () => {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">仕事</h1>
-        <Link to="/operations" className={buttonVariants({ variant: "ghost", size: "sm" })}>同期・実行状況</Link>
+        <div className="flex items-center gap-2">
+          <Link to="/operations" className={buttonVariants({ variant: "ghost", size: "sm" })}>同期・実行状況</Link>
+          <ThemeMenu />
+        </div>
       </header>
       <nav aria-label="仕事の表示" className="flex shrink-0 gap-1 border-b">
         {([{ value: "inbox", label: "受信箱" }, { value: "tasks", label: "タスク" }] as const).map((item) => (

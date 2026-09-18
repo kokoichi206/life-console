@@ -85,7 +85,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, periodLabel =
   const pending = nutritionIsPending(selectedNutrition?.analysisStatus ?? null);
   const selectedMeal = meals.find((meal) => meal.id === selectedMealId);
   return (
-    <Panel className="mb-6 max-sm:border-t max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0" id="meals">
+    <Panel mobileLayout="section" className="mb-6" id="meals">
       <header className="space-y-1.5 pb-4 sm:px-5">
         <Eyebrow className="max-sm:hidden">MEALS</Eyebrow>
         <h2 className="text-xl font-semibold sm:text-base">食事の記録</h2>

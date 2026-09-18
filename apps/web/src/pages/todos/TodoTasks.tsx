@@ -50,7 +50,7 @@ const TaskEditor = ({ task }: { readonly task: Task | undefined }) => {
     save.mutate();
   };
   return (
-    <form id="task-entry" onSubmit={submit} className="space-y-4 rounded-xl border bg-card p-4">
+    <form id="task-entry" onSubmit={submit} className={`space-y-4 rounded-xl border bg-card p-4 ${task === undefined ? "max-sm:rounded-none max-sm:border-x-0 max-sm:bg-transparent max-sm:px-0" : ""}`}>
       <h3 className="font-semibold">{task === undefined ? "タスクを追加" : "タスクを編集"}</h3>
       <fieldset disabled={save.isPending} className="space-y-4">
         <Field label="やること"><Input required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} /></Field>
@@ -103,8 +103,8 @@ export const TodoTasks = () => {
           <Button variant="outline" onClick={() => { void query.refetch(); }}>再読み込み</Button>
         </div>
       )}
-      <h2 className="text-lg font-semibold">{search.completed ? "完了・中止したタスク" : "タスク"}</h2>
-      <Panel className="px-4">
+      <h2 className="text-xl font-semibold sm:text-lg">{search.completed ? "完了・中止したタスク" : "タスク"}</h2>
+      <Panel mobileLayout="section" className="px-4">
         {visibleTasks.map((task) => (
           <article key={task.id} className="flex items-start gap-3 border-b py-4 last:border-b-0">
             {task.status === "canceled" ? <span className="mt-1 w-5 shrink-0 text-center text-muted-foreground" aria-hidden="true">—</span> : <input className="mt-1 size-5 shrink-0 accent-primary" type="checkbox" aria-label={`${task.title}を完了`} checked={task.status === "done"} disabled={complete.isPending} onChange={(event) => complete.mutate({ id: task.id, done: event.target.checked })} />}

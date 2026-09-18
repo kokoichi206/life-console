@@ -145,7 +145,7 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
   // 基準消費量がなければ収支の棒を 1 本も描かないので、目盛り・ゼロ線・凡例も出さない。
   const scaled = baselineKcal !== null;
   return (
-    <Panel className="mb-6 gap-4 px-5 max-sm:border-t max-sm:px-0 max-sm:overflow-visible max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0" aria-label="日別のカロリー収支">
+    <Panel mobileLayout="section" className="mb-6 gap-4 px-5" aria-label="日別のカロリー収支">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">カロリー収支</h2>

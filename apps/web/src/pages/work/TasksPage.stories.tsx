@@ -1,4 +1,4 @@
-import type { Conversation } from "@life-console/contracts";
+import type { Conversation, Task } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { http, HttpResponse } from "msw";
@@ -57,5 +57,46 @@ export const DraftFailure: Story = {
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("heading", { name: "テストの依頼者" })).toBeVisible();
     await expect(await canvas.findByText("下書きの取得に失敗しました。返信状況は未確認です。")).toBeVisible();
+  },
+};
+
+export const NarrowInbox: Story = {
+  parameters: { viewport: { options: { mobile: { name: "幅 320 px", styles: { width: "320px", height: "840px" } } } } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const reply = await canvas.findByRole("button", { name: "手動で返信" });
+    await userEvent.click(reply);
+    await userEvent.tab();
+    await userEvent.tab({ shift: true });
+    await expect(reply).toHaveFocus();
+    const scroller = canvas.getByRole("region", { name: "会話の詳細と同期結果" });
+    await expect(reply.getBoundingClientRect().left - 3).toBeGreaterThanOrEqual(scroller.getBoundingClientRect().left);
+    await userEvent.click(canvas.getByRole("button", { name: "やめる" }));
+    const inbox = canvas.getByRole("region", { name: "受信した会話" });
+    inbox.focus();
+    await expect(inbox).toHaveFocus();
+    await expect(getComputedStyle(inbox).outlineOffset).toBe("-2px");
+    const root = canvasElement.ownerDocument.documentElement;
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+    await expect(scroller.scrollWidth).toBeLessThanOrEqual(scroller.clientWidth);
+  },
+};
+export const NarrowInboxDark: Story = { ...NarrowInbox, globals: { ...NarrowInbox.globals, theme: "dark" } };
+
+const mobileTasks: Task[] = Array.from({ length: 3 }, (_, index) => ({
+  id: `mobile-task-${index}`, title: `表示を確認するタスク ${index + 1}`, description: "狭い画面で一覧と編集フォームが重ならないことを確認します。", area: "work", status: "todo", dueAt: null, scheduledAt: null, sourceUrl: null, completedAt: null, conversationId: null, repositoryId: null, repositoryName: null, createdAt: "2026-09-01T00:00:00Z", updatedAt: "2026-09-01T00:00:00Z",
+}));
+export const NarrowTaskBoard: Story = {
+  parameters: { ...NarrowInbox.parameters, initialEntry: "/tasks?view=tasks", msw: { handlers: [http.get("*/api/v1/tasks", () => HttpResponse.json({ data: mobileTasks })), ...handlers([])] } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
+  play: async ({ canvas, userEvent }) => {
+    const edit = (await canvas.findAllByRole("button", { name: "編集" }))[0]!;
+    await userEvent.click(edit);
+    const editor = canvas.getByRole("complementary", { name: "タスクの編集と起動設定" });
+    const list = canvas.getByRole("region", { name: "タスク一覧" });
+    await expect(editor.getBoundingClientRect().top).toBeGreaterThanOrEqual(list.getBoundingClientRect().bottom);
+    await expect(canvas.getByLabelText("タイトル")).toHaveValue(mobileTasks[0]!.title);
+    await userEvent.click(canvas.getByRole("button", { name: "編集をやめる" }));
+    await expect(canvas.getByLabelText("タイトル")).toHaveValue("");
   },
 };

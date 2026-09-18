@@ -114,18 +114,18 @@ export const WorkInbox = () => {
         </div>
       </div>
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,2fr)] gap-4 overflow-hidden lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.4fr)] lg:grid-rows-[minmax(0,1fr)]" aria-busy={conversations.isFetching}>
-        <section aria-label="受信した会話" tabIndex={0} className="min-h-0 overflow-y-auto overscroll-contain rounded-xl border bg-card [scrollbar-gutter:stable] focus-visible:outline-2 focus-visible:outline-ring">
+        <section aria-label="受信した会話" tabIndex={0} className="min-h-0 overflow-y-auto overscroll-contain rounded-xl border bg-card max-sm:rounded-none max-sm:border-x-0 max-sm:bg-transparent [scrollbar-gutter:stable] focus-visible:outline-2 focus-visible:outline-ring max-sm:focus-visible:-outline-offset-2">
           {drafts.isError && <p role="alert" className="p-4 text-xs text-destructive">下書きの取得に失敗しました。返信状況は未確認です。</p>}
           {visible.map((conversation) => {
             const draft = draftByConversation.get(conversation.id);
             return (
               <button key={conversation.id} type="button" aria-pressed={selected?.id === conversation.id} className={cn("block w-full border-b border-l-2 border-l-transparent p-4 text-left last:border-b-0 hover:bg-muted/40", selected?.id === conversation.id && "border-l-primary bg-primary/5")} onClick={() => selectConversation(conversation)}>
-                <div className="mb-2 flex flex-wrap items-center gap-2 text-[0.65rem] text-muted-foreground">
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-[0.65rem] text-muted-foreground max-sm:text-foreground">
                   <span>{serviceLabels[conversation.connector]}</span>
                   <span className="ml-auto">{new Date(conversation.occurredAt).toLocaleDateString("ja-JP")}</span>
                 </div>
                 <strong className="block truncate text-xs">{conversation.authorLabel}</strong>
-                <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-muted-foreground">{conversation.excerpt}</p>
+                <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-muted-foreground max-sm:text-foreground">{conversation.excerpt}</p>
                 <div className="mt-2 flex gap-2">
                   <Badge variant="outline">{draft === undefined ? conversation.classification === "no_action" ? "対応不要" : conversation.classification === "reference" ? "参考情報" : "未確認" : replyStatusLabels[draft.status]}</Badge>
                   {edits[conversation.id] != null && <Badge variant="secondary">未保存</Badge>}
@@ -136,7 +136,7 @@ export const WorkInbox = () => {
           {(conversations.isPending || drafts.isPending) && <EmptyState>連絡と下書きを読み込んでいます。</EmptyState>}
           {conversations.isSuccess && drafts.isSuccess && visible.length === 0 && <EmptyState>この条件の連絡はありません。期間や対応状況を変更できます。</EmptyState>}
         </section>
-        <div key={selected?.id} role="region" aria-label="会話の詳細と同期結果" tabIndex={0} className="min-h-0 min-w-0 space-y-4 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] focus-visible:outline-2 focus-visible:outline-ring">
+        <div key={selected?.id} role="region" aria-label="会話の詳細と同期結果" tabIndex={0} className="min-h-0 min-w-0 space-y-4 max-sm:p-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] focus-visible:outline-2 focus-visible:outline-ring max-sm:focus-visible:-outline-offset-2">
           {intakeJobs.length > 0 && (
             <details className="rounded-lg border px-4 py-3 text-xs" open={running || undefined}>
               <summary className="cursor-pointer text-muted-foreground">

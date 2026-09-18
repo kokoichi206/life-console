@@ -11,9 +11,9 @@ import { monitoringQuery } from "../../features/monitoring/MonitoringAlert";
 const stateLabels = { healthy: "正常", delayed: "応答が遅れています", unavailable: "5 分以上応答なし", warning: "接続確認に失敗", unknown: "初回の確認待ち" };
 const outcomeLabels = { healthy: "正常", auth_required: "再ログインが必要", permission_denied: "権限を確認", unavailable: "取得に失敗", timeout: "時間超過", invalid_response: "応答形式を確認", not_configured: "アカウント設定が必要" };
 export const MonitoringStatusView = ({ summary, error, loading }: { readonly summary: MonitoringSummary | undefined; readonly error: string | null; readonly loading: boolean }) => (
-  <Panel className="mb-4">
+  <Panel mobileLayout="section" className="mb-4">
     <SectionHeading eyebrow="MONITORING" title="死活監視" />
-    <div className="space-y-3 px-5">
+    <div className="space-y-3 sm:px-5">
       <p className="text-xs text-muted-foreground">2 分ごとに確認し、全件を保存します。5 分以上の未着、認証エラー、連続失敗を通知します。</p>
       {loading && <p role="status">監視状態を確認しています。</p>}
       {error !== null && <FormError>{error}</FormError>}
@@ -70,9 +70,9 @@ export const MonitoringPanel = () => {
   return (
     <>
       <MonitoringStatusView summary={summary.data} error={summary.error?.message ?? null} loading={summary.isPending} />
-      <Panel className="mb-4">
+      <Panel mobileLayout="section" className="mb-4">
         <SectionHeading eyebrow="HISTORY" title="監視履歴" />
-        <div className="space-y-3 px-5">
+        <div className="space-y-3 sm:px-5">
           <NativeSelect aria-label="監視履歴の対象" className="w-full" value={monitorTarget ?? ""} onChange={(event) => move(event.target.value || undefined, undefined)}>
             <option value="">すべての対象</option>
             {summary.data?.targets.map((target) => (

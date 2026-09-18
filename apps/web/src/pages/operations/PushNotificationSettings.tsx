@@ -20,9 +20,9 @@ type PushSettingsViewProps = {
 export const PushSettingsView = ({ state, configured, loading, pending, error, testAccepted, onEnable, onDisable, onTest }: PushSettingsViewProps) => {
   const enabled = state?.permission === "granted" && state.registered;
   return (
-    <Panel className="mb-4">
+    <Panel mobileLayout="section" className="mb-4">
       <SectionHeading eyebrow="NOTIFICATIONS" title="この端末への通知" />
-      <div className="space-y-3 px-5">
+      <div className="space-y-3 sm:px-5">
         <p className="text-sm" role="status">
           {loading
             ? "通知設定を確認しています。"

@@ -1,5 +1,6 @@
 import { Link, useSearch } from "@tanstack/react-router";
 
+import { ThemeMenu } from "../../components/ThemeMenu";
 import { buttonVariants } from "../../components/ui/Button";
 
 import { ShoppingBoard } from "./ShoppingBoard";
@@ -12,9 +13,12 @@ export const TodosPage = () => {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">やること</h1>
-        <Link from="/todos" to="/todos" search={(previous) => ({ ...previous, completed: previous.completed ? undefined : true })} className={buttonVariants({ variant: "outline", size: "sm" })}>
-          {search.completed ? "未完了を見る" : "完了済みを見る"}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link from="/todos" to="/todos" search={(previous) => ({ ...previous, completed: previous.completed ? undefined : true })} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            {search.completed ? "未完了を見る" : "完了済みを見る"}
+          </Link>
+          <ThemeMenu />
+        </div>
       </header>
       <nav aria-label="やることの表示" className="flex flex-wrap gap-2">
         {([{ value: "all", label: "すべて" }, { value: "tasks", label: "タスク" }, { value: "work", label: "仕事" }, { value: "personal", label: "私生活" }, { value: "shopping", label: "買い物" }] as const).map((item) => (

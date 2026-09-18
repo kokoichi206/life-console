@@ -280,3 +280,15 @@ export const UndoFailure: Story = {
     await expect(supermarket.queryByText("石けん")).not.toBeInTheDocument();
   },
 };
+
+export const NarrowShopping: Story = {
+  ...Shopping,
+  parameters: { ...Shopping.parameters, viewport: { options: { mobile: { name: "幅 320 px", styles: { width: "320px", height: "840px" } } } } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
+  play: async (context) => {
+    await Shopping.play!(context);
+    const root = context.canvasElement.ownerDocument.documentElement;
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+  },
+};
+export const NarrowShoppingDark: Story = { ...NarrowShopping, globals: { ...NarrowShopping.globals, theme: "dark" } };

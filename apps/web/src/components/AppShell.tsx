@@ -12,11 +12,11 @@ import {
   Sun,
   WalletCards,
 } from "lucide-react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 
 import { MonitoringAlert } from "../features/monitoring/MonitoringAlert";
 import { cn } from "../lib/class-names";
-import { applyTheme, storedTheme, type Theme } from "../theme";
+import { applyTheme, useTheme, type Theme } from "../theme";
 
 import { Button } from "./ui/Button";
 
@@ -39,16 +39,7 @@ const SIDEBAR_STORAGE_KEY = "life-console-sidebar-collapsed";
 export const AppShell = () => {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
-  const [theme, setTheme] = useState<Theme>(storedTheme);
-
-  useEffect(() => {
-    applyTheme(theme);
-    if (theme !== "system") return undefined;
-    const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
-    const followSystemTheme = () => applyTheme("system");
-    colorScheme.addEventListener("change", followSystemTheme);
-    return () => colorScheme.removeEventListener("change", followSystemTheme);
-  }, [theme]);
+  const theme = useTheme();
 
   const toggleSidebar = () => {
     setSidebarCollapsed((collapsed) => {
@@ -134,7 +125,7 @@ export const AppShell = () => {
                 aria-label={item.label}
                 aria-pressed={theme === item.value}
                 title={item.label}
-                onClick={() => setTheme(item.value)}
+                onClick={() => applyTheme(item.value)}
               >
                 <item.icon aria-hidden="true" />
               </Button>
@@ -143,8 +134,7 @@ export const AppShell = () => {
         </footer>
       </aside>
       <main className={cn(
-        "mx-auto w-full max-w-[1440px] px-6 transition-[padding] duration-200 sm:px-8",
-        pathname === "/health" && "max-sm:px-4",
+        "mx-auto w-full max-w-[1440px] px-4 transition-[padding] duration-200 sm:px-8",
         pathname === "/tasks" ? "flex h-full min-h-0 flex-col overflow-hidden pt-4 pb-20 md:pb-4" : "min-h-screen py-8 pb-20 md:pb-16",
         sidebarCollapsed ? "md:pl-24" : "md:pl-64",
       )}

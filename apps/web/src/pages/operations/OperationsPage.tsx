@@ -79,7 +79,7 @@ export const OperationsPage = () => {
       <PushNotificationSettings />
       <MonitoringPanel />
       <div className="mb-4">
-        <Panel>
+        <Panel mobileLayout="section">
           <SectionHeading
             eyebrow="JOB QUEUE"
             title="実行履歴"
@@ -90,7 +90,7 @@ export const OperationsPage = () => {
               </CountBadge>
             )}
           />
-          <div className="max-h-[900px] overflow-y-auto px-5">
+          <div className="max-h-[900px] overflow-y-auto max-sm:p-1 sm:px-5">
             {jobs.map((job) => (
               <article key={job.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t py-3 first:border-t-0">
                 <Badge variant={job.status === "failed" || job.status === "lost" ? "destructive" : "secondary"}>{jobStatusLabels[job.status]}</Badge>
@@ -106,7 +106,7 @@ export const OperationsPage = () => {
           </div>
         </Panel>
       </div>
-      <Panel className="mb-4">
+      <Panel mobileLayout="section" className="mb-4">
         <SectionHeading
           eyebrow="LOCAL CONNECTORS"
           title="同期状況"
@@ -135,8 +135,8 @@ export const OperationsPage = () => {
             </div>
           )}
         />
-        <div className="grid gap-3 px-5 md:grid-cols-3">
-          <div className="rounded-lg border bg-muted/30 p-4">
+        <div className="grid gap-3 sm:px-5 md:grid-cols-3">
+          <div className="rounded-lg border bg-muted/30 p-4 max-sm:rounded-none max-sm:border-x-0 max-sm:border-t-0 max-sm:bg-transparent max-sm:px-0">
             <small className="text-[0.65rem] font-semibold tracking-wider text-muted-foreground uppercase">Runner</small>
             <strong className="mt-2 block text-sm">{dashboard.runners[0]?.name ?? "未接続"}</strong>
             <span className="mt-1 block text-[0.7rem] text-muted-foreground">{dashboard.runners[0] === undefined ? "heartbeat なし" : `${new Date(dashboard.runners[0].lastHeartbeatAt).toLocaleString("ja-JP")} · Orca ${dashboard.runners[0].orcaStatus}`}</span>
@@ -149,7 +149,7 @@ export const OperationsPage = () => {
           ].map((item) => {
             const successAt = latestSuccessAt(item.connectors);
             return (
-              <div key={item.label} className="rounded-lg border bg-muted/30 p-4">
+              <div key={item.label} className="rounded-lg border bg-muted/30 p-4 max-sm:rounded-none max-sm:border-x-0 max-sm:border-t-0 max-sm:bg-transparent max-sm:px-0">
                 <small className="text-[0.65rem] font-semibold tracking-wider text-muted-foreground uppercase">{item.label}</small>
                 <strong className="mt-2 block text-sm">
                   {item.connectors.length}
@@ -161,13 +161,13 @@ export const OperationsPage = () => {
             );
           })}
         </div>
-        <div className="grid gap-2 px-5 pt-3">
+        <div className="grid gap-2 sm:px-5 pt-3">
           {syncConnector.error !== null && <FormError>{syncConnector.error.message}</FormError>}
           {syncRepositories.error !== null && <FormError>{syncRepositories.error.message}</FormError>}
         </div>
       </Panel>
       <div className="grid items-start gap-4 xl:grid-cols-[1.4fr_0.6fr]">
-        <Panel>
+        <Panel mobileLayout="section">
           <SectionHeading
             eyebrow="SOURCE ROUTING"
             title="チャンネルと作業リポジトリ"
@@ -179,7 +179,7 @@ export const OperationsPage = () => {
               </CountBadge>
             )}
           />
-          <div className="max-h-[560px] overflow-y-auto px-5">
+          <div className="max-h-[560px] overflow-y-auto max-sm:p-1 sm:px-5">
             {repositoryMappingConnectors.map((connector) => {
               const mapping = sourceRepositoryMappings.find((item) => item.connector === connector.connector && item.sourceId === connector.sourceId);
               return (
@@ -205,13 +205,13 @@ export const OperationsPage = () => {
               );
             })}
           </div>
-          {saveSourceRepositoryMapping.error !== null && <div className="px-5 pt-3"><FormError>{saveSourceRepositoryMapping.error.message}</FormError></div>}
+          {saveSourceRepositoryMapping.error !== null && <div className="sm:px-5 pt-3"><FormError>{saveSourceRepositoryMapping.error.message}</FormError></div>}
         </Panel>
         <form id="note-entry" onSubmit={submitNote}>
-          <Panel className="gap-4 px-5">
+          <Panel mobileLayout="section" className="gap-4 px-5">
             <div className="space-y-1.5">
-              <Eyebrow>QUICK NOTE</Eyebrow>
-              <h2 className="text-base font-semibold">メモを記録</h2>
+              <Eyebrow className="max-sm:hidden">QUICK NOTE</Eyebrow>
+              <h2 className="text-xl font-semibold sm:text-base">メモを記録</h2>
             </div>
             <Field label="メモ">
               <Textarea required rows={5} maxLength={10_000} value={noteBody} onChange={(event) => setNoteBody(event.target.value)} />

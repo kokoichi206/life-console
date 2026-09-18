@@ -117,12 +117,12 @@ export const AbstinencePanel = () => {
   const goal = data.goal;
   return (
     <>
-      <Panel className="mb-6 rounded-3xl px-5">
+      <Panel mobileLayout="section" className="mb-6 rounded-3xl px-5">
         {goal === null
           ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold">禁欲の継続</h2>
+                  <h2 className="text-xl font-semibold sm:text-sm">禁欲の継続</h2>
                   <p className="mt-1 text-xs text-muted-foreground">避けたい行動と目標を設定して、継続期間を記録します。</p>
                 </div>
                 <Button variant="outline" className="h-11 rounded-xl" onClick={() => setGoalOpen(true)}>禁欲目標を設定</Button>
