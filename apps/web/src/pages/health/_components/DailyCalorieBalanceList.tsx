@@ -1,5 +1,6 @@
 import type { JobStatus, StravaCaloriesSyncStatus } from "@life-console/contracts";
 import { Link } from "@tanstack/react-router";
+import type { CSSProperties } from "react";
 
 import { FormError, Panel } from "../../../components/DesignSystem";
 import { Button } from "../../../components/ui/Button";
@@ -97,11 +98,10 @@ const BalanceRow = ({ day, scaleKcal, scaled }: { readonly day: CalorieBalanceDa
       {scaled && <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border" />}
       {day.balanceKcal !== null && (
         <span
-          className={`absolute inset-y-1 rounded-xs ${barClassName(day, day.balanceKcal)}`}
+          className={cn("absolute inset-y-1 w-(--balance-width) rounded-xs", day.balanceKcal < 0 ? "right-1/2" : "left-1/2", barClassName(day, day.balanceKcal))}
           style={{
-            width: `${Math.min(Math.abs(day.balanceKcal) / scaleKcal, 1) * 50}%`,
-            ...(day.balanceKcal < 0 ? { right: "50%" } : { left: "50%" }),
-          }}
+            "--balance-width": `${Math.min(Math.abs(day.balanceKcal) / scaleKcal, 1) * 50}%`,
+          } as CSSProperties}
         />
       )}
     </div>
