@@ -176,37 +176,29 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
       {!readOnly && <WeightGoalDialog open={goalEntryOpen} onOpenChange={onGoalEntryOpenChange} goal={weightGoal} initialWeight={weightTrend[0]?.weightKg} />}
       <WeightGoalProgress goal={weightGoal} latestWeight={latestWeight?.weightKg} readOnly={readOnly} onEdit={() => onGoalEntryOpenChange(true)} />
       <section className="mb-6">
-        <header className="mb-4 flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">{search.overlay === "body-fat" ? "体重と体脂肪率の推移" : showExerciseCalories && strava.connected ? "体重と消費カロリーの推移" : showRunning && strava.connected ? "体重と走行距離の推移" : "体重の推移"}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              実測
-              {" "}
-              {weightTrend.length}
-              {" "}
-              件
-              {weightTrend.length > 0 && ` ・ ${shortDate(weightTrend[0]?.occurredAt ?? "")}〜${shortDate(latestWeight?.occurredAt ?? "")}`}
-            </p>
-          </div>
-          <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border bg-card p-1" role="group" aria-label="表示期間">
-            <Button type="button" size="sm" aria-pressed={weightRange === "d30"} variant={weightRange === "d30" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d30" })}>30 日</Button>
-            <Button type="button" size="sm" aria-pressed={weightRange === "d90"} variant={weightRange === "d90" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d90" })}>直近 90 日</Button>
-            {availableYears.map((year) => (
-              <Button key={year} type="button" size="sm" aria-pressed={weightRange === `year-${year}`} variant={weightRange === `year-${year}` ? "default" : "ghost"} onClick={() => onRangeChange({ range: `year-${year}` })}>{year}</Button>
-            ))}
-            <Button type="button" size="sm" aria-pressed={weightRange === "all"} variant={weightRange === "all" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "all" })}>全期間</Button>
+        <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <h2 className="text-xl font-semibold tracking-tight">{search.overlay === "body-fat" ? "体重と体脂肪率の推移" : showExerciseCalories && strava.connected ? "体重と消費カロリーの推移" : showRunning && strava.connected ? "体重と走行距離の推移" : "体重の推移"}</h2>
+          <div className="ml-auto flex max-w-full flex-wrap items-center gap-2 max-sm:w-full">
+            <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border bg-card p-1" role="group" aria-label="表示期間">
+              <Button type="button" size="sm" aria-pressed={weightRange === "d30"} variant={weightRange === "d30" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d30" })}>30 日</Button>
+              <Button type="button" size="sm" aria-pressed={weightRange === "d90"} variant={weightRange === "d90" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d90" })}>直近 90 日</Button>
+              {availableYears.map((year) => (
+                <Button key={year} type="button" size="sm" aria-pressed={weightRange === `year-${year}`} variant={weightRange === `year-${year}` ? "default" : "ghost"} onClick={() => onRangeChange({ range: `year-${year}` })}>{year}</Button>
+              ))}
+              <Button type="button" size="sm" aria-pressed={weightRange === "all"} variant={weightRange === "all" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "all" })}>全期間</Button>
+            </div>
+            <div className="ml-auto flex shrink-0 gap-1" role="group" aria-label="追加表示">
+              {([
+                { value: "exercise-calories", label: "消費カロリー" },
+                { value: "running", label: "走行距離" },
+                { value: "body-fat", label: "体脂肪率" },
+              ] as const).map(({ value, label }) => (
+                <Button key={label} type="button" size="sm" variant={search.overlay === value ? "default" : "outline"} aria-pressed={search.overlay === value} disabled={value !== "body-fat" && !strava.connected} onClick={() => onOverlayChange(search.overlay === value ? undefined : value)}>{label}</Button>
+              ))}
+            </div>
           </div>
         </header>
         <Panel mobileLayout="section" className="overflow-hidden rounded-3xl py-0 max-sm:border-t-0">
-          <div className="flex flex-wrap justify-end gap-1 pt-3 sm:px-4" role="group" aria-label="追加表示">
-            {([
-              { value: "exercise-calories", label: "消費カロリー" },
-              { value: "running", label: "走行距離" },
-              { value: "body-fat", label: "体脂肪率" },
-            ] as const).map(({ value, label }) => (
-              <Button key={label} type="button" size="sm" variant={search.overlay === value ? "default" : "outline"} aria-pressed={search.overlay === value} disabled={value !== "body-fat" && !strava.connected} onClick={() => onOverlayChange(search.overlay === value ? undefined : value)}>{label}</Button>
-            ))}
-          </div>
           {showExerciseCalories && strava.connected && chartWeeks === undefined && (
             <p role="status" className="px-1 pt-3 text-sm text-muted-foreground sm:px-4">
               {exerciseTracking === "failed" || strava.activities.isError
