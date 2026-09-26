@@ -110,7 +110,7 @@ export const StravaActivities = ({ from, to, weights, mealDayCounts, onSelectWee
                         <p className="font-medium break-words">{activity.name}</p>
                         <p className="text-xs text-muted-foreground">{`${new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(activity.occurredAt))} ・ ${sportLabel(activity.sportType)}`}</p>
                         <p>{`${activity.sportType === "WeightTraining" ? "" : `${(activity.distanceMeters / 1000).toFixed(2)} km ・ `}${Math.round(activity.movingSeconds / 60)} 分${isRunning(activity.sportType) ? ` ・ ${runningPace(activity.distanceMeters, activity.movingSeconds)}` : ""}${activity.averageHeartrate === null ? "" : ` ・ 平均心拍 ${Math.round(activity.averageHeartrate)} bpm`}`}</p>
-                        <a className="text-sm underline underline-offset-4" href={`https://www.strava.com/activities/${activity.id}`} target="_blank" rel="noreferrer">View on Strava</a>
+                        <a className="ml-auto block w-fit text-sm underline underline-offset-4" href={`https://www.strava.com/activities/${activity.id}`} target="_blank" rel="noreferrer">View on Strava</a>
                       </li>
                     ))}
                   </ul>
@@ -118,7 +118,7 @@ export const StravaActivities = ({ from, to, weights, mealDayCounts, onSelectWee
               )}
         </>
       )}
-      <p className="text-xs text-muted-foreground">Powered by Strava</p>
+      <p className="text-right text-xs text-muted-foreground">Powered by Strava</p>
     </Panel>
   );
 };

@@ -546,7 +546,7 @@ export const OptionalRunningOverlay: Story = {
     await expect(canvas.queryByRole("button", { name: "この週のランと食事を見る" })).not.toBeInTheDocument();
     await expect(canvas.getByLabelText("表示開始日")).toHaveValue(start);
     await expect(canvas.getByLabelText("表示終了日")).toHaveValue(end);
-    await expect(within(canvas.getByRole("group", { name: "追加表示" })).getAllByRole("button")).toHaveLength(2);
+    await expect(within(canvas.getByRole("group", { name: "追加表示" })).getAllByRole("button")).toHaveLength(3);
     await userEvent.click(toggle);
     await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();
     await userEvent.click(toggle);
@@ -586,3 +586,86 @@ export const BodyFatEmpty: Story = {
   },
 };
 export const BodyFatDark: Story = { ...BodyFatOverlay, name: "体脂肪率・ダーク", globals: { theme: "dark" } };
+
+export const WeeklyExerciseCalories: Story = {
+  name: "週の消費カロリーを体重に重ねて切り替える",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-09-01&to=2026-09-07", msw: { handlers: calorieBalanceHandlers(() => measuredCalories) } },
+  play: async ({ canvas, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" });
+    await expect(chart).toHaveTextContent("500 kcal");
+    await expect(chart).toHaveTextContent("（一部・1 日分）");
+    const finalDayBar = within(chart).getByText(/500 kcal/, { selector: "title" }).parentElement!;
+    await expect(finalDayBar.getBoundingClientRect().width).toBeGreaterThan(0);
+    await userEvent.click(canvas.getByRole("button", { name: "走行距離" }));
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();
+    await expect(canvas.queryByLabelText("週ごとの消費カロリー")).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "消費カロリー" }));
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" })).toHaveTextContent("500 kcal");
+    await userEvent.click(canvas.getByRole("button", { name: "この週の運動と食事を見る" }));
+    await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-09-07");
+    await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-13");
+    await userEvent.click(canvas.getByRole("button", { name: "消費カロリー" }));
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
+  },
+};
+
+export const WeeklyExerciseCaloriesMissing: Story = {
+  name: "カロリー全件未取得の週は欠損として表示する",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-09-01&to=2026-09-07", msw: { handlers: calorieBalanceHandlers(() => [{ ...measuredCalories[0]!, status: "unavailable", caloriesKcal: null }]) } },
+  play: async ({ canvas }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" });
+    await expect(chart).toHaveTextContent("カロリー未取得 ・ 取得不可 1 件");
+    await expect(chart).not.toHaveTextContent("0 kcal");
+    await expect(canvas.getByText("カロリー未取得 ・ 取得不可 1 件", { selector: "p" })).toBeVisible();
+  },
+};
+
+export const WeeklyExerciseCaloriesFailed: Story = {
+  name: "消費カロリーの取得失敗を週のゼロとして表示しない",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-09-01&to=2026-09-07", msw: { handlers: [
+    http.get("*/api/v1/strava/calories", () => HttpResponse.json({ error: { message: "架空の取得失敗", code: "internal_error" } }, { status: 500 })),
+    ...calorieBalanceHandlers(() => measuredCalories),
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("消費カロリーを取得できませんでした。週の合計は表示していません。")).toBeVisible();
+    await expect(canvas.queryByLabelText("週ごとの消費カロリー")).not.toBeInTheDocument();
+  },
+};
+
+export const WeeklyExerciseCaloriesOverview: Story = {
+  name: "体重と週の消費カロリー・欠損のある期間",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-06-12&to=2026-09-09", msw: { handlers: [
+    http.get("*/api/v1/strava/calories", () => HttpResponse.json({ data: Array.from({ length: 12 }, (_, index) => ({
+      activityId: `synthetic-${index}`, occurredAt: new Date(Date.UTC(2026, 5, 15 + index * 7)).toISOString(),
+      status: index === 3 ? "unavailable" : "measured", caloriesKcal: index === 3 ? null : 600 + index * 110,
+    })) })),
+    ...combinedTrendHandlers,
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" })).toHaveTextContent("1,810 kcal");
+  },
+};
+
+export const WeeklyExerciseCaloriesMobileDark: Story = {
+  ...WeeklyExerciseCaloriesOverview,
+  name: "週の消費カロリー・スマホ・ダーク",
+  globals: { theme: "dark", viewport: { value: "narrowWeight", isRotated: false } },
+  parameters: { ...WeeklyExerciseCaloriesOverview.parameters, viewport: { options: { narrowWeight: { name: "狭い画面", styles: { width: "390px", height: "844px" } } } } },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" })).toBeVisible();
+    const root = canvasElement.ownerDocument.documentElement;
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+  },
+};
+
+export const WeeklyExerciseCaloriesPartial: Story = {
+  name: "週の消費カロリーは取得済み分と未取得件数を示す",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-09-01&to=2026-09-07", msw: { handlers: [
+    http.get("*/api/v1/strava/activities", () => HttpResponse.json({ data: { activities: [calorieRun, { ...calorieRun, id: "pending-walk", sportType: "Walk" }], nextPage: null } })),
+    ...calorieBalanceHandlers(() => measuredCalories),
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" })).toHaveTextContent("500 kcal（取得済み分） ・ 未取得 1 件");
+    await expect(canvas.getByText("500 kcal（取得済み分） ・ 未取得 1 件", { selector: "p" })).toBeVisible();
+  },
+};

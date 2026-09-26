@@ -226,6 +226,8 @@ export const jobs = sqliteTable("jobs", {
   uniqueIndex("jobs_idempotency_uidx").on(table.idempotencyKey),
   index("jobs_claim_idx").on(table.status, table.createdAt),
   index("jobs_kind_created_idx").on(table.kind, table.createdAt),
+  // meals.id と同じ TEXT affinity にし、相関検索でも式索引を使えるようにする。
+  index("jobs_kind_meal_created_idx").on(table.kind, sql`cast(json_extract(${table.payloadJson}, '$.mealId') as text)`, table.createdAt),
 ]);
 
 export const promotions = sqliteTable("promotions", {

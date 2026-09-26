@@ -29,14 +29,22 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
       const latestEstimateId = db.select({ id: nutritionEstimates.id }).from(nutritionEstimates)
         .where(eq(nutritionEstimates.mealId, meals.id))
         .orderBy(desc(nutritionEstimates.analyzedAt), desc(sql`${nutritionEstimates}.rowid`)).limit(1);
-      const jobMealId = sql`json_extract(${jobs.payloadJson}, '$.mealId')`;
-      const latestJobId = db.select({ id: jobs.id }).from(jobs).where(and(
-        eq(jobs.kind, "nutrition_analysis"),
-        or(eq(jobMealId, meals.id), and(
-          isNull(jobMealId), isNotNull(meals.photoId), gte(jobs.createdAt, meals.recordedAt),
-          or(and(isNull(meals.manualCaloriesKcal), isNull(estimate.id)), eq(estimate.sourceJobId, jobs.id)),
-        )),
-      )).orderBy(desc(jobs.createdAt), desc(sql`${jobs}.rowid`)).limit(1);
+      const jobMealId = sql`cast(json_extract(${jobs.payloadJson}, '$.mealId') as text)`;
+      // 個別と一括を OR で検索すると、食事ごとに他の食事の解析履歴まで走査する。
+      const individualJobId = db.select({ id: jobs.id }).from(jobs)
+        .where(and(eq(jobs.kind, "nutrition_analysis"), eq(jobMealId, meals.id)))
+        .orderBy(desc(jobs.createdAt), desc(sql`${jobs}.rowid`)).limit(1);
+      const pendingBulkJobId = db.select({ id: jobs.id }).from(jobs)
+        .where(and(eq(jobs.kind, "nutrition_analysis"), isNull(jobMealId), gte(jobs.createdAt, meals.recordedAt)))
+        .orderBy(desc(jobs.createdAt), desc(sql`${jobs}.rowid`)).limit(1);
+      const sourceBulkJobId = db.select({ id: jobs.id }).from(jobs)
+        .where(and(eq(jobs.id, estimate.sourceJobId), eq(jobs.kind, "nutrition_analysis"), isNull(jobMealId), gte(jobs.createdAt, meals.recordedAt)));
+      const bulkJobId = sql`case when ${meals.photoId} is null then null
+        when ${meals.manualCaloriesKcal} is null and ${estimate.id} is null then (${pendingBulkJobId})
+        else (${sourceBulkJobId}) end`;
+      const latestJobId = db.select({ id: jobs.id }).from(jobs)
+        .where(sql`${jobs.id} in ((${individualJobId}), ${bulkJobId})`)
+        .orderBy(desc(jobs.createdAt), desc(sql`${jobs}.rowid`)).limit(1);
       const listQuery = db.select({
         mealId: meals.id, photoId: meals.photoId, occurredAt: meals.occurredAt, manualCaloriesKcal: meals.manualCaloriesKcal,
         estimate: {
@@ -71,7 +79,7 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
               notExists(db.select({ id: jobs.id }).from(jobs).where(and(
                 eq(jobs.kind, "nutrition_analysis"),
                 inArray(jobs.status, ["queued", "claimed", "running", "waiting_for_user"]),
-                eq(sql`json_extract(${jobs.payloadJson}, '$.mealId')`, meals.id),
+                eq(sql`cast(json_extract(${jobs.payloadJson}, '$.mealId') as text)`, meals.id),
               ))),
             ),
       )).orderBy(asc(meals.occurredAt));

@@ -107,6 +107,18 @@ describe("写真付き食事の自動解析予約", () => {
 });
 
 describe("栄養推定の読み取り結果", () => {
+  it.each([true, false])("個別と一括が同時刻なら後から登録された候補を選ぶ（一括が後: %s）", async (bulkLast) => {
+    const { database, nutrition } = await setup();
+    try {
+      database.exec("DELETE FROM jobs");
+      const insertJob = database.prepare(`INSERT INTO jobs (id, kind, status, idempotency_key, payload_json, attempt, created_at, updated_at)
+        VALUES (?, 'nutrition_analysis', ?, ?, ?, 1, ?, ?)`);
+      const candidates = bulkLast ? ["individual", "bulk"] : ["bulk", "individual"];
+      for (const id of candidates) insertJob.run(id, id === "bulk" ? "running" : "failed", id, JSON.stringify(id === "bulk" ? {} : { mealId: "meal" }), now, now);
+      for (let i = 0; i < 500; i += 1) insertJob.run(`unrelated-${i}`, "queued", `unrelated-${i}`, JSON.stringify({ mealId: `other-${i}` }), now, now);
+      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ mealId: "meal", analysisStatus: bulkLast ? "running" : "failed" }] });
+    } finally { database.close(); }
+  });
   it("栄養一覧は食事に対応する推定と栄養解析ジョブの索引を使う", async () => {
     const { database, binding, nutrition } = await setup();
     try {
@@ -117,8 +129,21 @@ describe("栄養推定の読み取り結果", () => {
       const parameters = Array.from(query.matchAll(/\?/gu), () => null);
       const plan = database.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...parameters).map((row) => row.detail).join("\n");
       expect(plan).toContain("nutrition_estimates_meal_time_idx");
-      expect(plan).toContain("jobs_kind_created_idx");
+      expect(plan).toMatch(/jobs_kind_meal_created_idx \(kind=\? AND <expr>=\?\)/u);
+      expect(plan).toMatch(/jobs_kind_meal_created_idx \(kind=\? AND <expr>=\? AND created_at>\?\)/u);
       expect(plan).not.toMatch(/SCAN (jobs|nutrition_estimates)/u);
+    } finally { database.close(); }
+  });
+  it("一括解析の候補取得も食事 ID の式索引を使う", async () => {
+    const { database, binding, nutrition } = await setup();
+    try {
+      const prepare = vi.spyOn(binding, "prepare");
+      expect((await nutrition.candidates({})).ok).toBe(true);
+      const query = prepare.mock.calls[0]![0];
+      const parameters = Array.from(query.matchAll(/\?/gu), () => null);
+      const plan = database.prepare(`EXPLAIN QUERY PLAN ${query}`).all(...parameters).map((row) => row.detail).join("\n");
+      expect(plan).toMatch(/jobs_kind_meal_created_idx \(kind=\? AND <expr>=\?\)/u);
+      expect(plan).not.toMatch(/SCAN jobs/u);
     } finally { database.close(); }
   });
   it("解析結果もジョブもない写真・メモは null を返す", async () => {
