@@ -125,8 +125,12 @@ export const createMonitoringRepository = (database: D1Database) => {
       }
       // 配送の完了と復旧判定が前後しても、受付済みの端末へ復旧を一度予約する。
       const accepted = alias(monitorNotifications, "accepted_alert");
+      const reservedRecovery = alias(monitorNotifications, "reserved_recovery");
       const recovery = db.insert(monitorNotifications).select(db.select(notificationSelection("recovery", `${target.runnerId} / ${target.service} (${target.account}): 復旧しました。`))
         .from(monitorIncidents).innerJoin(pushSubscriptions, sql`1`).where(and(eq(monitorIncidents.targetId, target.id), isNotNull(monitorIncidents.resolvedAt),
+          // 復旧を予約済みの端末では、過去の警告履歴の走査と競合 INSERT を繰り返さない。
+          notExists(db.select({ id: reservedRecovery.id }).from(reservedRecovery).where(and(eq(reservedRecovery.incidentId, monitorIncidents.id),
+            eq(reservedRecovery.kind, "recovery"), eq(reservedRecovery.slot, 0), eq(reservedRecovery.endpoint, pushSubscriptions.endpoint)))),
           exists(db.select({ id: accepted.id }).from(accepted).where(and(eq(accepted.incidentId, monitorIncidents.id), eq(accepted.endpoint, pushSubscriptions.endpoint),
             isNotNull(accepted.acceptedAt), eq(accepted.kind, "alert")))),
         ))).onConflictDoNothing();
