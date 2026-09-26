@@ -195,6 +195,23 @@ describe("監視履歴と通知予約", () => {
     expect(f.send).toHaveBeenCalledTimes(1);
     expect(f.send.mock.calls[0]![1].body).toContain("復旧");
   });
+  it("復旧予約済みの端末は再 INSERT せず、別の端末の遅い受付は復旧を予約する", async () => {
+    const f = await setup();
+    await f.usecase.record(f.event("slack", "auth_required"), false);
+    const first = await f.repository.claim(f.now());
+    const second = await f.repository.claim(f.now());
+    if (!first.ok || first.value === null || !second.ok || second.value === null) throw new Error("claim failed");
+    await f.repository.finish(first.value, "accepted", f.now());
+    await f.usecase.record(f.event("slack"), false);
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind = 'recovery'").get()!.n).toBe(1);
+    f.database.exec(`CREATE TRIGGER reject_duplicate_recovery BEFORE INSERT ON monitor_notifications
+      WHEN NEW.kind = 'recovery' AND EXISTS (SELECT 1 FROM monitor_notifications WHERE incident_id = NEW.incident_id AND endpoint = NEW.endpoint AND kind = 'recovery' AND slot = 0)
+      BEGIN SELECT RAISE(ABORT, 'duplicate recovery attempted'); END`);
+    expect(await f.usecase.record(f.event("slack"), false)).toEqual(ok(undefined));
+    await f.repository.finish(second.value, "accepted", f.now());
+    expect(await f.usecase.record(f.event("slack"), false)).toEqual(ok(undefined));
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind = 'recovery'").get()!.n).toBe(2);
+  });
   it("解除した購読への未送信通知を取り消す", async () => {
     const f = await setup();
     await f.usecase.record(f.event("slack", "auth_required"), false);

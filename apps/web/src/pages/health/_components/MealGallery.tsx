@@ -91,7 +91,10 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = fal
     <Panel mobileLayout="section" className="mb-6" id="meals">
       <header className="space-y-1.5 pb-4 sm:px-5">
         <Eyebrow className="max-sm:hidden">MEALS</Eyebrow>
-        <h2 className="text-xl font-semibold sm:text-base">食事の記録</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold sm:text-base">食事の記録</h2>
+          <Button variant="outline" size="sm" disabled={nutrition.isFetching} onClick={() => { void nutrition.refetch(); }}>{nutrition.isFetching ? "更新中…" : "栄養の結果を更新"}</Button>
+        </div>
       </header>
       <div className="sm:px-5">
         <p className="mb-4 text-xs text-muted-foreground">{periodLabel}</p>
@@ -181,7 +184,9 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = fal
                 {selectedNutrition !== undefined && <MealCaloriesForm key={selectedMeal.id} nutrition={selectedNutrition} />}
                 {(selectedMeal.photoId !== null || selectedMeal.memo.trim() !== "") && <Button disabled={readOnly || analyze.isPending || pending || nutrition.data === undefined} onClick={() => analyze.mutate({ mealId: selectedMeal.id })}>{pending ? "解析待ち・解析中" : selectedNutrition?.estimate == null ? "栄養を解析" : "栄養を再解析"}</Button>}
                 {selectedNutrition?.manualCaloriesKcal != null && <p className="text-xs text-muted-foreground">解析しても手入力したカロリーは変わりません。</p>}
-                {pending && <p role="status" className="text-sm text-muted-foreground">Mac の runner で順番に解析します。結果は自動で更新されます。</p>}
+                {pending && <p role="status" className="text-sm text-muted-foreground">Mac の runner で順番に解析します。「栄養の結果を更新」で結果を確認できます。</p>}
+                <Button variant="outline" disabled={nutrition.isFetching} onClick={() => { void nutrition.refetch(); }}>{nutrition.isFetching ? "更新中…" : "栄養の結果を更新"}</Button>
+                {nutrition.error !== null && <FormError>{nutrition.error.message}</FormError>}
                 {selectedNutrition?.analysisStatus === "failed" && <FormError>{selectedNutrition.analysisSummary ?? "解析に失敗しました。再解析できます。"}</FormError>}
                 {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}
               </div>

@@ -2,7 +2,7 @@ import type { MealNutrition, Meal } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { http, HttpResponse } from "msw";
 import { useState } from "react";
-import { expect, fn, waitFor, within } from "storybook/test";
+import { expect, fn, spyOn, waitFor, within } from "storybook/test";
 
 import { MealGallery } from "./MealGallery";
 
@@ -187,7 +187,7 @@ export const ManualCaloriesDuringAnalysis: Story = {
   parameters: { msw: { handlers: [photoHandler, http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: nutrition.map((entry, index) => index === 0 ? { ...entry, manualCaloriesKcal: 520, analysisStatus: "running" } : entry) }))] } },
   play: async ({ canvas, canvasElement, userEvent }) => {
     const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
-    await expect(await detail.findByText("Mac の runner で順番に解析します。結果は自動で更新されます。")).toBeVisible();
+    await expect(await detail.findByText("Mac の runner で順番に解析します。「栄養の結果を更新」で結果を確認できます。")).toBeVisible();
     await expect(detail.getByText("520 kcal（手入力）")).toBeVisible();
     await expect(detail.getByRole("button", { name: "解析待ち・解析中" })).toBeDisabled();
     await userEvent.click(detail.getByRole("button", { name: "食事の詳細を閉じる" }));
@@ -211,5 +211,41 @@ export const AnalyzeMemo: Story = {
     await userEvent.click(analyzeButton);
     await expect(await detail.findByText("解析を予約できませんでした。")).toBeVisible();
     await expect(detail.getByText("200 kcal（手入力）")).toBeVisible();
+  },
+};
+
+const refreshedNutrition = fn();
+const nutritionIntervals = { delays: (): Array<number | undefined> => [] };
+export const RefreshAnalysisResult: Story = {
+  name: "解析結果を手動で更新",
+  args: { selectedMealId: "meal-0" },
+  beforeEach: () => {
+    refreshedNutrition.mockReset();
+    const intervalSpy = spyOn(window, "setInterval");
+    nutritionIntervals.delays = () => intervalSpy.mock.calls.map((call) => call[1]);
+    return () => {
+      intervalSpy.mockRestore();
+    };
+  },
+  parameters: { msw: { handlers: [photoHandler,
+    http.get("*/api/v1/nutrition", () => {
+      refreshedNutrition();
+      return HttpResponse.json({ data: nutrition.map((entry, index) => index === 0
+        ? { ...entry, analysisStatus: refreshedNutrition.mock.calls.length === 1 ? "running" : "succeeded" }
+        : entry) });
+    }),
+  ] } },
+  play: async ({ canvasElement, userEvent }) => {
+    const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await expect(await detail.findByRole("button", { name: "解析待ち・解析中" })).toBeDisabled();
+    const input = await detail.findByLabelText("カロリー（kcal）");
+    await userEvent.clear(input);
+    await userEvent.type(input, "520");
+    await userEvent.click(detail.getByRole("button", { name: "栄養の結果を更新" }));
+    await expect(await detail.findByRole("button", { name: "栄養を再解析" })).toBeEnabled();
+    await expect(input).toHaveValue(520);
+    await expect(refreshedNutrition).toHaveBeenCalledTimes(2);
+    await expect(nutritionIntervals.delays()).not.toContain(5_000);
+    await expect(nutritionIntervals.delays()).not.toContain(60_000);
   },
 };
