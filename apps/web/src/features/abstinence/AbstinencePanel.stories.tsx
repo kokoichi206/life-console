@@ -1,7 +1,7 @@
 import type { AbstinenceOverview } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { http, HttpResponse } from "msw";
-import { expect, within } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 
 import { AbstinencePanel } from "./AbstinencePanel";
 
@@ -28,7 +28,10 @@ type Story = StoryObj<typeof meta>;
 export const Active: Story = {
   name: "継続中と中断履歴",
   play: async ({ canvas, canvasElement, userEvent }) => {
-    await expect(await canvas.findByText("5", { exact: true })).toBeVisible();
+    const timer = await canvas.findByRole("timer", { name: "禁欲の経過時間" });
+    await expect(timer).toHaveTextContent(/\d+ 日\s*\d+ 時間\s*\d+ 分\s*\d+ 秒/);
+    const initialElapsed = timer.textContent;
+    await waitFor(() => expect(timer.textContent).not.toBe(initialElapsed), { timeout: 2_500 });
     await userEvent.click(canvas.getByRole("button", { name: "イベントを記録" }));
     await expect(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "中断イベントを記録" })).toBeVisible();
   },
