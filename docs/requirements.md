@@ -444,7 +444,9 @@ connector ごとに watermark を保存し、前回の成功位置から再開�
 - Slack、Chatwork、Talknote の資格情報は Mac の local secret store に保存する。
 - launchd は本人の user session で動く LaunchAgent とする。
 - connector の資格情報を Cloudflare Secrets、D1、公開設定へ保存しない。
-- Worker log には ID、状態、時刻以外の本文を出さない。
+- Worker log には本文・認証情報を出さず、ID、状態、時刻、HTTP メソッド、ルート定義、ステータス、処理時間を記録する。
+- API はリクエストごとに `request_id` を発行し、リクエストログと失敗ログで共有する。レスポンスの `X-Request-Id` にも返す。
+- API のリクエストログは正常・エラーとも応答確定時に 1 件。失敗ログは HTTP 4xx を `warn`、5xx を `error` として 1 件だけ追加する。業務エラーから HTTP ステータスへの対応は HTTP 層に置く。
 - runner がクラウドへ送るエラー概要には redaction と長さ制限を適用する。
 - agent の transcript と terminal 出力はローカルにのみ保持する。
 

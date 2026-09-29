@@ -70,6 +70,11 @@ export default [
     },
   },
   {
+    files: ["packages/core/src/logger.ts"],
+    // 共通 logger は info の severity を保持して実行環境へ渡す。
+    rules: { "no-console": ["error", { allow: ["info", "warn", "error"] }] },
+  },
+  {
     files: ["apps/api/src/{handlers,usecases,repositories}/**/*.ts", "apps/runner/src/{usecases,repositories}/**/*.ts"],
     plugins: { custom: customRules },
     rules: {

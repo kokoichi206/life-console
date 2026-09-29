@@ -12,6 +12,7 @@ import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
+import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 
 import { createLifeConsoleHandlers } from "./handlers/life-console-handlers";
@@ -31,7 +32,7 @@ import { appError } from "./shared/app-error";
 import { systemClock } from "./shared/clock";
 import { parseApiEnvironment, type ApiEnvironment } from "./shared/environment";
 import { cryptoIdGenerator } from "./shared/id-generator";
-import { cloudLogger } from "./shared/logger";
+import { requestLogging, type RequestLogVariables } from "./shared/request-logging";
 import { createAbstinenceUsecase } from "./usecases/abstinence-usecase";
 import { createAgentQuestionUsecase } from "./usecases/agent-question-usecase";
 import { createConnectorScheduleUsecase } from "./usecases/connector-schedule-usecase";
@@ -53,7 +54,7 @@ import { createTaskUsecase } from "./usecases/task-usecase";
 
 type HonoEnvironment = {
   Bindings: ApiEnvironment;
-  Variables: { environment: ApiEnvironment };
+  Variables: RequestLogVariables & { environment: ApiEnvironment };
 };
 
 const identifierParameterSchema = z.object({ id: z.string().min(1).max(128) });
@@ -157,6 +158,7 @@ const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 412 | 42
 
 const respond = <T>(context: Context<HonoEnvironment>, result: Result<T, AppError>) => {
   if (result.ok) return context.json({ data: result.value === undefined ? null : result.value });
+  context.set("errorCode", result.error.code);
   return context.json({
     error: {
       code: result.error.code,
@@ -200,11 +202,11 @@ const parseWeightCsv = (csv: string): Result<ReadonlyArray<z.infer<typeof create
 const app = new Hono<HonoEnvironment>();
 
 app.onError((error, context) => {
-  cloudLogger.error({
-    event: "unhandled_request_error",
-    requestId: context.req.header("cf-ray") ?? "local-request",
-    timestamp: new Date().toISOString(),
-  });
+  if (error instanceof HTTPException) {
+    context.set("errorCode", "http_error");
+    return context.json({ error: { code: "http_error", message: "HTTP リクエストの処理に失敗しました。" } }, error.status);
+  }
+  context.set("errorCode", "internal_error");
   return context.json({
     error: {
       code: "internal_error",
@@ -212,6 +214,8 @@ app.onError((error, context) => {
     },
   }, 500);
 });
+
+app.use("*", requestLogging);
 
 app.use("/api/*", async (context, next) => {
   context.set("environment", parseApiEnvironment(context.env));
