@@ -2,6 +2,8 @@
 
 共通 Flat Config と、このアプリの構成を守るカスタムルールです。ルートの `eslint.config.mjs` はこのパッケージだけを参照します。
 
+`console.info` は Pino の出力先である `packages/core/src/logger.ts` だけで許可します。アプリ側は共通 logger を使い、レベルと許可項目を揃えます。
+
 ```text
 packages/eslint-config/
   index.js
