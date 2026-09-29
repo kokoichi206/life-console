@@ -10,6 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
 
+import { AbstinenceElapsedTime } from "./AbstinenceElapsedTime";
 import { abstinenceQuery } from "./queries";
 
 const localDateTimeValue = (value: string): string => {
@@ -133,10 +134,7 @@ export const AbstinencePanel = () => {
                 <header className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground">{goal.name}</p>
-                    <h2 className="mt-1 text-4xl font-semibold tracking-tight tabular-nums">
-                      {data.currentStreakDays}
-                      <span className="ml-1 text-base font-normal text-muted-foreground">日継続中</span>
-                    </h2>
+                    <AbstinenceElapsedTime goal={goal} events={data.events} />
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" className="h-10 rounded-xl" onClick={() => setGoalOpen(true)}>禁欲目標を編集</Button>
