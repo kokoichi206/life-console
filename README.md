@@ -23,6 +23,7 @@ Slack・Chatwork・Gmail・Talknote の連絡を集め、返信や作業が必�
 - coding agent は Orca 経由で既存の checkout または新しい worktree に起動
 - agent が本人の判断を必要としたらホームの『あなたの確認待ち』へ質問。回答・修正指示を保存すると同じ agent が受け取って作業を継続
 - GitHub で追跡したいタスクは Issue・非公開 Project へ昇格
+- PR・Issue のレビュー・判断・マージ確認は『自分の確認待ち』に表示。理由・推奨案・確認済み／未確認の根拠を見て GitHub へ進み、対応済みを記録。[Orca からの取り込み仕様](docs/work-confirmations.md)
 
 タスクの管理元は Life Console。GitHub への昇格は一方向で、agent の作業環境は Mac に残ります。
 

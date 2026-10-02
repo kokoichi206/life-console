@@ -1,5 +1,6 @@
 import type { AppType, HealthReadApp } from "@life-console/api";
 import type { AgentQuestion } from "@life-console/contracts";
+import type { WorkConfirmations } from "@life-console/contracts";
 import type { ConnectorScheduleStatus, CreateConnectorScheduleInput, UpdateConnectorScheduleInput } from "@life-console/contracts";
 import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contracts";
 import type { AbstinenceEventInput, AbstinenceGoalInput, AbstinenceOverview, CalorieBaseline, MealDayCount, MealGalleryPage, MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
@@ -82,6 +83,8 @@ export const api = {
   ...createHealthReadApi("/api/v1"),
   healthShare: async () => unwrap<string | null>(await client.api.v1["health-share"].$get()),
   agentQuestions: async () => unwrap<ReadonlyArray<AgentQuestion>>(await client.api.v1["agent-questions"].$get()),
+  workConfirmations: async () => unwrap<WorkConfirmations>(await client.api.v1["work-confirmations"].$get()),
+  completeWorkConfirmation: async (id: string) => unwrap<null>(await client.api.v1["work-confirmations"][":id"].complete.$post({ param: { id } })),
   answerAgentQuestion: async (id: string, answer: string) => unwrap<null>(await client.api.v1["agent-questions"][":id"].answer.$post({ param: { id }, json: { answer } })),
   connectorSchedules: async () => unwrap<ReadonlyArray<ConnectorScheduleStatus>>(await client.api.v1["connector-schedules"].$get()),
   createConnectorSchedule: async (input: CreateConnectorScheduleInput) => unwrap<null>(await client.api.v1["connector-schedules"].$post({ json: input })),

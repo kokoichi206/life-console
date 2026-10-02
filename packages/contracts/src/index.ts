@@ -9,3 +9,4 @@ export * from "./abstinence";
 export * from "./shopping";
 export * from "./connector-schedules";
 export * from "./agent-questions";
+export * from "./work-confirmations";

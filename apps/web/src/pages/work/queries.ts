@@ -9,3 +9,6 @@ export const conversationsQuery = (input: ListConversationsInput = { period: "24
   refetchInterval: 60_000,
 });
 export const replyDraftsQuery = queryOptions({ queryKey: ["reply-drafts"], queryFn: api.replyDrafts, refetchInterval: 15_000 });
+export const workConfirmationsQuery = queryOptions({
+  queryKey: ["work-confirmations"], queryFn: api.workConfirmations, staleTime: 10_000,
+});

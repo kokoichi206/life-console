@@ -526,3 +526,7 @@ PWA の追加機能、複数リポジトリ UI、高度な provider 切り替え
 
 - [Grok の設計レビュー](reviews/grok-design-review-2026-09-01.md)
 - [Claude Code / Fable の設計レビュー要約](reviews/claude-code-fable-summary-2026-09-01.md)
+
+### PR・Issue の本人確認待ち
+
+『仕事』に『自分の確認待ち』を追加する。本人の行動・対象・判断材料・情報の鮮度を表示し、元の GitHub で対応した後に対応済みを記録する。新規依頼は既存の Web Push で通知する。取得元は Orca の巡回を想定し、重複取り込み・観測更新・明示的な解消を受け付ける。既存の agent への質問・回答とは別に扱う。詳細は [表示の目的と取り込み仕様](work-confirmations.md) を参照する。
