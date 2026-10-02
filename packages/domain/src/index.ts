@@ -73,3 +73,9 @@ export const monitorNotificationStatuses = ["pending", "sending", "accepted", "e
 
 export const monitorDeliveryOutcomes = ["accepted", "expired", "failed"] as const;
 export type MonitorDeliveryOutcome = typeof monitorDeliveryOutcomes[number];
+
+export const workConfirmationKinds = ["review", "decision", "merge"] as const;
+export const workConfirmationStatuses = ["pending", "done"] as const;
+export const workConfirmationEvidenceStates = ["confirmed", "unconfirmed"] as const;
+export const workConfirmationCompletedBy = ["user", "source"] as const;
+export const workConfirmationNotificationStatuses = ["pending", "sending", "accepted", "expired", "canceled"] as const;

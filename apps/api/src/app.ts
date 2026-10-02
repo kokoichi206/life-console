@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 
 import { zValidator } from "@hono/zod-validator";
 import { createAgentQuestionSchema, answerAgentQuestionSchema } from "@life-console/contracts";
+import { importWorkConfirmationsSchema } from "@life-console/contracts";
 import { createConnectorScheduleSchema, updateConnectorScheduleSchema } from "@life-console/contracts";
 import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from "@life-console/contracts";
 import { calorieBaselineSchema, nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
@@ -27,6 +28,7 @@ import { createStravaApiRepository } from "./repositories/strava-api-repository"
 import { createStravaCaloriesRepository } from "./repositories/strava-calories-repository";
 import { createStravaConnectionRepository } from "./repositories/strava-connection-repository";
 import { createWebPushRepository } from "./repositories/web-push-repository";
+import { createWorkConfirmationRepository } from "./repositories/work-confirmation-repository";
 import type { AppError } from "./shared/app-error";
 import { appError } from "./shared/app-error";
 import { systemClock } from "./shared/clock";
@@ -51,6 +53,7 @@ import { createRepositoryUsecase } from "./usecases/repository-usecase";
 import { createShoppingUsecase } from "./usecases/shopping-usecase";
 import { createStravaUsecase } from "./usecases/strava-usecase";
 import { createTaskUsecase } from "./usecases/task-usecase";
+import { createWorkConfirmationUsecase } from "./usecases/work-confirmation-usecase";
 
 type HonoEnvironment = {
   Bindings: ApiEnvironment;
@@ -116,6 +119,10 @@ const pushKeys = (environment: ApiEnvironment) => environment.WEB_PUSH_PUBLIC_KE
     };
 const createPushHandlers = (environment: ApiEnvironment) => createPushNotificationUsecase(
   createPushSubscriptionRepository(environment.DB), createWebPushRepository(pushKeys(environment)), environment.WEB_PUSH_PUBLIC_KEY ?? null, systemClock,
+);
+export const createWorkConfirmationHandlers = (environment: ApiEnvironment) => createWorkConfirmationUsecase(
+  createWorkConfirmationRepository(environment.DB), createPushSubscriptionRepository(environment.DB),
+  createWebPushRepository(pushKeys(environment)), systemClock, cryptoIdGenerator, environment.WEB_PUSH_PUBLIC_KEY !== undefined,
 );
 export const createMonitoringHandlers = (environment: ApiEnvironment) => createMonitoringUsecase(
   createMonitoringRepository(environment.DB), createPushSubscriptionRepository(environment.DB), createWebPushRepository(pushKeys(environment)), systemClock,
@@ -374,6 +381,19 @@ const _routes = app
     return respond(context, await createShoppingHandlers(context.get("environment")).setPlace(id, placeId, context.req.valid("json").linked));
   })
   .get("/api/v1/tasks", async (context) => respond(context, await createHandlers(context.get("environment")).listTasks()))
+  .get("/api/v1/work-confirmations", async (context) => respond(context, await createWorkConfirmationHandlers(context.get("environment")).list()))
+  .post("/api/v1/work-confirmations/:id/complete", zValidator("param", identifierParameterSchema), async (context) => respond(
+    context, await createWorkConfirmationHandlers(context.get("environment")).complete(context.req.valid("param").id),
+  ))
+  .post("/api/v1/runner/work-confirmations/import", zValidator("json", importWorkConfirmationsSchema), async (context) => {
+    const handlers = createWorkConfirmationHandlers(context.get("environment"));
+    const result = await handlers.import(context.req.valid("json"));
+    if (!result.ok) return respond(context, result);
+    context.executionCtx.waitUntil(handlers.deliverNotifications().then((delivery) => {
+      if (!delivery.ok) context.get("logger").error({ event: "work_confirmation_delivery_failed", errorCode: delivery.error.code });
+    }));
+    return respond(context, result);
+  })
   .post("/api/v1/tasks", zValidator("json", createTaskSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createTask(context.req.valid("json")));
   })

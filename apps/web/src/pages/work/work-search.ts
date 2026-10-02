@@ -1,7 +1,10 @@
 import type { Conversation, ReplyDraft } from "@life-console/contracts";
 
 export type WorkSearch = {
-  readonly view?: "inbox" | "tasks" | undefined;
+  readonly view?: "inbox" | "tasks" | "confirmations" | undefined;
+  readonly confirmationStatus?: "pending" | "done" | undefined;
+  readonly confirmationRepository?: string | undefined;
+  readonly confirmationId?: string | undefined;
   readonly service?: "all" | "gmail" | "slack" | "chatwork" | "talknote" | undefined;
   readonly period?: "24h" | "3d" | "7d" | "all" | undefined;
   readonly status?: "pending" | "draft" | "review" | "all" | undefined;
@@ -11,7 +14,10 @@ export type WorkSearch = {
 };
 
 export const parseWorkSearch = (search: Record<string, unknown>): WorkSearch => ({
-  ...(search.view === "inbox" || search.view === "tasks" ? { view: search.view } : {}),
+  ...(search.view === "inbox" || search.view === "tasks" || search.view === "confirmations" ? { view: search.view } : {}),
+  ...(search.confirmationStatus === "pending" || search.confirmationStatus === "done" ? { confirmationStatus: search.confirmationStatus } : {}),
+  ...(typeof search.confirmationRepository === "string" ? { confirmationRepository: search.confirmationRepository } : {}),
+  ...(typeof search.confirmationId === "string" ? { confirmationId: search.confirmationId } : {}),
   ...(typeof search.service === "string" && ["all", "gmail", "slack", "chatwork", "talknote"].includes(search.service) ? { service: search.service as NonNullable<WorkSearch["service"]> } : {}),
   ...(typeof search.period === "string" && ["24h", "3d", "7d", "all"].includes(search.period) ? { period: search.period as NonNullable<WorkSearch["period"]> } : {}),
   ...(typeof search.status === "string" && ["pending", "draft", "review", "all"].includes(search.status) ? { status: search.status as NonNullable<WorkSearch["status"]> } : {}),
