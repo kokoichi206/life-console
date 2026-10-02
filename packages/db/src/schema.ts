@@ -1,3 +1,4 @@
+import { workConfirmationKinds, workConfirmationCompletedBy, workConfirmationNotificationStatuses } from "@life-console/domain";
 import { taskAreas, agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, stravaCaloriesStatuses, taskStatuses, weightSources } from "@life-console/domain";
 import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
@@ -386,4 +387,49 @@ export const agentQuestions = sqliteTable("agent_questions", {
   answeredAt: text("answered_at"),
 }, (table) => [
   uniqueIndex("agent_questions_pending_uidx").on(table.jobId, table.leaseToken).where(sql`${table.answer} IS NULL`),
+]);
+
+export const workConfirmationSources = sqliteTable("work_confirmation_sources", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  lastSuccessAt: text("last_success_at").notNull(),
+});
+
+export const workConfirmations = sqliteTable("work_confirmations", {
+  id: text("id").primaryKey(),
+  sourceId: text("source_id").notNull().references(() => workConfirmationSources.id),
+  externalId: text("external_id").notNull(),
+  repositoryName: text("repository_name").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  kind: text("kind", { enum: workConfirmationKinds }).notNull(),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  environment: text("environment").notNull(),
+  question: text("question").notNull(),
+  reason: text("reason").notNull(),
+  recommendation: text("recommendation").notNull(),
+  evidenceJson: text("evidence_json").notNull(),
+  requestedAt: text("requested_at").notNull(),
+  checkedAt: text("checked_at").notNull(),
+  completedAt: text("completed_at"),
+  completedBy: text("completed_by", { enum: workConfirmationCompletedBy }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("work_confirmations_external_uidx").on(table.sourceId, table.externalId),
+  index("work_confirmations_pending_idx").on(table.completedAt, table.requestedAt),
+]);
+
+export const workConfirmationNotifications = sqliteTable("work_confirmation_notifications", {
+  id: text("id").primaryKey(),
+  confirmationId: text("confirmation_id").notNull().references(() => workConfirmations.id),
+  endpoint: text("endpoint").notNull(),
+  status: text("status", { enum: workConfirmationNotificationStatuses }).notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at").notNull(),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: text("lease_expires_at"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("work_confirmation_delivery_uidx").on(table.confirmationId, table.endpoint),
+  index("work_confirmation_delivery_due_idx").on(table.status, table.nextAttemptAt),
 ]);

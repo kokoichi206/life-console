@@ -6,6 +6,11 @@ import { matchesWorkStatus, parseWorkSearch } from "./work-search";
 const conversation: Conversation = { id: "c1", connector: "slack", sourceId: "default/C1", externalMessageId: "1", authorLabel: "依頼者", excerpt: "確認お願いします", occurredAt: "2026-09-06T00:00:00Z", sourceUrl: null, classification: "unprocessed" };
 const draft: ReplyDraft = { ...conversation, conversationId: conversation.id, status: "needs_review", body: "返信案", reason: "要確認", replyEvidenceId: null, checkedAt: conversation.occurredAt, editedAt: null, updatedAt: conversation.occurredAt };
 describe("仕事の受信箱", () => {
+  it("確認待ちの選択と絞り込みを URL に保持する", () => {
+    const search = { view: "confirmations", confirmationStatus: "done", confirmationRepository: "example/project", confirmationId: "review-1" };
+    expect(parseWorkSearch(search)).toEqual(search);
+    expect(parseWorkSearch({ confirmationStatus: "invalid", confirmationId: ["review-1"] })).toEqual({});
+  });
   it("返信済みは通常表示と下書き表示から除外し、すべてでは確認できる", () => {
     const replied = { ...draft, status: "replied" as const };
     expect(matchesWorkStatus(conversation, replied, "pending")).toBe(false);

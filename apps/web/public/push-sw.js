@@ -6,10 +6,17 @@ self.addEventListener("push", (event) => {
   const message = event.data.json();
   event.waitUntil(self.registration.showNotification(message.title, {
     body: message.body, tag: message.tag, icon: "/icons/app-192.png", badge: "/icons/app-192.png",
+    data: { workConfirmationId: message.workConfirmationId },
   }));
 });
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  // 通知 payload に遷移先を委ねず、本人認証のある画面へ戻す。
-  event.waitUntil(self.clients.openWindow(new URL("/operations", self.location.origin).href));
+  // 遷移先は本人認証のある画面に固定し、payload から外部 URL を受け取らない。
+  const id = event.notification.data?.workConfirmationId;
+  const destination = new URL(typeof id === "string" ? "/tasks" : "/operations", self.location.origin);
+  if (typeof id === "string") {
+    destination.searchParams.set("view", "confirmations");
+    destination.searchParams.set("confirmationId", id);
+  }
+  event.waitUntil(self.clients.openWindow(destination.href));
 });

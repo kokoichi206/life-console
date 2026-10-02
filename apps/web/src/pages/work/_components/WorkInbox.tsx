@@ -42,6 +42,17 @@ export const WorkInbox = () => {
       void navigate({ search: (previous) => ({ ...previous, conversationId: firstConversationId }), replace: true });
     }
   }, [search.conversationId, firstConversationId, conversations.isPlaceholderData, navigate]);
+  const handleClassified = async (classified: Conversation) => {
+    await client.cancelQueries({ queryKey: ["conversations"] });
+    client.setQueriesData<ReadonlyArray<Conversation>>({ queryKey: ["conversations"] }, (entries) => entries?.map((entry) => entry.id === classified.id ? { ...entry, classification: classified.classification } : entry));
+    if (status !== "pending") return;
+    const selectedIndex = visible.findIndex((entry) => entry.id === classified.id);
+    const nextConversation = visible.slice(selectedIndex + 1).find((entry) => entry.id !== classified.id)
+      ?? visible.find((entry) => entry.id !== classified.id);
+    await navigate({ search: (previous) => previous.conversationId === classified.id
+      ? { ...previous, conversationId: nextConversation?.id }
+      : previous, replace: true });
+  };
   const sync = useMutation({
     mutationFn: async () => {
       const connectors = service === "all" ? Object.keys(serviceLabels) as CreateReplyDraftsInput["connector"][] : [service];
@@ -156,7 +167,7 @@ export const WorkInbox = () => {
             </details>
           )}
           {[conversations.error, drafts.error, jobs.error, tasks.error, sync.error, generate.error].map((error, index) => error !== null && <FormError key={index}>{error.message}</FormError>)}
-          {selected === undefined ? <EmptyState>会話を選ぶと、本文・返信案・関連タスクをここで確認できます。</EmptyState> : <ConversationDetail key={selected.id} conversation={selected} draft={draftByConversation.get(selected.id)} jobs={jobs.data ?? []} tasks={tasks.data ?? []} editing={edits[selected.id] ?? null} setEditing={(edit) => setEdits((previous) => ({ ...previous, [selected.id]: edit }))} />}
+          {selected === undefined ? <EmptyState>会話を選ぶと、本文・返信案・関連タスクをここで確認できます。</EmptyState> : <ConversationDetail key={selected.id} conversation={selected} onClassified={handleClassified} draft={draftByConversation.get(selected.id)} jobs={jobs.data ?? []} tasks={tasks.data ?? []} editing={edits[selected.id] ?? null} setEditing={(edit) => setEdits((previous) => ({ ...previous, [selected.id]: edit }))} />}
         </div>
       </div>
     </div>

@@ -13,4 +13,4 @@ export const pushSubscriptionSchema = pushEndpointInputSchema.extend({
 });
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 export type PushConfiguration = { readonly publicKey: string | null };
-export type PushMessage = { readonly title: string; readonly body: string; readonly tag: string };
+export type PushMessage = { readonly title: string; readonly body: string; readonly tag: string; readonly workConfirmationId?: string };
