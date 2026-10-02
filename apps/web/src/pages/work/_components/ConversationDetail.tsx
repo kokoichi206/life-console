@@ -15,8 +15,9 @@ import { serviceLabels } from "../work-search";
 import { CalendarDraftOptions, initialReplyCalendar } from "./CalendarDraftOptions";
 import { ReplyComposer, type DraftEdit } from "./ReplyComposer";
 
-export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, setEditing }: {
+export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, setEditing, onClassified }: {
   readonly conversation: Conversation;
+  readonly onClassified: (conversation: Conversation) => Promise<void>;
   readonly draft: ReplyDraft | undefined;
   readonly jobs: ReadonlyArray<Job>;
   readonly tasks: ReadonlyArray<Task>;
@@ -35,7 +36,13 @@ export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, 
     ...(calendarEnabled ? { calendar } : {}),
   }), onSuccess: invalidateWork });
   const createTask = useMutation({ mutationFn: () => api.createTaskFromConversation(conversation.id), onSuccess: invalidateWork });
-  const classify = useMutation({ mutationFn: (classification: "reference" | "no_action") => api.classifyConversation(conversation.id, classification), onSuccess: invalidateWork });
+  const classify = useMutation({
+    mutationFn: (classification: "reference" | "no_action") => api.classifyConversation(conversation.id, classification),
+    onSuccess: async (_, classification) => {
+      await onClassified({ ...conversation, classification });
+      await invalidateWork();
+    },
+  });
   const reply = useMutation({ mutationFn: (body: string) => api.replyConversation(conversation.id, body), onSuccess: async () => {
     setSendBody(null);
     await invalidateWork();
