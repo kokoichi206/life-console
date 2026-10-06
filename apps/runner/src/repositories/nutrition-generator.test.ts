@@ -97,23 +97,30 @@ describe("メモだけの栄養推定", () => {
   it.each(["codex", "claude", "gemini"] as const)("%s に写真なしでメモを渡す", async (provider) => {
     const { readFile, writeFile } = await import("node:fs/promises");
     const { join } = await import("node:path");
+    const textMeal = { ...meal, photoId: null, memo: "カレーライス" };
     const readMealPhoto = vi.fn();
     const execute = vi.fn<CommandRepository["execute"]>().mockImplementation(async (_command, args, options) => {
+      const prompt = provider === "claude"
+        ? args[args.indexOf("--system-prompt") + 1]!
+        : await readFile(join(options!.cwd!, provider === "codex" ? "instructions.md" : "system.md"), "utf8");
+      expect(prompt).toContain("メモに書かれた食品名・料理名を食事内容として解析");
+      expect(prompt).toContain("各食品・料理の標準的な 1 人前として概算");
+      expect(prompt).toContain("メモの量・食べ残し・人数の指定を優先");
       if (provider === "codex") {
         expect(args).not.toContain("--image");
-        expect(JSON.parse(options!.stdin!) as unknown).toEqual({ memo: meal.memo });
+        expect(JSON.parse(options!.stdin!) as unknown).toEqual({ memo: textMeal.memo });
         await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({ estimate }));
         return ok({ stdout: JSON.stringify({ type: "turn.completed" }), stderr: "" });
       }
       if (provider === "gemini") {
         expect(args[args.indexOf("--prompt") + 1]).toBe("@meal.json この食事の栄養を推定してください。");
-        expect(JSON.parse(await readFile(join(options!.cwd!, "meal.json"), "utf8")) as unknown).toEqual({ memo: meal.memo });
+        expect(JSON.parse(await readFile(join(options!.cwd!, "meal.json"), "utf8")) as unknown).toEqual({ memo: textMeal.memo });
         return ok({ stdout: JSON.stringify({ response: JSON.stringify({ estimate }), stats: { models: { test: {} } } }), stderr: "" });
       }
-      expect(JSON.parse(options!.stdin!) as unknown).toMatchObject({ message: { content: [{ type: "text", text: JSON.stringify({ memo: meal.memo }) }] } });
+      expect(JSON.parse(options!.stdin!) as unknown).toMatchObject({ message: { content: [{ type: "text", text: JSON.stringify({ memo: textMeal.memo }) }] } });
       return reply(estimate);
     });
-    expect(await createNutritionGenerator({ execute }, { readMealPhoto }, { provider, geminiAuth: "gemini-api-key" }).generate({ ...meal, photoId: null }, signal)).toMatchObject({ ok: true, value: estimate });
+    expect(await createNutritionGenerator({ execute }, { readMealPhoto }, { provider, geminiAuth: "gemini-api-key" }).generate(textMeal, signal)).toMatchObject({ ok: true, value: estimate });
     expect(readMealPhoto).not.toHaveBeenCalled();
   });
 });

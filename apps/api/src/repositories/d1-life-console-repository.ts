@@ -277,7 +277,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     const initialJob = this.#database.insert(jobs).select(this.#database.select(queuedJobSelection({
       id: initialJobId, kind: "nutrition_analysis", idempotencyKey: initialJobId,
       payloadJson: sql`json_object('mealId', ${meals.id})`, createdAt: now, updatedAt: now,
-    })).from(meals).where(and(eq(meals.clientId, input.clientId), isNotNull(meals.photoId), isNull(meals.manualCaloriesKcal), isNull(meals.deletedAt)))).onConflictDoNothing();
+    })).from(meals).where(and(eq(meals.clientId, input.clientId), or(isNotNull(meals.photoId), sql`length(trim(${meals.memo})) > 0`), isNull(meals.manualCaloriesKcal), isNull(meals.deletedAt)))).onConflictDoNothing();
     const inserted = await safeTry(() => this.#database.batch([
       this.#database.insert(meals).values({ id, clientId: input.clientId, photoId: input.photoId, manualCaloriesKcal: input.manualCaloriesKcal, memo: input.memo,
         occurredAt: input.occurredAt, recordedAt: now, tagsJson: JSON.stringify(input.tags), deletedAt: null,
@@ -314,7 +314,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   async getWeightGoal(): Promise<Result<WeightGoal | null, AppError>> {
-    const result = await safeTry(() => this.#database.select({ startWeightKg: sql<number>`${weightGoal.startWeightGrams} / 1000.0`.as("startWeightKg"),
+    const result = await safeTry(() => this.#database.select({ startDate: weightGoal.startDate, startWeightKg: sql<number>`${weightGoal.startWeightGrams} / 1000.0`.as("startWeightKg"),
       targetWeightKg: sql<number>`${weightGoal.targetWeightGrams} / 1000.0`.as("targetWeightKg"), targetDate: weightGoal.targetDate,
     }).from(weightGoal).where(eq(weightGoal.id, 1)).get());
     if (!result.ok) return err(appError.storage(result.error));
@@ -322,7 +322,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   async saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>> {
-    const changes = input === null ? null : { startWeightGrams: Math.round(input.startWeightKg * 1000), targetWeightGrams: Math.round(input.targetWeightKg * 1000), targetDate: input.targetDate };
+    const changes = input === null ? null : { startDate: input.startDate, startWeightGrams: Math.round(input.startWeightKg * 1000), targetWeightGrams: Math.round(input.targetWeightKg * 1000), targetDate: input.targetDate };
     const result = await safeTry(() => changes === null
       ? this.#database.delete(weightGoal).where(eq(weightGoal.id, 1)).run()
       : this.#database.insert(weightGoal).values({ id: 1, ...changes }).onConflictDoUpdate({ target: weightGoal.id, set: changes }).run());

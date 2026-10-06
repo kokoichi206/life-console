@@ -20,7 +20,7 @@ describe("栄養解析の HTTP と runner の経路", () => {
       expect((await app.request(path, { method }, { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker" })).status).toBe(401);
     }
   });
-  it("画像取得から解析・lease 付き保存・ジョブ完了・再表示まで通る", async () => {
+  it.each(["photo", null])("写真またはメモの取得から解析・lease 付き保存・ジョブ完了・再表示まで通る: %s", async (photoId) => {
     const { database, repository, binding } = createJobStorage();
     const get = vi.fn().mockResolvedValue({ body: new Blob(["test-image"]).stream(), httpEtag: "\"test\"" });
     const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding, MEAL_PHOTOS: { get, head: vi.fn().mockResolvedValue({}) } };
@@ -28,12 +28,14 @@ describe("栄養解析の HTTP と runner の経路", () => {
       const now = new Date().toISOString();
       await repository.createMealPhoto({ id: "photo", clientId: "photo-client", contentType: "image/jpeg", objectKey: "meals/test.jpg", tokenHash: "hash", expiresAt: now, now });
       const response = await app.request("/api/v1/meals", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId: "11111111-1111-4111-8111-111111111111", photoId: "photo", memo: "写真の食事", occurredAt: now, tags: [] }) }, environment);
+        body: JSON.stringify({ clientId: "11111111-1111-4111-8111-111111111111", photoId, memo: "牛乳200ml", occurredAt: now, tags: [] }) }, environment);
       expect(response.status).toBe(200);
       expect(database.prepare("SELECT status, kind FROM jobs").get()).toMatchObject({ status: "queued", kind: "nutrition_analysis" });
       vi.stubGlobal("fetch", (url: string, init: RequestInit) => app.request(url, init, environment));
       const api = createApiRepository({ apiUrl: "http://localhost", runnerId: "test-runner", runnerName: "Test runner", runnerToken: "local-runner-token" } as RunnerConfig);
-      const execute = vi.fn().mockImplementation(async (_command: string, args: ReadonlyArray<string>) => {
+      const execute = vi.fn().mockImplementation(async (_command: string, args: ReadonlyArray<string>, options: { stdin: string }) => {
+        expect(JSON.parse(options.stdin) as unknown).toEqual({ memo: "牛乳200ml" });
+        expect(args.includes("--image")).toBe(photoId !== null);
         await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({
           estimate: { caloriesKcal: 650, proteinGrams: 30, fatGrams: 20, carbohydrateGrams: 87.5 },
         }));
@@ -46,7 +48,8 @@ describe("栄養解析の HTTP と runner の経路", () => {
       expect(database.prepare("SELECT status, error_code FROM jobs").get()).toMatchObject({ status: "succeeded", error_code: null });
       const listed = await app.request("/api/v1/nutrition", {}, environment);
       expect(await listed.json()).toMatchObject({ data: [{ estimate: { caloriesKcal: 650, model: "gpt-5.6-luna" } }] });
-      expect(get).toHaveBeenCalledWith("meals/test.jpg");
+      if (photoId === null) expect(get).not.toHaveBeenCalled();
+      else expect(get).toHaveBeenCalledWith("meals/test.jpg");
       expect(execute).toHaveBeenCalledOnce();
     } finally { database.close(); }
   });

@@ -11,6 +11,7 @@ import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
 
 import { AbstinenceElapsedTime } from "./AbstinenceElapsedTime";
+import { AbstinenceHistory } from "./AbstinenceHistory";
 import { abstinenceQuery } from "./queries";
 
 const localDateTimeValue = (value: string): string => {
@@ -19,7 +20,6 @@ const localDateTimeValue = (value: string): string => {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 };
 
-const formatDateTime = (value: string): string => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 const formatDuration = (minutes: number): string => minutes < 60 ? String(minutes) + " 分" : String(Math.floor(minutes / 60)) + " 時間 " + String(minutes % 60) + " 分";
 
 const GoalDialog = ({ open, onOpenChange, goal }: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void; readonly goal: AbstinenceGoalInput | null }) => {
@@ -170,19 +170,7 @@ export const AbstinencePanel = () => {
                     </dd>
                   </div>
                 </dl>
-                {data.events.length > 0 && (
-                  <div className="mt-4 border-t pt-3">
-                    <p className="text-xs font-semibold text-muted-foreground">最近の中断</p>
-                    <div className="mt-2 grid gap-2">
-                      {data.events.slice(0, 3).map((event) => (
-                        <div key={event.id} className="flex items-center justify-between gap-3 text-xs">
-                          <span>{formatDateTime(event.occurredAt)}</span>
-                          <span className="truncate text-muted-foreground">{event.memo || "メモなし"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {data.events.length > 0 && <AbstinenceHistory goal={goal} events={data.events} />}
               </>
             )}
       </Panel>
