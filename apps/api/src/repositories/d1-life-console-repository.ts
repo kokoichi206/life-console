@@ -314,7 +314,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   async getWeightGoal(): Promise<Result<WeightGoal | null, AppError>> {
-    const result = await safeTry(() => this.#database.select({ startWeightKg: sql<number>`${weightGoal.startWeightGrams} / 1000.0`.as("startWeightKg"),
+    const result = await safeTry(() => this.#database.select({ startDate: weightGoal.startDate, startWeightKg: sql<number>`${weightGoal.startWeightGrams} / 1000.0`.as("startWeightKg"),
       targetWeightKg: sql<number>`${weightGoal.targetWeightGrams} / 1000.0`.as("targetWeightKg"), targetDate: weightGoal.targetDate,
     }).from(weightGoal).where(eq(weightGoal.id, 1)).get());
     if (!result.ok) return err(appError.storage(result.error));
@@ -322,7 +322,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   }
 
   async saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>> {
-    const changes = input === null ? null : { startWeightGrams: Math.round(input.startWeightKg * 1000), targetWeightGrams: Math.round(input.targetWeightKg * 1000), targetDate: input.targetDate };
+    const changes = input === null ? null : { startDate: input.startDate, startWeightGrams: Math.round(input.startWeightKg * 1000), targetWeightGrams: Math.round(input.targetWeightKg * 1000), targetDate: input.targetDate };
     const result = await safeTry(() => changes === null
       ? this.#database.delete(weightGoal).where(eq(weightGoal.id, 1)).run()
       : this.#database.insert(weightGoal).values({ id: 1, ...changes }).onConflictDoUpdate({ target: weightGoal.id, set: changes }).run());

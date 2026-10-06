@@ -12,15 +12,22 @@ describe("体重の目標の保存", () => {
     const save = (goal: unknown) => app.request("/api/v1/weight-goal", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(goal) }, environment);
     try {
       expect(await read()).toEqual({ data: null });
-      const goal = { startWeightKg: 90.5, targetWeightKg: 80.1, targetDate: "2026-12-31" };
+      database.exec("INSERT INTO weight_goal (id, start_weight_grams, target_weight_grams, target_date) VALUES (1, 90500, 80100, '2026-12-31')");
+      expect(await read()).toEqual({ data: { startDate: null, startWeightKg: 90.5, targetWeightKg: 80.1, targetDate: "2026-12-31" } });
+      const goal = { startDate: "2026-09-01", startWeightKg: 90.5, targetWeightKg: 80.1, targetDate: "2026-12-31" };
       expect((await save(goal)).status).toBe(200);
       expect(await read()).toEqual({ data: goal });
-      const updated = { ...goal, targetWeightKg: 79.5, targetDate: null };
+      const updated = { ...goal, startDate: "2026-08-01", targetWeightKg: 79.5, targetDate: null };
       expect((await save(updated)).status).toBe(200);
       expect(await read()).toEqual({ data: updated });
+      expect((await save({ ...goal, startDate: "2026-02-30" })).status).toBe(400);
+      expect((await save({ ...goal, targetDate: "2026-08-31" })).status).toBe(400);
       expect((await save({ ...goal, targetDate: "2026-02-30" })).status).toBe(400);
       expect((await save({ ...goal, targetWeightKg: 0 })).status).toBe(400);
       expect(await read()).toEqual({ data: updated });
+      const withoutStartDate = { ...goal, startDate: null };
+      expect((await save(withoutStartDate)).status).toBe(200);
+      expect(await read()).toEqual({ data: withoutStartDate });
       expect((await save(null)).status).toBe(200);
       expect(await read()).toEqual({ data: null });
     } finally {

@@ -300,10 +300,11 @@ export type UpsertSourceRepositoryMappingInput = z.infer<typeof upsertSourceRepo
 export type { AssetKind, JobKind, JobStatus, TaskStatus } from "@life-console/domain";
 
 export const weightGoalSchema = z.object({
+  startDate: z.iso.date().nullable(),
   startWeightKg: z.number().min(0.1).max(500),
   targetWeightKg: z.number().min(0.1).max(500),
   targetDate: z.iso.date().nullable(),
-});
+}).refine((goal) => goal.startDate === null || goal.targetDate === null || goal.startDate <= goal.targetDate, { message: "期限は開始日以降にしてください。", path: ["targetDate"] });
 export type WeightGoal = z.infer<typeof weightGoalSchema>;
 
 export const abstinenceGoalSchema = z.object({
