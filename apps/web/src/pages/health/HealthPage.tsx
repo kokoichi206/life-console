@@ -234,7 +234,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
               <table aria-label="体重の推移" className="w-full border-collapse text-xs tabular-nums">
                 <thead>
                   <tr className="bg-muted/60">
-                    {["日付", "体重", "体脂肪率", "種類", "7 日平均", "窓内件数"].map((heading) => <th key={heading} className="border-b px-3 py-2.5 text-right font-semibold whitespace-nowrap">{heading}</th>)}
+                    {["日付", "体重", "体脂肪率", "7 日平均"].map((heading) => <th key={heading} className="border-b px-3 py-2.5 text-right font-semibold whitespace-nowrap">{heading}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -247,16 +247,10 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
                         kg
                       </td>
                       <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">{point.bodyFatPercent === null ? "—" : `${point.bodyFatPercent.toFixed(1)} %`}</td>
-                      <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">実測</td>
                       <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">
                         {point.movingAverage7DaysKg.toFixed(2)}
                         {" "}
                         kg
-                      </td>
-                      <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">
-                        {point.movingAverageWindowSamples}
-                        {" "}
-                        件
                       </td>
                     </tr>
                   ))}
