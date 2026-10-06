@@ -214,6 +214,24 @@ export const AnalyzeMemo: Story = {
   },
 };
 
+export const AnalyzeMemoInBulk: Story = {
+  name: "未解析のメモだけでも一括解析できる",
+  args: { meals: [meals[1]!] },
+  parameters: { msw: { handlers: [
+    http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: [nutrition[1]!] })),
+    http.post("*/api/v1/nutrition/analyze", async ({ request }) => {
+      await expect(await request.json()).toEqual({});
+      return HttpResponse.json({ error: { message: "解析を予約できませんでした。" } }, { status: 503 });
+    }),
+  ] } },
+  play: async ({ canvas, userEvent }) => {
+    const analyzeButton = canvas.getByRole("button", { name: "未解析の食事をまとめて解析" });
+    await waitFor(() => expect(analyzeButton).toBeEnabled());
+    await userEvent.click(analyzeButton);
+    await expect(await canvas.findByText("解析を予約できませんでした。")).toBeVisible();
+  },
+};
+
 const refreshedNutrition = fn();
 const nutritionIntervals = { delays: (): Array<number | undefined> => [] };
 export const RefreshAnalysisResult: Story = {

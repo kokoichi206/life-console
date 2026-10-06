@@ -39,7 +39,7 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
         .orderBy(desc(jobs.createdAt), desc(sql`${jobs}.rowid`)).limit(1);
       const sourceBulkJobId = db.select({ id: jobs.id }).from(jobs)
         .where(and(eq(jobs.id, estimate.sourceJobId), eq(jobs.kind, "nutrition_analysis"), isNull(jobMealId), gte(jobs.createdAt, meals.recordedAt)));
-      const bulkJobId = sql`case when ${meals.photoId} is null then null
+      const bulkJobId = sql`case when ${meals.photoId} is null and length(trim(${meals.memo})) = 0 then null
         when ${meals.manualCaloriesKcal} is null and ${estimate.id} is null then (${pendingBulkJobId})
         else (${sourceBulkJobId}) end`;
       const latestJobId = db.select({ id: jobs.id }).from(jobs)
@@ -73,7 +73,7 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
         input.mealId !== undefined
           ? and(eq(meals.id, input.mealId), or(isNotNull(meals.photoId), sql`length(trim(${meals.memo})) > 0`))
           : and(
-              isNotNull(meals.photoId), isNull(meals.manualCaloriesKcal),
+              or(isNotNull(meals.photoId), sql`length(trim(${meals.memo})) > 0`), isNull(meals.manualCaloriesKcal),
               notExists(db.select({ id: nutritionEstimates.id }).from(nutritionEstimates)
                 .where(eq(nutritionEstimates.mealId, meals.id))),
               notExists(db.select({ id: jobs.id }).from(jobs).where(and(
