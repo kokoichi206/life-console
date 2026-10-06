@@ -289,6 +289,7 @@ export const jobHeartbeatObservations = sqliteTable("job_heartbeat_observations"
 });
 
 export const weightGoal = sqliteTable("weight_goal", {
+  startDate: text("start_date"),
   id: integer("id").primaryKey(),
   startWeightGrams: integer("start_weight_grams").notNull(),
   targetWeightGrams: integer("target_weight_grams").notNull(),

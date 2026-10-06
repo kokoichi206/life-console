@@ -127,11 +127,13 @@ export const MealEntryOpen: Story = {
 };
 
 export const Goal: Story = {
-  parameters: { msw: { handlers: handlers(weights, { startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-12-31" }) } },
+  parameters: { msw: { handlers: handlers(weights, { startDate: "2026-09-01", startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-12-31" }) } },
   play: async ({ canvas, canvasElement, userEvent }) => {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(await canvas.findByRole("button", { name: "目標を編集" }));
     const dialog = await screen.findByRole("dialog", { name: "体重の目標を設定" });
+    await expect(within(dialog).getByLabelText("開始日（任意）")).toHaveValue("2026-09-01");
+    await fireEvent.change(within(dialog).getByLabelText("開始日（任意）"), { target: { value: "2026-08-01" } });
     await userEvent.clear(within(dialog).getByLabelText("目標体重 (kg)"));
     await userEvent.type(within(dialog).getByLabelText("目標体重 (kg)"), "79");
     await userEvent.click(within(dialog).getByRole("button", { name: "目標を保存" }));
@@ -139,6 +141,15 @@ export const Goal: Story = {
     await expect(canvas.getByText("目標 79.0 kg")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "目標を編集" }));
     await expect(await screen.findByLabelText("目標体重 (kg)")).toHaveValue(79);
+    await expect(within(await screen.findByRole("dialog", { name: "体重の目標を設定" })).getByLabelText("開始日（任意）")).toHaveValue("2026-08-01");
+    const reopenedDialog = await screen.findByRole("dialog", { name: "体重の目標を設定" });
+    await fireEvent.change(within(reopenedDialog).getByLabelText("開始日（任意）"), { target: { value: "" } });
+    await userEvent.click(within(reopenedDialog).getByRole("button", { name: "目標を保存" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await expect(canvas.getByRole("img", { name: /^目標の達成率/ })).toBeVisible();
+    await expect(canvas.queryByText("日付 未設定")).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "目標を編集" }));
+    await expect(within(await screen.findByRole("dialog", { name: "体重の目標を設定" })).getByLabelText("開始日（任意）")).toHaveValue("");
     await userEvent.click(screen.getByRole("button", { name: "目標を解除" }));
     await waitFor(() => expect(canvas.getByRole("button", { name: "目標を設定" })).toBeVisible());
   },
@@ -172,7 +183,7 @@ const trendWeights: WeightPoint[] = Array.from({ length: 120 }, (_, index) => ({
   occurredAt: new Date(Date.UTC(2026, 4, 1 + index)).toISOString(), recordedAt: "2026-09-01T00:00:00Z",
 }));
 export const GoalOverview: Story = {
-  parameters: { msw: { handlers: handlers(trendWeights, { startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-09-30" }) } },
+  parameters: { msw: { handlers: handlers(trendWeights, { startDate: "2026-09-01", startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-09-30" }) } },
 };
 
 export const MobileWeightOverview: Story = {
@@ -668,4 +679,10 @@ export const WeeklyExerciseCaloriesPartial: Story = {
     await expect(await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" })).toHaveTextContent("500 kcal（取得済み分） ・ 未取得 1 件");
     await expect(canvas.getByText("500 kcal（取得済み分） ・ 未取得 1 件", { selector: "p" })).toBeVisible();
   },
+};
+
+export const GoalMobileDark: Story = {
+  ...Goal,
+  globals: { theme: "dark", viewport: { value: "narrowWeight", isRotated: false } },
+  parameters: { msw: { handlers: handlers(weights, { startDate: "2026-09-01", startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-12-31" }) }, viewport: { options: { narrowWeight: { name: "狭い画面", styles: { width: "390px", height: "844px" } } } } },
 };

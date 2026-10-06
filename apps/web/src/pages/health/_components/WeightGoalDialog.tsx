@@ -1,5 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog";
-import type { WeightGoal } from "@life-console/contracts";
+import { weightCalendarDate, type WeightGoal } from "@life-console/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -16,6 +16,7 @@ const WeightGoalForm = ({ goal, initialWeight, onSaved }: {
   readonly onSaved: () => void;
 }) => {
   const client = useQueryClient();
+  const [startDate, setStartDate] = useState(goal === null ? weightCalendarDate(new Date().toISOString()) : goal.startDate ?? "");
   const [startWeight, setStartWeight] = useState(String(goal?.startWeightKg ?? initialWeight ?? ""));
   const [targetWeight, setTargetWeight] = useState(String(goal?.targetWeightKg ?? ""));
   const [targetDate, setTargetDate] = useState(goal?.targetDate ?? "");
@@ -28,7 +29,7 @@ const WeightGoalForm = ({ goal, initialWeight, onSaved }: {
   });
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    save.mutate({ startWeightKg: Number(startWeight), targetWeightKg: Number(targetWeight), targetDate: targetDate === "" ? null : targetDate });
+    save.mutate({ startDate: startDate === "" ? null : startDate, startWeightKg: Number(startWeight), targetWeightKg: Number(targetWeight), targetDate: targetDate === "" ? null : targetDate });
   };
   return (
     <form onSubmit={submit} className="mt-6">
@@ -38,7 +39,10 @@ const WeightGoalForm = ({ goal, initialWeight, onSaved }: {
           <Field label="開始体重 (kg)"><Input required type="number" min="0.1" max="500" step="0.1" inputMode="decimal" value={startWeight} onChange={(event) => setStartWeight(event.target.value)} /></Field>
           <Field label="目標体重 (kg)"><Input autoFocus required type="number" min="0.1" max="500" step="0.1" inputMode="decimal" value={targetWeight} onChange={(event) => setTargetWeight(event.target.value)} /></Field>
         </div>
-        <Field label="期限（任意）"><Input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="開始日（任意）"><Input type="date" max={targetDate || undefined} value={startDate} onChange={(event) => setStartDate(event.target.value)} /></Field>
+          <Field label="期限（任意）"><Input type="date" min={startDate || undefined} value={targetDate} onChange={(event) => setTargetDate(event.target.value)} /></Field>
+        </div>
         <Button type="submit" className="h-11 rounded-xl">{save.isPending ? "保存しています…" : "目標を保存"}</Button>
         {goal !== null && <Button type="button" variant="ghost" onClick={() => save.mutate(null)}>目標を解除</Button>}
       </fieldset>
@@ -60,7 +64,7 @@ export const WeightGoalDialog = ({ open, onOpenChange, goal, initialWeight }: {
         <header className="flex items-start justify-between gap-3">
           <div>
             <Dialog.Title className="text-xl font-semibold">体重の目標を設定</Dialog.Title>
-            <Dialog.Description className="mt-2 text-xs text-muted-foreground">開始体重を基準に、最新の記録で進捗を表示します。</Dialog.Description>
+            <Dialog.Description className="mt-2 text-xs text-muted-foreground">開始体重からの変化と、開始日から期限までの日付の進捗を表示します。</Dialog.Description>
           </div>
           <Dialog.Close render={<Button variant="ghost" size="icon" aria-label="目標の設定を閉じる" />}><X /></Dialog.Close>
         </header>
