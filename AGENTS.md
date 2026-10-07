@@ -1,6 +1,6 @@
 # Life Console の開発ガイド
 
-本人用のダッシュボード。Web/API は Cloudflare、外部 CLI と coding agent の実行は Mac の runner が担当する。現行機能は [README](README.md)、記録済みの要件は [要件定義](docs/requirements.md) で確認する。
+本人用のダッシュボード。Web/API は Cloudflare、外部 CLI と coding agent の実行は Mac の runner が担当する。現行機能は [機能と操作](docs/features.md)、記録済みの要件は [要件定義](docs/requirements.md) で確認する。
 
 ## 作業の原則
 
@@ -21,7 +21,7 @@
 | API、runner、共通型、環境変数 | [サーバー境界](docs/agent-rules/server-boundaries.md)、[core](packages/core/README.md)、[env](packages/env/README.md) |
 | DB schema、migration、永続化 | [DB](docs/agent-rules/database.md)、[DB パッケージ](packages/db/README.md) |
 | Web、URL、共通 UI、Storybook | [UI](docs/agent-rules/web-ui.md)、[Web 開発](apps/web/README.md) |
-| 外部 CLI、会話取り込み、返信生成、agent job | [外部実行](docs/agent-rules/runner-integrations.md)、README の該当機能 |
+| 外部 CLI、会話取り込み、返信生成、agent job | [外部実行](docs/agent-rules/runner-integrations.md)、[機能と操作](docs/features.md)、[栄養解析](docs/nutrition-analysis.md) |
 | lint の変更・違反 | [ESLint](packages/eslint-config/README.md) と該当ルールの README |
 | Android などの native client | [クライアント](clients/README.md)、[Android](clients/android/README.md) |
 | AI 設定、rule、skill | [ハーネスの管理](docs/agent-configuration.md) |
