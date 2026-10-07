@@ -1,7 +1,7 @@
 import type { AbstinenceOverview } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { http, HttpResponse } from "msw";
-import { expect, waitFor, within } from "storybook/test";
+import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
 
 import { AbstinencePanel } from "./AbstinencePanel";
 
@@ -38,7 +38,7 @@ export const Active: Story = {
     await expect(timer).toHaveTextContent(/\d+ 日\s*\d+ 時間\s*\d+ 分\s*\d+ 秒/);
     const initialElapsed = timer.textContent;
     await waitFor(() => expect(timer.textContent).not.toBe(initialElapsed), { timeout: 2_500 });
-    await expect(canvas.getByText("1 日 2 時間 30 分 0 秒 継続")).toBeVisible();
+    await expect(canvas.getByText("1 日 2 時間 30 分 継続")).toBeVisible();
     const latestMemo = canvas.getByText("翌日の予定を確認していた");
     await expect(latestMemo).not.toBeVisible();
     await userEvent.click(canvas.getAllByText("メモ", { selector: "summary" })[0]!);
@@ -46,7 +46,7 @@ export const Active: Story = {
     await userEvent.click(canvas.getAllByText("メモ", { selector: "summary" })[0]!);
     await expect(latestMemo).not.toBeVisible();
     const historyToggle = canvas.getByText("過去の中断を表示（2 件）");
-    const firstStreak = canvas.getByText("3 日 23 時間 0 分 0 秒 継続");
+    const firstStreak = canvas.getByText("3 日 23 時間 0 分 継続");
     await expect(firstStreak).not.toBeVisible();
     await userEvent.click(historyToggle);
     await expect(firstStreak).toBeVisible();
@@ -95,7 +95,7 @@ export const LongHistory: Story = {
     await userEvent.click(historyToggle);
     await expect(canvas.getAllByRole("listitem")).toHaveLength(23);
     await expect(canvas.getAllByRole("listitem")[3]!).toBeVisible();
-    await expect(within(canvas.getAllByRole("listitem")[22]!).getByText("0 日 1 時間 0 分 0 秒 継続")).toBeVisible();
+    await expect(within(canvas.getAllByRole("listitem")[22]!).getByText("0 日 1 時間 0 分 継続")).toBeVisible();
     await expect(canvas.getByText("中断 23 のメモ")).toBeInTheDocument();
     await expect(canvas.queryByText("中断 24 のメモ")).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "さらに表示（次の 20 件）" }));
@@ -115,5 +115,53 @@ export const LongHistory: Story = {
     await userEvent.click(historyToggle);
     await waitFor(() => expect(canvas.getAllByRole("listitem")).toHaveLength(23));
     await expect(canvas.getAllByRole("listitem")[3]!).not.toBeVisible();
+  },
+};
+
+const goalWithSeconds = { ...overview.goal!, startedAt: "2026-09-01T00:00:37+09:00" };
+const savedGoal = fn();
+const savedEvent = fn();
+export const PreserveSeconds: Story = {
+  name: "開始日時と中断日時の秒を保持する",
+  beforeEach: () => {
+    savedGoal.mockClear();
+    savedEvent.mockClear();
+  },
+  parameters: { msw: { handlers: [
+    http.get("*/api/v1/abstinence", () => HttpResponse.json({ data: { ...overview, goal: goalWithSeconds } })),
+    http.put("*/api/v1/abstinence/goal", async ({ request }) => {
+      savedGoal(await request.json());
+      return HttpResponse.json({ data: null });
+    }),
+    http.post("*/api/v1/abstinence/events", async ({ request }) => {
+      savedEvent(await request.json());
+      return HttpResponse.json({ data: null });
+    }),
+  ] } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await canvas.findByRole("timer", { name: "禁欲の経過時間" });
+    await userEvent.click(canvas.getByRole("button", { name: "禁欲目標を編集" }));
+    const screen = within(canvasElement.ownerDocument.body);
+    const goalDialog = within(await screen.findByRole("dialog", { name: "禁欲目標を設定" }));
+    const startedAt = goalDialog.getByLabelText<HTMLInputElement>("開始日時");
+    await expect(startedAt).toHaveAttribute("step", "1");
+    await expect(new Date(startedAt.value).toISOString()).toBe(new Date(goalWithSeconds.startedAt).toISOString());
+    await userEvent.click(goalDialog.getByRole("button", { name: "目標を保存" }));
+    await waitFor(() => expect(savedGoal).toHaveBeenCalledWith(expect.objectContaining({ startedAt: new Date(goalWithSeconds.startedAt).toISOString() })));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(canvas.getByRole("button", { name: "イベントを記録" }));
+    const eventDialog = within(await screen.findByRole("dialog", { name: "中断イベントを記録" }));
+    const occurredAt = eventDialog.getByLabelText<HTMLInputElement>("発生日時");
+    await expect(occurredAt).toHaveAttribute("step", "1");
+    await fireEvent.change(occurredAt, { target: { value: "2026-09-12T12:34:43" } });
+    await userEvent.click(eventDialog.getByRole("button", { name: "イベントを記録" }));
+    await waitFor(() => expect(savedEvent).toHaveBeenCalledWith(expect.objectContaining({ occurredAt: new Date("2026-09-12T12:34:43").toISOString() })));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await userEvent.click(canvas.getByRole("button", { name: "イベントを記録" }));
+    const reopenedDialog = within(await screen.findByRole("dialog", { name: "中断イベントを記録" }));
+    const reopenedAt = reopenedDialog.getByLabelText<HTMLInputElement>("発生日時").value;
+    await expect(Math.abs(Date.now() - new Date(reopenedAt).getTime())).toBeLessThan(5_000);
+    await userEvent.click(reopenedDialog.getByRole("button", { name: "中断イベントの記録を閉じる" }));
+    await waitFor(() => expect(canvas.getByRole("button", { name: "イベントを記録" })).toHaveFocus());
   },
 };

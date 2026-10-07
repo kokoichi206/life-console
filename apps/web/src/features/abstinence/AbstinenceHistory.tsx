@@ -9,8 +9,8 @@ const HISTORY_PAGE_SIZE = 20;
 const formatDateTime = (value: string): string => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 
 const formatStreakDuration = (milliseconds: number): string => {
-  const seconds = Math.floor(milliseconds / 1_000);
-  return `${Math.floor(seconds / 86_400)} 日 ${Math.floor(seconds / 3_600) % 24} 時間 ${Math.floor(seconds / 60) % 60} 分 ${seconds % 60} 秒`;
+  const minutes = Math.floor(milliseconds / 60_000);
+  return `${Math.floor(minutes / 1_440)} 日 ${Math.floor(minutes / 60) % 24} 時間 ${minutes % 60} 分`;
 };
 
 export const AbstinenceHistory = ({ goal, events }: { readonly goal: AbstinenceGoal; readonly events: ReadonlyArray<AbstinenceEvent> }) => {
