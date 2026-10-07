@@ -695,7 +695,10 @@ export const LoadOlderCalorieBalance: Story = {
     initialUrl: "/health?from=2026-09-02&to=2026-09-20",
     msw: { handlers: [
       http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
-      http.get("*/api/v1/strava/calories/sync-status", () => HttpResponse.json({ data: { lastJob: { status: "succeeded", at: "2026-09-21T00:00:00Z", errorCode: null }, backfill: null } })),
+      http.get("*/api/v1/strava/calories/sync-status", async () => {
+        await delay(300);
+        return HttpResponse.json({ data: { lastJob: { status: "succeeded", at: "2026-09-21T00:00:00Z", errorCode: null }, backfill: null } });
+      }),
       http.get("*/api/v1/strava/calories", ({ request }) => {
         const query = new URL(request.url).searchParams;
         balanceRangeRequests("exercise", query.get("from"), query.get("to"));
@@ -720,10 +723,12 @@ export const LoadOlderCalorieBalance: Story = {
     const panel = within((await canvas.findByRole("heading", { name: "カロリー収支" })).closest("[data-slot=card]") as HTMLElement);
     await expect(await panel.findByRole("rowheader", { name: "9/20" })).toBeVisible();
     await waitFor(() => expect(balanceRangeRequests).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(panel.getByRole("button", { name: "さらに前の 7 日を表示" })).toBeEnabled());
     await userEvent.click(panel.getByRole("button", { name: "さらに前の 7 日を表示" }));
     await expect(panel.getByRole("rowheader", { name: "9/20" })).toBeVisible();
     await expect(await panel.findByRole("rowheader", { name: "9/7" })).toBeInTheDocument();
     await waitFor(() => expect(balanceRangeRequests).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(panel.getByRole("button", { name: "さらに前の 5 日を表示" })).toBeEnabled());
     await userEvent.click(panel.getByRole("button", { name: "さらに前の 5 日を表示" }));
     await expect(await panel.findByRole("rowheader", { name: "9/2" })).toBeInTheDocument();
     await expect(panel.queryByRole("button", { name: /さらに前/ })).not.toBeInTheDocument();
@@ -735,6 +740,7 @@ export const LoadOlderCalorieBalance: Story = {
     }
     await userEvent.click(panel.getByRole("button", { name: "直近 7 日に戻す" }));
     await expect(panel.queryByRole("rowheader", { name: "9/7" })).not.toBeInTheDocument();
+    await waitFor(() => expect(panel.getByRole("button", { name: "さらに前の 7 日を表示" })).toBeEnabled());
     await userEvent.click(panel.getByRole("button", { name: "さらに前の 7 日を表示" }));
     await expect(await panel.findByRole("rowheader", { name: "9/7" })).toBeInTheDocument();
     await expect(balanceRangeRequests).toHaveBeenCalledTimes(6);

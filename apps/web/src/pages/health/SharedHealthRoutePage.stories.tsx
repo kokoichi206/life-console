@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { useMemo } from "react";
-import { expect, within } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 
 import { parseSharedHealthSearch } from "./health-search";
 import { SharedHealthRoutePage } from "./SharedHealthRoutePage";
@@ -20,7 +20,10 @@ const meta = {
     http.get(`${prefix}/meal-day-counts`, () => HttpResponse.json({ data: [{ occurredAt: "2026-09-01", count: 1 }] })),
     http.get(`${prefix}/meal-gallery`, () => HttpResponse.json({ data: { meals: [meal], nextTo: null } })),
     http.get(`${prefix}/nutrition`, () => HttpResponse.json({ data: [{ mealId: meal.id, photoId: meal.photoId, occurredAt: meal.occurredAt, manualCaloriesKcal: 500, estimate: null, analysisStatus: null, analysisSummary: null }] })),
-    http.get(`${prefix}/strava/status`, () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+    http.get(`${prefix}/strava/status`, async () => {
+      await delay(1_200);
+      return HttpResponse.json({ data: { configured: true, athleteId: 42 } });
+    }),
     http.get(`${prefix}/strava/activities`, () => HttpResponse.json({ data: { activities: [], nextPage: null } })),
     http.get(`${prefix}/strava/calories`, () => HttpResponse.json({ data: [] })),
     http.get(`${prefix}/strava/calories/sync-status`, () => HttpResponse.json({ data: { lastJob: null, backfill: null } })),
@@ -42,7 +45,7 @@ export const ReadOnly: Story = {
   play: async ({ canvas, canvasElement, userEvent }) => {
     await expect(await canvas.findByText(/読み取り専用です/)).toBeVisible();
     for (const name of ["体重", "食事", "目標を設定", "運動を同期", "接続を解除", "未解析の食事をまとめて解析"]) {
-      await expect(await canvas.findByRole("button", { name: new RegExp(`^${name}$`) })).toBeDisabled();
+      await waitFor(() => expect(canvas.getByRole("button", { name: new RegExp(`^${name}$`) })).toBeDisabled(), { timeout: 10_000 });
     }
     await expect(canvas.getByLabelText("CSV を取り込む")).toBeDisabled();
     await expect(canvas.queryByRole("dialog")).not.toBeInTheDocument();
