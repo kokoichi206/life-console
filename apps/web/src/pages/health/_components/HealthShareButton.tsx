@@ -11,7 +11,7 @@ export const HealthShareButton = ({ search }: { readonly search: HealthSearch })
     mutationFn: async (path: string) => {
       const url = new URL(path, window.location.origin);
       for (const [key, value] of Object.entries(parseSharedHealthSearch(search))) {
-        if (value !== undefined) url.searchParams.set(key, value);
+        if (value !== undefined) url.searchParams.set(key, String(value));
       }
       await navigator.clipboard.writeText(url.toString());
     },

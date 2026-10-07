@@ -7,7 +7,7 @@ export type HealthSearch = {
   readonly meal?: string | undefined;
   readonly range?: WeightRange | undefined;
   readonly overlay?: "running" | "body-fat" | "exercise-calories" | undefined;
-  readonly calories?: "all" | undefined;
+  readonly calories?: number | undefined;
   readonly from?: string | undefined;
   readonly to?: string | undefined;
 };
@@ -23,7 +23,9 @@ export const parseHealthSearch = (search: Record<string, unknown>): HealthSearch
     ...(search.overlay === "running" || search.overlay === "body-fat" || search.overlay === "exercise-calories"
       ? { overlay: search.overlay }
       : search.running === "show" ? { overlay: "running" as const } : {}),
-    ...(search.calories === "all" ? { calories: search.calories } : {}),
+    ...(Number.isSafeInteger(Number(search.calories)) && Number(search.calories) > 7 && Number(search.calories) % 7 === 0
+      ? { calories: Number(search.calories) }
+      : {}),
     ...(range === undefined ? {} : { range }),
     ...(from.success && to.success && from.data < to.data ? { from: from.data, to: to.data } : {}),
   };

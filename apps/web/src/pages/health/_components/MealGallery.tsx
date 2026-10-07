@@ -1,5 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog";
-import type { Meal, MealNutrition } from "@life-console/contracts";
+import { weightCalendarDate, type Meal, type MealNutrition } from "@life-console/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Utensils, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -30,12 +30,12 @@ const mealCaloriesLabel = (nutrition: MealNutrition | undefined): string => {
 };
 
 const MealCaloriesForm = ({ nutrition }: { readonly nutrition: MealNutrition }) => {
-  const { nutritionQuery, readOnly } = useHealthQueries();
+  const { nutritionQueryKey, readOnly } = useHealthQueries();
   const queryClient = useQueryClient();
   const [caloriesKcal, setCaloriesKcal] = useState(String(nutrition.manualCaloriesKcal ?? nutrition.estimate?.caloriesKcal ?? ""));
   const save = useMutation({
     mutationFn: api.saveMealCalories,
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: nutritionQuery.queryKey }); },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: nutritionQueryKey }); },
   });
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -74,12 +74,17 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = fal
   readonly loadingMore?: boolean;
   readonly onLoadMore?: () => void;
 }) => {
-  const { nutritionQuery, readOnly } = useHealthQueries();
+  const { nutritionQuery, nutritionQueryKey, readOnly } = useHealthQueries();
   const queryClient = useQueryClient();
-  const nutrition = useQuery(nutritionQuery);
+  const today = weightCalendarDate(new Date().toISOString());
+  const mealDates = meals.map((meal) => weightCalendarDate(meal.occurredAt)).sort();
+  const nutrition = useQuery({
+    ...nutritionQuery(mealDates[0] ?? today, mealDates.at(-1) ?? today),
+    enabled: meals.length > 0,
+  });
   const analyze = useMutation({
     mutationFn: api.analyzeNutrition,
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: nutritionQuery.queryKey }); },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: nutritionQueryKey }); },
   });
   const visibleMealIds = new Set(meals.map((meal) => meal.id));
   const visibleNutrition = nutrition.data?.filter((entry) => visibleMealIds.has(entry.mealId));
@@ -93,7 +98,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = fal
         <Eyebrow className="max-sm:hidden">MEALS</Eyebrow>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl font-semibold sm:text-base">食事の記録</h2>
-          <Button variant="outline" size="sm" disabled={nutrition.isFetching} onClick={() => { void nutrition.refetch(); }}>{nutrition.isFetching ? "更新中…" : "栄養の結果を更新"}</Button>
+          <Button variant="outline" size="sm" disabled={nutrition.isFetching} onClick={() => { void queryClient.invalidateQueries({ queryKey: nutritionQueryKey }); }}>{nutrition.isFetching ? "更新中…" : "栄養の結果を更新"}</Button>
         </div>
       </header>
       <div className="sm:px-5">
@@ -102,7 +107,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = fal
           <p className="text-xs text-muted-foreground">{readOnly ? "保存済みの食事と栄養の推定値を表示しています。" : "カロリーが未入力の食事は、写真またはメモから保存後に自動で解析します。写真とメモは設定した AI サービスへ送られ、Mac の runner が起動している間に概算します。"}</p>
           <Button variant="outline" size="sm" disabled={readOnly || analyze.isPending || nutrition.data === undefined || nutrition.data.some((entry) => nutritionIsPending(entry.analysisStatus)) || !nutrition.data.some((entry) => entry.manualCaloriesKcal === null && entry.estimate === null)} onClick={() => analyze.mutate({})}>未解析の食事をまとめて解析</Button>
           {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}
-          {nutrition.isPending && <p role="status" className="text-sm text-muted-foreground">推定結果を読み込み中…</p>}
+          {meals.length > 0 && nutrition.isPending && <p role="status" className="text-sm text-muted-foreground">推定結果を読み込み中…</p>}
           {nutrition.error !== null && <FormError>{nutrition.error.message}</FormError>}
           {visibleNutrition !== undefined && visibleNutrition.length > 0 && (
             <div className="max-h-48 overflow-auto rounded-xl border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" role="region" aria-label="日別のカロリー" tabIndex={0}>
@@ -185,7 +190,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = fal
                 {(selectedMeal.photoId !== null || selectedMeal.memo.trim() !== "") && <Button disabled={readOnly || analyze.isPending || pending || nutrition.data === undefined} onClick={() => analyze.mutate({ mealId: selectedMeal.id })}>{pending ? "解析待ち・解析中" : selectedNutrition?.estimate == null ? "栄養を解析" : "栄養を再解析"}</Button>}
                 {selectedNutrition?.manualCaloriesKcal != null && <p className="text-xs text-muted-foreground">解析しても手入力したカロリーは変わりません。</p>}
                 {pending && <p role="status" className="text-sm text-muted-foreground">Mac の runner で順番に解析します。「栄養の結果を更新」で結果を確認できます。</p>}
-                <Button variant="outline" disabled={nutrition.isFetching} onClick={() => { void nutrition.refetch(); }}>{nutrition.isFetching ? "更新中…" : "栄養の結果を更新"}</Button>
+                <Button variant="outline" disabled={nutrition.isFetching} onClick={() => { void queryClient.invalidateQueries({ queryKey: nutritionQueryKey }); }}>{nutrition.isFetching ? "更新中…" : "栄養の結果を更新"}</Button>
                 {nutrition.error !== null && <FormError>{nutrition.error.message}</FormError>}
                 {selectedNutrition?.analysisStatus === "failed" && <FormError>{selectedNutrition.analysisSummary ?? "解析に失敗しました。再解析できます。"}</FormError>}
                 {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}

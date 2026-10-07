@@ -1,5 +1,5 @@
 import { calculate7DayMovingAverage, weightCalendarDate, weightCalendarDayTimestamp } from "@life-console/contracts";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState, type ChangeEvent } from "react";
 
 import { api } from "../../api";
@@ -18,7 +18,7 @@ import { WeightEntryDialog } from "./_components/WeightEntryDialog";
 import { WeightGoalDialog } from "./_components/WeightGoalDialog";
 import { WeightGoalProgress } from "./_components/WeightGoalProgress";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
-import { calorieBalanceRows, recentBalanceWindow, type ExerciseInput } from "./calorie-balance";
+import { calorieBalanceRows, calorieBalanceRanges, RECENT_BALANCE_DAYS, recentBalanceWindow, type ExerciseInput } from "./calorie-balance";
 import { exerciseCaloriesByDay } from "./exercise-calories";
 import { exerciseChartWeeks } from "./exercise-chart-weeks";
 import { exerciseWeeks } from "./exercise-weeks";
@@ -38,12 +38,12 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
 
 const currentJapanDate = (): string => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
 
-export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExpanded, onCaloriesExpandedChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+export const HealthPage = ({ search, onRangeChange, onOverlayChange, calorieDays, onCalorieDaysChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
   readonly search: HealthSearch;
   readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
   readonly onOverlayChange: (overlay: HealthSearch["overlay"]) => void;
-  readonly caloriesExpanded: boolean;
-  readonly onCaloriesExpandedChange: (expanded: boolean) => void;
+  readonly calorieDays: number;
+  readonly onCalorieDaysChange: (days: number) => void;
   readonly goalEntryOpen: boolean;
   readonly onGoalEntryOpenChange: (open: boolean) => void;
   readonly baselineEntryOpen: boolean;
@@ -91,11 +91,24 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
     getNextPageParam: (page) => page.nextTo ?? undefined,
   });
   const galleryMeals = mealGallery.data?.pages.flatMap((page) => page.meals) ?? [];
-  const nutrition = useQuery(nutritionQuery);
+  const balanceWindow = recentBalanceWindow(periodFrom, periodTo, calorieDays);
+  const balanceRanges = calorieBalanceRanges(periodFrom, periodTo, calorieDays);
+  const nutritionPages = useQueries({ queries: balanceRanges.map((range) => nutritionQuery(range.from, range.to)) });
+  const nutrition = {
+    isPending: nutritionPages.some((page) => page.isPending),
+    error: nutritionPages.find((page) => page.error !== null)?.error ?? null,
+  };
   const strava = useStravaActivities(periodFrom, periodTo);
-  const stravaCalories = useQuery(stravaCaloriesQuery(periodFrom, periodTo, strava.connected && !strava.disconnect.isPending));
+  const caloriesEnabled = strava.connected && !strava.disconnect.isPending;
+  const caloriePages = useQueries({ queries: balanceRanges.map((range) => stravaCaloriesQuery(range.from, range.to, caloriesEnabled)) });
+  const stravaCalories = {
+    data: caloriePages.every((page) => page.data !== undefined) ? caloriePages.flatMap((page) => page.data!) : undefined,
+    isError: caloriePages.some((page) => page.isError),
+  };
+  const chartCalories = useQuery(stravaCaloriesQuery(periodFrom, periodTo, caloriesEnabled && search.overlay === "exercise-calories"));
   const syncStatus = useQuery(stravaCaloriesSyncStatusQuery(strava.connected));
-  const awaitingFirstSync = stravaCalories.data?.length === 0 && syncStatus.data?.lastJob?.status !== "succeeded" && syncStatus.data?.backfill === null;
+  const noCompletedSync = syncStatus.data?.lastJob?.status !== "succeeded" && syncStatus.data?.backfill === null;
+  const awaitingFirstSync = stravaCalories.data?.length === 0 && noCompletedSync;
   const exerciseByDay = useMemo(() => {
     if (!strava.connected || strava.disconnect.isPending || stravaCalories.isError || stravaCalories.data === undefined || awaitingFirstSync || (stravaCalories.data.length === 0 && syncStatus.data === undefined)) return undefined;
     return exerciseCaloriesByDay(stravaCalories.data.map((entry) => ({ id: entry.activityId, occurredAt: entry.occurredAt })), stravaCalories.data);
@@ -112,26 +125,24 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
               ? "unsynced"
               : exerciseByDay !== undefined ? "stored" : "loading";
   const untracked = exerciseTracking === "untracked";
-  // 食事が未取得・取得失敗の間は行を組まない。空配列で組むと期間全体が「記録なし」の表になる。
-  const nutritionMeals = nutrition.isError ? undefined : nutrition.data;
-  // 表示は既定で直近だけに絞る。取得の期間は絞らないので、広げたときに空にならない。
-  const recentBalance = recentBalanceWindow(periodFrom, periodTo);
-  const balanceFrom = caloriesExpanded ? periodFrom : recentBalance.from;
-  const balanceRows = useMemo(() => {
-    if (nutritionMeals === undefined) return [];
+  const balanceRows = balanceRanges.flatMap((range, index) => {
+    const meals = nutritionPages[index]!;
+    if (meals.data === undefined || meals.isError) return [];
+    const calories = caloriePages[index]!;
     const exercise: ExerciseInput | undefined = untracked
       ? { mode: "untracked" }
-      : exerciseByDay === undefined ? undefined : { mode: "tracked", byDay: exerciseByDay };
-    return calorieBalanceRows(balanceFrom, periodTo, nutritionMeals, exercise, calorieBaseline?.dailyExpenditureKcal ?? null);
-  }, [balanceFrom, periodTo, nutritionMeals, untracked, exerciseByDay, calorieBaseline]);
-  // 取得待ちの件数は表示を絞っても期間全体で数える。runner は期間全体を取得している。
-  const pendingActivities = exerciseByDay === undefined
-    ? 0
-    : [...exerciseByDay.values()].reduce((total, day) => total + day.pendingActivities, 0);
+      : calories.data === undefined || calories.isError || (calories.data.length === 0 && (noCompletedSync || syncStatus.data === undefined || syncStatus.isError))
+        ? undefined
+        : { mode: "tracked", byDay: exerciseCaloriesByDay(calories.data.map((entry) => ({ id: entry.activityId, occurredAt: entry.occurredAt })), calories.data) };
+    return calorieBalanceRows(range.from, range.to, meals.data, exercise, calorieBaseline?.dailyExpenditureKcal ?? null);
+  });
+  // 取得待ちは API から読み込んだ表示範囲で数える。
+  const pendingActivities = caloriePages.reduce((total, page) => total + (page.data?.filter((entry) => entry.status === "pending").length ?? 0), 0);
   const showRunning = search.overlay === "running";
   const showExerciseCalories = search.overlay === "exercise-calories";
-  const chartExerciseCalories = showExerciseCalories && strava.complete && exerciseTracking === "stored" && stravaCalories.data !== undefined
-    ? exerciseCaloriesByDay(strava.records, stravaCalories.data)
+  const chartExerciseCalories = showExerciseCalories && strava.complete && chartCalories.data !== undefined && !chartCalories.isError
+    && (chartCalories.data.length > 0 || (syncStatus.data !== undefined && !syncStatus.isError && !awaitingFirstSync))
+    ? exerciseCaloriesByDay(strava.records, chartCalories.data)
     : undefined;
   const chartWeeks = strava.complete && (showRunning || chartExerciseCalories !== undefined)
     ? exerciseChartWeeks(exerciseWeeks(periodFrom, periodTo, strava.records, [], []), chartExerciseCalories === undefined ? { kind: "running" } : { kind: "calories", byDay: chartExerciseCalories }, currentJapanDate())
@@ -201,7 +212,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
         <Panel mobileLayout="section" className="overflow-hidden rounded-3xl py-0 max-sm:border-t-0">
           {showExerciseCalories && strava.connected && chartWeeks === undefined && (
             <p role="status" className="px-1 pt-3 text-sm text-muted-foreground sm:px-4">
-              {exerciseTracking === "failed" || strava.activities.isError
+              {chartCalories.isError || exerciseTracking === "failed" || strava.activities.isError
                 ? "消費カロリーを取得できませんでした。週の合計は表示していません。"
                 : exerciseTracking === "unsynced" ? "運動はまだ同期されていません。週の合計は同期後に表示します。" : "週の消費カロリーを読み込んでいます。"}
             </p>
@@ -271,9 +282,10 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, caloriesExp
         nutritionPending={nutrition.isPending}
         nutritionErrorMessage={nutrition.error?.message ?? null}
         onEditBaseline={() => onBaselineEntryOpenChange(true)}
-        expanded={caloriesExpanded}
-        hiddenDays={recentBalance.hiddenDays}
-        onExpandedChange={onCaloriesExpandedChange}
+        expanded={calorieDays > RECENT_BALANCE_DAYS}
+        hiddenDays={balanceWindow.hiddenDays}
+        onLoadMore={() => onCalorieDaysChange(calorieDays + RECENT_BALANCE_DAYS)}
+        onCollapse={() => onCalorieDaysChange(RECENT_BALANCE_DAYS)}
         syncStatus={syncStatus.data}
       />
       <StravaActivities strava={strava} from={periodFrom} to={periodTo} weights={weights} mealDayCounts={mealDayCounts.data} onSelectWeek={onRangeChange} />
