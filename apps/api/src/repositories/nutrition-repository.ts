@@ -9,7 +9,7 @@ import { appError, type AppError } from "../shared/app-error";
 
 export interface NutritionRepository {
   saveManualCalories(mealId: string, caloriesKcal: number): Promise<Result<void, AppError>>;
-  list(): Promise<Result<ReadonlyArray<MealNutrition>, AppError>>;
+  list(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<MealNutrition>, AppError>>;
   candidates(input: NutritionAnalysisPayload): Promise<Result<ReadonlyArray<NutritionCandidate>, AppError>>;
   save(id: string, input: SaveNutritionEstimateInput, now: string): Promise<Result<void, AppError>>;
 }
@@ -23,7 +23,7 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
       if (!result.ok) return err(appError.storage(result.error));
       return result.value.meta.changes > 0 ? ok(undefined) : err(appError.notFound("食事記録が見つかりません。"));
     },
-    async list() {
+    async list(period) {
       const estimate = alias(nutritionEstimates, "latest_estimate");
       const analysisJob = alias(jobs, "latest_analysis_job");
       const latestEstimateId = db.select({ id: nutritionEstimates.id }).from(nutritionEstimates)
@@ -57,7 +57,12 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
       }).from(meals)
         .leftJoin(estimate, eq(estimate.id, latestEstimateId))
         .leftJoin(analysisJob, eq(analysisJob.id, latestJobId))
-        .where(isNull(meals.deletedAt)).orderBy(desc(meals.occurredAt));
+        .where(and(isNull(meals.deletedAt), period === undefined
+          ? undefined
+          : and(
+              gte(sql`julianday(${meals.occurredAt})`, sql`julianday(${`${period.from}T00:00:00+09:00`})`),
+              sql`julianday(${meals.occurredAt}) < julianday(${`${period.to}T00:00:00+09:00`}, '+1 day')`,
+            ))).orderBy(desc(meals.occurredAt));
       const result = await safeTry(() => listQuery.all());
       if (!result.ok) return err(appError.storage(result.error));
       return ok(result.value.map(({ sourceJobId, jobId, ...meal }) => ({

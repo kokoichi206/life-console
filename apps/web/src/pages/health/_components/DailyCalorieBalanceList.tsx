@@ -122,11 +122,11 @@ const LegendSwatch = ({ className, label }: { readonly className: string; readon
   </span>
 );
 
-export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onExpandedChange, syncStatus, readOnly = false }: {
+export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pendingActivities, nutritionPending, nutritionErrorMessage, onEditBaseline, expanded, hiddenDays, onLoadMore, onCollapse, syncStatus, readOnly = false }: {
   readonly rows: ReadonlyArray<CalorieBalanceRow>;
   readonly baselineKcal: number | null;
   readonly exerciseState: ExerciseTrackingState;
-  /** 表示期間全体の取得待ち件数。直近だけを表示していても runner は期間全体を取得している。 */
+  /** API から読み込んだ表示範囲の取得待ち件数。 */
   readonly pendingActivities: number;
   readonly nutritionPending: boolean;
   readonly nutritionErrorMessage: string | null;
@@ -135,7 +135,8 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
   readonly expanded: boolean;
   /** 直近の窓から外れている日数。0 なら広げる先がないのでボタンを出さない。 */
   readonly hiddenDays: number;
-  readonly onExpandedChange: (expanded: boolean) => void;
+  readonly onLoadMore: () => void;
+  readonly onCollapse: () => void;
   /** 定期同期の状態。未接続や未取得のときは出さない。 */
   readonly syncStatus: StravaCaloriesSyncStatus | undefined;
 }) => {
@@ -223,11 +224,18 @@ export const DailyCalorieBalanceList = ({ rows, baselineKcal, exerciseState, pen
             </tbody>
           </table>
         </div>
-        {hiddenDays > 0 && (
-          <div className="mt-3 flex justify-center">
-            <Button type="button" size="sm" variant="outline" aria-expanded={expanded} onClick={() => onExpandedChange(!expanded)}>
-              {expanded ? `直近 ${RECENT_BALANCE_DAYS} 日だけ表示` : `すべて表示（他 ${hiddenDays} 日）`}
-            </Button>
+        {(hiddenDays > 0 || expanded) && (
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            {hiddenDays > 0 && (
+              <Button type="button" size="sm" variant="outline" disabled={nutritionPending || exerciseState === "loading"} onClick={onLoadMore}>
+                {`さらに前の ${Math.min(RECENT_BALANCE_DAYS, hiddenDays)} 日を表示`}
+              </Button>
+            )}
+            {expanded && (
+              <Button type="button" size="sm" variant="outline" onClick={onCollapse}>
+                {`直近 ${RECENT_BALANCE_DAYS} 日に戻す`}
+              </Button>
+            )}
           </div>
         )}
         <figcaption className="mt-3 space-y-1 text-[0.7rem] leading-5 text-muted-foreground">

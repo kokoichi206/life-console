@@ -63,7 +63,8 @@ const meta = {
     onEditBaseline: fn(),
     expanded: false,
     hiddenDays: RECENT.hiddenDays,
-    onExpandedChange: fn(),
+    onLoadMore: fn(),
+    onCollapse: fn(),
     syncStatus: { lastJob: { status: "succeeded", at: "2026-09-14T06:12:00.000Z", errorCode: null }, backfill: { cursorTo: "2026-03-01", completedAt: null } },
   },
 } satisfies Meta<typeof DailyCalorieBalanceList>;
@@ -92,9 +93,9 @@ export const RecentDaysByDefault: Story = {
   play: async ({ canvas, userEvent, args }) => {
     await expect(canvas.getAllByRole("rowheader").map((header) => header.textContent)).toEqual(["9/13", "9/12", "9/11", "9/10", "9/9", "9/8", "9/7"]);
     await expect(canvas.queryByText(/9\/2〜9\/7/)).not.toBeInTheDocument();
-    const expand = canvas.getByRole("button", { name: "すべて表示（他 5 日）", expanded: false });
+    const expand = canvas.getByRole("button", { name: "さらに前の 5 日を表示" });
     await userEvent.click(expand);
-    await expect(args.onExpandedChange).toHaveBeenCalledWith(true);
+    await expect(args.onLoadMore).toHaveBeenCalled();
   },
 };
 
@@ -189,7 +190,7 @@ export const WithoutHiddenDays: Story = {
   args: { hiddenDays: 0 },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("+117")).toBeVisible();
-    await expect(canvas.queryByRole("button", { name: /すべて表示/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: /さらに前/ })).not.toBeInTheDocument();
     await expect(canvas.queryByRole("button", { name: /直近/ })).not.toBeInTheDocument();
   },
 };
@@ -281,10 +282,10 @@ export const PendingCalories: Story = {
 };
 
 export const GapDays: Story = {
-  name: "すべて表示で記録なしの日と空白期間を出す",
-  args: { rows: wholePeriodRows, expanded: true },
+  name: "追加表示で記録なしの日と空白期間を出す",
+  args: { rows: wholePeriodRows, expanded: true, hiddenDays: 0 },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("button", { name: "直近 7 日だけ表示", expanded: true })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "直近 7 日に戻す" })).toBeVisible();
     // 展開時は行が増えるので、高さを制限してキーボードで送れるようにする。
     await expect(canvas.getByRole("region", { name: "日別の収支" })).toBeVisible();
     await expect(canvas.getByText("9/2〜9/7 食事と運動の記録なし（6 日）")).toBeVisible();

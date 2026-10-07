@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { delay, http, HttpResponse } from "msw";
 import { useMemo } from "react";
-import { expect, fireEvent, waitFor, within } from "storybook/test";
+import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
 
 import { parseHealthSearch } from "./health-search";
 import { HealthRoutePage } from "./HealthRoutePage";
@@ -685,4 +685,58 @@ export const GoalMobileDark: Story = {
   ...Goal,
   globals: { theme: "dark", viewport: { value: "narrowWeight", isRotated: false } },
   parameters: { msw: { handlers: handlers(weights, { startDate: "2026-09-01", startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-12-31" }) }, viewport: { options: { narrowWeight: { name: "狭い画面", styles: { width: "390px", height: "844px" } } } } },
+};
+
+const balanceRangeRequests = fn();
+export const LoadOlderCalorieBalance: Story = {
+  name: "カロリー収支は API から前の 7 日だけ追加取得する",
+  beforeEach: () => { balanceRangeRequests.mockClear(); },
+  parameters: {
+    initialUrl: "/health?from=2026-09-02&to=2026-09-20",
+    msw: { handlers: [
+      http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+      http.get("*/api/v1/strava/calories/sync-status", () => HttpResponse.json({ data: { lastJob: { status: "succeeded", at: "2026-09-21T00:00:00Z", errorCode: null }, backfill: null } })),
+      http.get("*/api/v1/strava/calories", ({ request }) => {
+        const query = new URL(request.url).searchParams;
+        balanceRangeRequests("exercise", query.get("from"), query.get("to"));
+        return HttpResponse.json({ data: [] });
+      }),
+      http.get("*/api/v1/nutrition", async ({ request }) => {
+        const query = new URL(request.url).searchParams;
+        const from = query.get("from")!;
+        const to = query.get("to")!;
+        balanceRangeRequests("nutrition", from, to);
+        if (to !== "2026-09-20") await delay(200);
+        const days = (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1;
+        return HttpResponse.json({ data: Array.from({ length: days }, (_, index) => {
+          const date = new Date(Date.parse(to) - index * 86_400_000).toISOString().slice(0, 10);
+          return { mealId: date, photoId: null, occurredAt: `${date}T12:00:00+09:00`, manualCaloriesKcal: 500, estimate: null, analysisStatus: null, analysisSummary: null };
+        }) });
+      }),
+      ...handlers(weights, null, { dailyExpenditureKcal: 1500 }),
+    ] },
+  },
+  play: async ({ canvas, userEvent }) => {
+    const panel = within((await canvas.findByRole("heading", { name: "カロリー収支" })).closest("[data-slot=card]") as HTMLElement);
+    await expect(await panel.findByRole("rowheader", { name: "9/20" })).toBeVisible();
+    await waitFor(() => expect(balanceRangeRequests).toHaveBeenCalledTimes(2));
+    await userEvent.click(panel.getByRole("button", { name: "さらに前の 7 日を表示" }));
+    await expect(panel.getByRole("rowheader", { name: "9/20" })).toBeVisible();
+    await expect(await panel.findByRole("rowheader", { name: "9/7" })).toBeInTheDocument();
+    await waitFor(() => expect(balanceRangeRequests).toHaveBeenCalledTimes(4));
+    await userEvent.click(panel.getByRole("button", { name: "さらに前の 5 日を表示" }));
+    await expect(await panel.findByRole("rowheader", { name: "9/2" })).toBeInTheDocument();
+    await expect(panel.queryByRole("button", { name: /さらに前/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(balanceRangeRequests).toHaveBeenCalledTimes(6));
+    for (const kind of ["nutrition", "exercise"]) {
+      await expect(balanceRangeRequests).toHaveBeenCalledWith(kind, "2026-09-14", "2026-09-20");
+      await expect(balanceRangeRequests).toHaveBeenCalledWith(kind, "2026-09-07", "2026-09-13");
+      await expect(balanceRangeRequests).toHaveBeenCalledWith(kind, "2026-09-02", "2026-09-06");
+    }
+    await userEvent.click(panel.getByRole("button", { name: "直近 7 日に戻す" }));
+    await expect(panel.queryByRole("rowheader", { name: "9/7" })).not.toBeInTheDocument();
+    await userEvent.click(panel.getByRole("button", { name: "さらに前の 7 日を表示" }));
+    await expect(await panel.findByRole("rowheader", { name: "9/7" })).toBeInTheDocument();
+    await expect(balanceRangeRequests).toHaveBeenCalledTimes(6);
+  },
 };

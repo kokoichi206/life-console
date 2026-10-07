@@ -1,7 +1,7 @@
 import type { MealNutrition } from "@life-console/contracts";
 import { describe, expect, it } from "vitest";
 
-import { calorieBalanceRows, recentBalanceWindow, type CalorieBalanceRow, type ExerciseInput } from "./calorie-balance";
+import { calorieBalanceRows, calorieBalanceRanges, recentBalanceWindow, type CalorieBalanceRow, type ExerciseInput } from "./calorie-balance";
 import type { ExerciseDayCalories } from "./exercise-calories";
 
 const meal = (mealId: string, occurredAt: string, caloriesKcal: number | null): MealNutrition => ({
@@ -86,4 +86,12 @@ describe("日別のカロリー収支", () => {
     expect(days(rows)).toHaveLength(1);
     expect(days(rows)[0]).toMatchObject({ date: "2026-09-08", intakeKcal: 1900, totalMeals: 1 });
   });
+});
+
+it("追加範囲を 7 日ごとに分け、期間の先頭では残りの日だけ取得する", () => {
+  const first = calorieBalanceRanges("2026-09-02", "2026-09-20", 7);
+  expect(first).toEqual([{ from: "2026-09-14", to: "2026-09-20" }]);
+  const next = calorieBalanceRanges("2026-09-02", "2026-09-20", 14);
+  expect(next).toEqual([...first, { from: "2026-09-07", to: "2026-09-13" }]);
+  expect(calorieBalanceRanges("2026-09-02", "2026-09-20", 21)).toEqual([...next, { from: "2026-09-02", to: "2026-09-06" }]);
 });

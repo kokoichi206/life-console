@@ -16,8 +16,9 @@ export const createHealthQueries = (read: ReturnType<typeof createHealthReadApi>
   calorieBaselineQuery: queryOptions({ queryKey: [...scope, "calorie-baseline"], queryFn: read.calorieBaseline }),
   stravaStatusQuery: queryOptions({ queryKey: [...scope, "strava-status"], queryFn: read.stravaStatus, retry: false }),
   mealDayCountsQuery: (from: string, to: string) => queryOptions({ queryKey: [...scope, "meal-day-counts", from, to], queryFn: () => read.mealDayCounts(from, to) }),
-  nutritionQuery: queryOptions({
-    queryKey: [...scope, "nutrition"], queryFn: read.nutrition,
+  nutritionQueryKey: [...scope, "nutrition"],
+  nutritionQuery: (from: string, to: string) => queryOptions({
+    queryKey: [...scope, "nutrition", from, to], queryFn: () => read.nutrition(from, to), staleTime: 60_000,
   }),
   stravaCaloriesSyncStatusQuery: (enabled: boolean) => queryOptions({
     queryKey: [...scope, "strava-calories-sync-status"], queryFn: read.stravaCaloriesSyncStatus, enabled, retry: false,
@@ -25,7 +26,7 @@ export const createHealthQueries = (read: ReturnType<typeof createHealthReadApi>
     refetchInterval: STRAVA_CALORIES_POLL_INTERVAL_MS,
   }),
   stravaCaloriesQuery: (from: string, to: string, enabled: boolean) => queryOptions({
-    queryKey: [...scope, "strava-calories", from, to], queryFn: ({ signal }) => read.stravaCalories(from, to, signal), enabled, retry: false,
+    queryKey: [...scope, "strava-calories", from, to], queryFn: ({ signal }) => read.stravaCalories(from, to, signal), staleTime: 60_000, enabled, retry: false,
     refetchInterval: (query) => query.state.data?.some((entry) => entry.status === "pending") === true ? STRAVA_CALORIES_POLL_INTERVAL_MS : 60_000,
   }),
   stravaActivitiesKey: (athleteId: number | null | undefined, from: string, to: string) => [...scope, "strava-activities", athleteId, from, to],

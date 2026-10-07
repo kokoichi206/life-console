@@ -8,12 +8,25 @@ const ONE_DAY_MILLISECONDS = 86_400_000;
 /** 既定で表示する日数。表示期間が長くても直近だけを出し、残りは操作で広げる。 */
 export const RECENT_BALANCE_DAYS = 7;
 
-/** 終端 `to` から数えた直近 {@link RECENT_BALANCE_DAYS} 日の窓と、そこから外れる日数。 */
-export const recentBalanceWindow = (from: string, to: string): { readonly from: string; readonly hiddenDays: number } => {
-  const recentStart = Date.parse(`${to}T00:00:00Z`) - (RECENT_BALANCE_DAYS - 1) * ONE_DAY_MILLISECONDS;
+/** 終端 `to` から数えた指定日数の窓と、そこから外れる日数。 */
+export const recentBalanceWindow = (from: string, to: string, days = RECENT_BALANCE_DAYS): { readonly from: string; readonly hiddenDays: number } => {
+  const recentStart = Date.parse(`${to}T00:00:00Z`) - (days - 1) * ONE_DAY_MILLISECONDS;
   const hiddenDays = Math.round((recentStart - Date.parse(`${from}T00:00:00Z`)) / ONE_DAY_MILLISECONDS);
   if (hiddenDays <= 0) return { from, hiddenDays: 0 };
   return { from: new Date(recentStart).toISOString().slice(0, 10), hiddenDays };
+};
+
+/** 既に表示した日を再取得せず、7 日単位の範囲をそれぞれキャッシュする。 */
+export const calorieBalanceRanges = (from: string, to: string, days: number): ReadonlyArray<{ readonly from: string; readonly to: string }> => {
+  const start = recentBalanceWindow(from, to, days).from;
+  const ranges: { from: string; to: string }[] = [];
+  for (let end = Date.parse(to); end >= Date.parse(start); end -= RECENT_BALANCE_DAYS * ONE_DAY_MILLISECONDS) {
+    ranges.push({
+      from: new Date(Math.max(Date.parse(start), end - (RECENT_BALANCE_DAYS - 1) * ONE_DAY_MILLISECONDS)).toISOString().slice(0, 10),
+      to: new Date(end).toISOString().slice(0, 10),
+    });
+  }
+  return ranges;
 };
 
 export type ExerciseInput

@@ -19,14 +19,14 @@ export const HealthRouteContent = ({ search, navigate }: {
     <HealthPage
       search={search}
       onRangeChange={(range) => {
-        void navigate({ search: { ...search, range: undefined, from: undefined, to: undefined, ...range }, replace: true, resetScroll: false });
+        void navigate({ search: { ...search, range: undefined, from: undefined, to: undefined, calories: undefined, ...range }, replace: true, resetScroll: false });
       }}
       onOverlayChange={(overlay) => {
         void navigate({ search: { ...search, overlay }, replace: true, resetScroll: false });
       }}
-      caloriesExpanded={search.calories === "all"}
-      onCaloriesExpandedChange={(expanded) => {
-        void navigate({ search: { ...search, calories: expanded ? "all" : undefined }, replace: true, resetScroll: false });
+      calorieDays={search.calories ?? 7}
+      onCalorieDaysChange={(days) => {
+        void navigate({ search: { ...search, calories: days > 7 ? days : undefined }, replace: true, resetScroll: false });
       }}
       goalEntryOpen={search.entry === "goal"}
       onGoalEntryOpenChange={(open) => {
