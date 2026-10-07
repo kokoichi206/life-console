@@ -280,11 +280,14 @@ export const WeeklyExerciseAndMeals: Story = {
   name: "週を選んで体重・運動・食事を一緒に振り返る",
   parameters: { initialUrl: "/health?running=show&from=2026-08-31&to=2026-09-13", msw: { handlers: [
     http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
-    http.get("*/api/v1/strava/activities", ({ request }) => HttpResponse.json({ data: new URL(request.url).searchParams.get("page") === "1"
-      ? {
-          activities: [{ id: "123", name: "架空の朝ラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 15000, movingSeconds: 5400, elapsedSeconds: 5500, averageHeartrate: 145 }], nextPage: 2,
-        }
-      : { activities: [], nextPage: null } })),
+    http.get("*/api/v1/strava/activities", async ({ request }) => {
+      await delay(1_200);
+      return HttpResponse.json({ data: new URL(request.url).searchParams.get("page") === "1"
+        ? {
+            activities: [{ id: "123", name: "架空の朝ラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 15000, movingSeconds: 5400, elapsedSeconds: 5500, averageHeartrate: 145 }], nextPage: 2,
+          }
+        : { activities: [], nextPage: null } });
+    }),
     http.get("*/api/v1/meal-day-counts", () => HttpResponse.json({ data: [{ occurredAt: "2026-09-07", count: 1 }, { occurredAt: "2026-08-31", count: 1 }] })),
     http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [
       { id: "current-meal", photoId: null, memo: "架空の食事メモ・今週", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },

@@ -4,8 +4,12 @@ import { http, HttpResponse } from "msw";
 import { setupWorker } from "msw/browser";
 import { mswLoader } from "msw-storybook-addon/csf3";
 import { Suspense, useMemo } from "react";
+import { configure } from "storybook/test";
 
 import "../src/styles.css";
+
+// CI の並列実行では、非同期の画面表示が既定の 1 秒を超えるため、状態を待つ期限を共有する。
+configure({ asyncUtilTimeout: 10_000 });
 
 const preview: Preview = {
   tags: ["autodocs"],

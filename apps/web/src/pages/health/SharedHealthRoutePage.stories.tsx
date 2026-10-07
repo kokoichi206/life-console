@@ -45,7 +45,7 @@ export const ReadOnly: Story = {
   play: async ({ canvas, canvasElement, userEvent }) => {
     await expect(await canvas.findByText(/読み取り専用です/)).toBeVisible();
     for (const name of ["体重", "食事", "目標を設定", "運動を同期", "接続を解除", "未解析の食事をまとめて解析"]) {
-      await waitFor(() => expect(canvas.getByRole("button", { name: new RegExp(`^${name}$`) })).toBeDisabled(), { timeout: 10_000 });
+      await waitFor(() => expect(canvas.getByRole("button", { name: new RegExp(`^${name}$`) })).toBeDisabled());
     }
     await expect(canvas.getByLabelText("CSV を取り込む")).toBeDisabled();
     await expect(canvas.queryByRole("dialog")).not.toBeInTheDocument();
