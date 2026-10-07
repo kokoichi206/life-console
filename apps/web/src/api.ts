@@ -70,7 +70,7 @@ export const createHealthReadApi = (baseUrl: string) => {
     mealsForPeriod: async (from: string, to: string) => unwrap<ReadonlyArray<Meal>>(await readClient.meals.$get({ query: { from, to } })),
     mealGallery: async (to: string) => unwrap<MealGalleryPage>(await readClient["meal-gallery"].$get({ query: { to } })),
     mealDayCounts: async (from: string, to: string) => unwrap<ReadonlyArray<MealDayCount>>(await readClient["meal-day-counts"].$get({ query: { from, to } })),
-    nutrition: async () => unwrap<ReadonlyArray<MealNutrition>>(await readClient.nutrition.$get()),
+    nutrition: async (from: string, to: string) => unwrap<ReadonlyArray<MealNutrition>>(await readClient.nutrition.$get({ query: { from, to } })),
     meals: async () => unwrap<ReadonlyArray<Meal>>(await readClient.meals.$get({ query: {} })),
     weightGoal: async () => unwrap<WeightGoal | null>(await readClient["weight-goal"].$get()),
     calorieBaseline: async () => unwrap<CalorieBaseline | null>(await readClient["calorie-baseline"].$get()),

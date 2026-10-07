@@ -75,6 +75,6 @@ pnpm storybook:test
 
 Storybook では MSW が架空の応答を返します。未定義の API 操作は 501 とし、アプリ用の API proxy は無効にしています。会話、メール、体重などの実データや外部サービスの認証は使いません。生成された Service Worker は `.storybook/public` に置き、アプリの配信物には含めません。
 
-Vitest Browser Mode で stories を実際に描画し、play の操作とアクセシビリティ検査を行います。`pnpm check` に静的ビルドとブラウザテストも含めています。共通 UI を追加して story を忘れた場合は ESLint が失敗します。
+Vitest Browser Mode で stories を実際に描画し、play の操作とアクセシビリティ検査を行います。非同期の表示・操作準備は `findBy` / `waitFor` で待ち、待機期限は `.storybook/preview.tsx` の `asyncUtilTimeout`（10 秒）で共有します。API の呼び出し件数だけでは描画やボタンの有効化は保証されないため、操作前に画面の状態も確認します。`pnpm check` に静的ビルドとブラウザテストも含めています。共通 UI を追加して story を忘れた場合は ESLint が失敗します。
 
 `src/styles.css` は Tailwind の読込、テーマの CSS 変数、ベーススタイルを持ちます。ページごとのスタイルをまとめる場所ではありません。

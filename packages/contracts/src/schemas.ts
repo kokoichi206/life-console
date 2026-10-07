@@ -142,8 +142,8 @@ export const createNutritionEstimateSchema = z.object({
 export const createWeightSchema = z.object({
   source: weightSourceSchema,
   sourceKey: z.string().trim().min(1).max(240),
-  weightKg: z.number().positive().max(500),
-  bodyFatPercent: z.number().min(0).max(100).optional(),
+  weightKg: z.number().min(30).max(110),
+  bodyFatPercent: z.number().min(5).max(40).optional(),
   occurredAt: isoDateTimeSchema,
 });
 

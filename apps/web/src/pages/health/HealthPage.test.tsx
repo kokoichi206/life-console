@@ -17,7 +17,7 @@ describe("体重の記録頻度", () => {
     client.setQueryData(mealsQuery.queryKey, []);
     client.setQueryData(weightGoalQuery.queryKey, null);
     client.setQueryData(calorieBaselineQuery.queryKey, null);
-    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { search: {}, onRangeChange: () => undefined, onOverlayChange: () => undefined, caloriesExpanded: false, onCaloriesExpandedChange: () => undefined, goalEntryOpen: false, onGoalEntryOpenChange: () => undefined, baselineEntryOpen: false, onBaselineEntryOpenChange: () => undefined, selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
+    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { search: {}, onRangeChange: () => undefined, onOverlayChange: () => undefined, calorieDays: 7, onCalorieDaysChange: () => undefined, goalEntryOpen: false, onGoalEntryOpenChange: () => undefined, baselineEntryOpen: false, onBaselineEntryOpenChange: () => undefined, selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
     expect(html.replace(/<[^>]*>/g, "").replace(/\s+/g, "")).toContain("記録頻度2/8日25%");
     client.clear();
   });
@@ -30,7 +30,7 @@ describe("体重の記録頻度", () => {
     client.setQueryData(mealsQuery.queryKey, []);
     client.setQueryData(weightGoalQuery.queryKey, null);
     client.setQueryData(calorieBaselineQuery.queryKey, null);
-    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { search: { from: "2026-08-01", to: "2026-12-31" }, onRangeChange: () => undefined, onOverlayChange: () => undefined, caloriesExpanded: false, onCaloriesExpandedChange: () => undefined, goalEntryOpen: false, onGoalEntryOpenChange: () => undefined, baselineEntryOpen: false, onBaselineEntryOpenChange: () => undefined, selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
+    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client, children: createElement(HealthPage, { search: { from: "2026-08-01", to: "2026-12-31" }, onRangeChange: () => undefined, onOverlayChange: () => undefined, calorieDays: 7, onCalorieDaysChange: () => undefined, goalEntryOpen: false, onGoalEntryOpenChange: () => undefined, baselineEntryOpen: false, onBaselineEntryOpenChange: () => undefined, selectedMealId: undefined, onSelectMeal: () => undefined, mealEntryOpen: false, onMealEntryOpenChange: () => undefined, weightEntryOpen: false, onWeightEntryOpenChange: () => undefined }) }));
     const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
     expect(html).toMatch(new RegExp(`aria-label="表示終了日"[^>]*value="${today}"`));
     client.clear();

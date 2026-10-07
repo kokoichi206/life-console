@@ -54,6 +54,25 @@ export const PreviousWeight: Story = {
   },
 };
 export const Dark: Story = { name: "ダーク", globals: { theme: "dark" } };
+export const WheelLimits: Story = {
+  name: "ホイールで入力範囲の上下限を選ぶ",
+  play: async ({ canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    const kilograms = await screen.findByRole("spinbutton", { name: "体重の整数部" });
+    await userEvent.click(kilograms);
+    await userEvent.keyboard("{End}");
+    await expect(kilograms).toHaveAttribute("aria-valuenow", "110");
+    const decimal = screen.getByRole("spinbutton", { name: "体重の小数部" });
+    await expect(decimal).toHaveAttribute("aria-valuenow", "0");
+    await expect(decimal).toHaveAttribute("aria-valuemax", "0");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect(kilograms).toHaveAttribute("aria-valuenow", "110");
+    await userEvent.keyboard("{Home}{ArrowDown}");
+    await expect(kilograms).toHaveAttribute("aria-valuenow", "30");
+    await expect(decimal).toHaveAttribute("aria-valuemin", "0");
+    await expect(screen.getByRole("button", { name: "体重を保存" })).toBeEnabled();
+  },
+};
 export const FirstRecord: Story = {
   name: "初めての記録",
   args: { previousWeight: undefined },
@@ -61,6 +80,48 @@ export const FirstRecord: Story = {
     const screen = within(canvasElement.ownerDocument.body);
     await expect(await screen.findByRole("spinbutton", { name: "体重 (kg)" })).toHaveValue(null);
     await expect(screen.getByRole("button", { name: "体重を保存" })).toBeDisabled();
+  },
+};
+export const InvalidMeasurements: Story = {
+  name: "不正な値を保存できない",
+  args: { previousWeight: undefined },
+  play: async ({ canvasElement, userEvent, args }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    const weight = await screen.findByRole("spinbutton", { name: "体重 (kg)" });
+    const bodyFat = screen.getByLabelText("体脂肪率（%・任意）");
+    const save = screen.getByRole("button", { name: "体重を保存" });
+    for (const value of ["0", "29.9", "110.1"]) {
+      await fireEvent.change(weight, { target: { value } });
+      await expect(weight).toHaveAttribute("aria-invalid", "true");
+      await expect(screen.getByRole("alert")).toHaveTextContent("体重は 30〜110 kg");
+      await expect(save).toBeDisabled();
+      await expect(screen.getByRole("button", { name: "ホイールで選ぶ" })).toBeDisabled();
+      await fireEvent.submit(weight.closest("form")!);
+      await expect(savedWeight).not.toHaveBeenCalled();
+    }
+    for (const value of ["30", "110"]) {
+      await fireEvent.change(weight, { target: { value } });
+      await expect(save).toBeEnabled();
+    }
+    await fireEvent.change(weight, { target: { value: "81.4" } });
+    for (const value of ["0", "4.9", "40.1"]) {
+      await fireEvent.change(bodyFat, { target: { value } });
+      await expect(bodyFat).toHaveAttribute("aria-invalid", "true");
+      await expect(screen.getByRole("alert")).toHaveTextContent("体脂肪率は 5〜40 %");
+      await expect(save).toBeDisabled();
+      await fireEvent.submit(weight.closest("form")!);
+      await expect(savedWeight).not.toHaveBeenCalled();
+    }
+    for (const value of ["5", "40", ""]) {
+      await fireEvent.change(bodyFat, { target: { value } });
+      await expect(save).toBeEnabled();
+      await expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    }
+    await userEvent.type(bodyFat, "21.3");
+    await userEvent.click(save);
+    await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
+    await expect(savedWeight).toHaveBeenCalledTimes(1);
+    await expect(savedWeight).toHaveBeenCalledWith(expect.objectContaining({ weightKg: 81.4, bodyFatPercent: 21.3 }));
   },
 };
 export const SaveSelectedWeightAndTime: Story = {

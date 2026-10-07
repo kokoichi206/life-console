@@ -126,3 +126,24 @@ describe("解析予約後の手入力", () => {
     } finally { database.close(); }
   });
 });
+
+it("栄養 API は日本時間の指定範囲だけを返し、不完全な範囲を拒否する", async () => {
+  const { database, repository, binding } = createJobStorage();
+  const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
+  try {
+    for (const [id, occurredAt] of [
+      ["before", "2026-09-06T14:59:59Z"],
+      ["start", "2026-09-06T15:00:00Z"],
+      ["end", "2026-09-13T23:59:59+09:00"],
+      ["after", "2026-09-13T15:00:00Z"],
+    ] as const) {
+      await repository.createMealAndQueueNutrition(id, { clientId: id, photoId: null, memo: "", occurredAt, tags: [], manualCaloriesKcal: 500 }, "2026-09-14T00:00:00Z");
+    }
+    const response = await app.request("/api/v1/nutrition?from=2026-09-07&to=2026-09-13", {}, environment);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: [{ mealId: "end" }, { mealId: "start" }] });
+    for (const query of ["from=2026-09-07", "to=2026-09-13", "from=2026-09-14&to=2026-09-13", "from=invalid&to=2026-09-13"]) {
+      expect((await app.request(`/api/v1/nutrition?${query}`, {}, environment)).status).toBe(400);
+    }
+  } finally { database.close(); }
+});

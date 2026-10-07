@@ -1,5 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog";
-import type { WeightPoint } from "@life-console/contracts";
+import { createWeightSchema, type WeightPoint } from "@life-console/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Clock3, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -24,13 +24,14 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
   const queryClient = useQueryClient();
   const [weight, setWeight] = useState(() => previousWeight?.weightKg.toFixed(1) ?? "");
   const [bodyFatPercent, setBodyFatPercent] = useState("");
-  const [numericEntry, setNumericEntry] = useState(previousWeight === undefined);
+  const [numericEntry, setNumericEntry] = useState(() => !createWeightSchema.shape.weightKg.safeParse(Number(weight)).success);
   const [occurredAt, setOccurredAt] = useState(currentLocalDateTime);
   const [date, time] = occurredAt.split("T");
   const tenths = Math.round(Number(weight) * 10);
   const kilograms = Math.floor(tenths / 10);
   const decimal = tenths % 10;
-  const validWeight = weight !== "" && Number(weight) >= 0.1 && Number(weight) <= 500;
+  const validWeight = weight !== "" && createWeightSchema.shape.weightKg.safeParse(Number(weight)).success;
+  const validBodyFat = bodyFatPercent === "" || createWeightSchema.shape.bodyFatPercent.safeParse(Number(bodyFatPercent)).success;
   const createWeight = useMutation({
     mutationFn: api.createWeight,
     onSuccess: async () => {
@@ -43,6 +44,7 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
   });
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!validWeight || !validBodyFat) return;
     createWeight.mutate({ source: "manual", sourceKey: crypto.randomUUID(), weightKg: Number(weight), ...(bodyFatPercent === "" ? {} : { bodyFatPercent: Number(bodyFatPercent) }), occurredAt: new Date(occurredAt).toISOString() });
   };
 
@@ -72,18 +74,19 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
           </p>
           {numericEntry
             ? (
-                <div className="flex h-60 items-center justify-center px-12">
+                <div className="flex h-60 flex-col items-center justify-center gap-2 px-12">
                   <Field label="体重 (kg)" className="w-full">
-                    <Input autoFocus required type="number" min="0.1" max="500" step="0.1" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} className="h-16 text-center text-3xl! tabular-nums" />
+                    <Input autoFocus required type="number" min="30" max="110" step="0.1" inputMode="decimal" aria-invalid={weight !== "" && !validWeight} aria-describedby={weight !== "" && !validWeight ? "weight-error" : undefined} value={weight} onChange={(event) => setWeight(event.target.value)} className="h-16 text-center text-3xl! tabular-nums" />
                   </Field>
+                  {weight !== "" && !validWeight && <div id="weight-error"><FormError>体重は 30〜110 kg で入力してください。</FormError></div>}
                 </div>
               )
             : (
                 <div inert={createWeight.isPending} className="relative mt-1 grid grid-cols-[1fr_20px_1fr_48px] items-center" aria-label="体重の選択">
                   <div className="pointer-events-none absolute inset-x-0 top-24 h-12 rounded-2xl bg-primary/8 dark:bg-input/30" />
-                  <WeightWheel label="体重の整数部" value={kilograms} minimum={0} maximum={500} onChange={(value) => setWeight((Math.min(5000, Math.max(1, value * 10 + decimal)) / 10).toFixed(1))} />
+                  <WeightWheel label="体重の整数部" value={kilograms} minimum={30} maximum={110} onChange={(value) => setWeight((Math.min(1100, value * 10 + decimal) / 10).toFixed(1))} />
                   <span className="z-10 text-3xl" aria-hidden="true">.</span>
-                  <WeightWheel label="体重の小数部" value={decimal} minimum={kilograms === 0 ? 1 : 0} maximum={kilograms === 500 ? 0 : 9} onChange={(value) => setWeight(((kilograms * 10 + value) / 10).toFixed(1))} />
+                  <WeightWheel label="体重の小数部" value={decimal} minimum={0} maximum={kilograms === 110 ? 0 : 9} onChange={(value) => setWeight(((kilograms * 10 + value) / 10).toFixed(1))} />
                   <span className="z-10 text-xl text-foreground" aria-hidden="true">kg</span>
                 </div>
               )}
@@ -102,9 +105,10 @@ const WeightEntryForm = ({ previousWeight, onSaved }: {
           </Button>
         </div>
         <Field label="体脂肪率（%・任意）" className="mt-4">
-          <Input type="number" min="0" max="100" step="0.1" inputMode="decimal" value={bodyFatPercent} onChange={(event) => setBodyFatPercent(event.target.value)} />
+          <Input type="number" min="5" max="40" step="0.1" inputMode="decimal" aria-invalid={!validBodyFat} aria-describedby={!validBodyFat ? "body-fat-error" : undefined} value={bodyFatPercent} onChange={(event) => setBodyFatPercent(event.target.value)} />
         </Field>
-        <Button type="submit" disabled={!validWeight || createWeight.isPending} className="mt-6 h-12 w-full rounded-2xl text-base">
+        {!validBodyFat && <div id="body-fat-error" className="mt-2"><FormError>体脂肪率は 5〜40 % で入力してください。</FormError></div>}
+        <Button type="submit" disabled={!validWeight || !validBodyFat || createWeight.isPending} className="mt-6 h-12 w-full rounded-2xl text-base">
           {createWeight.isPending ? "保存しています…" : "体重を保存"}
         </Button>
       </fieldset>

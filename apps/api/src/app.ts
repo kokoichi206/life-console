@@ -266,7 +266,10 @@ const healthReadRoutes = new Hono<HonoEnvironment>()
   .get("/strava/activities", zValidator("query", stravaActivityQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activities(context.req.valid("query"))))
   .get("/strava/calories", zValidator("query", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activityCalories(context.req.valid("query"))))
   .get("/strava/calories/sync-status", async (context) => respond(context, await createStravaHandlers(context.get("environment")).syncStatus()))
-  .get("/nutrition", async (context) => respond(context, await createNutritionHandlers(context.get("environment")).list()))
+  .get("/nutrition", zValidator("query", mealPeriodQuerySchema), async (context) => {
+    const period = context.req.valid("query");
+    return respond(context, await createNutritionHandlers(context.get("environment")).list(period.from === undefined ? undefined : { from: period.from, to: period.to }));
+  })
   .get("/meals", zValidator("query", mealPeriodQuerySchema), async (context) => {
     const period = context.req.valid("query");
     return respond(context, await createHandlers(context.get("environment")).listMeals(period.from === undefined ? undefined : { from: period.from, to: period.to }));
