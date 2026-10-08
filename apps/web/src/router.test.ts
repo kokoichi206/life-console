@@ -12,6 +12,23 @@ const createTestRouter = (entry: string) => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("アプリのルーティング", () => {
+  it.each([
+    { path: "/health", calories: [14] },
+    { path: "/health", calories: { toString: null } },
+    { path: `/share/health/${"ab".repeat(32)}`, calories: [14] },
+    { path: `/share/health/${"ab".repeat(32)}`, calories: { toString: null } },
+  ])("$path で JSON の不正な表示日数 $calories があっても健康ページを読み込む", async ({ path, calories }) => {
+    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") || url.endsWith("calorie-baseline") ? null : [] })));
+    vi.stubGlobal("fetch", fetchResponse);
+    const search = new URLSearchParams({ range: "d90", calories: JSON.stringify(calories) });
+    const testRouter = createTestRouter(`${path}?${search}`);
+    await testRouter.load();
+    await testRouter.navigate({ to: ".", search: true, replace: true });
+    expect(testRouter.state.matches.at(-1)?.status).toBe("success");
+    expect(testRouter.state.location.search).toEqual({ range: "d90" });
+    expect(testRouter.state.matches.at(-1)?.search).toEqual({ range: "d90" });
+  });
+
   it("URL の不正なフィルターと未定義項目を、遷移後の画面へ引き継がない", async () => {
     const testRouter = createTestRouter("/tasks?view=tasks&service=%5B%22gmail%22%5D&period=invalid&unexpected=keep");
     await testRouter.load();

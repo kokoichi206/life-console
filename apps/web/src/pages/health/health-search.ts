@@ -16,6 +16,7 @@ export const parseHealthSearch = (search: Record<string, unknown>): HealthSearch
   const range = typeof search.range === "string" && /^(d30|d90|all|year-\d{4})$/.test(search.range) ? search.range as WeightRange : undefined;
   const from = weightGoalSchema.shape.targetDate.unwrap().safeParse(search.from);
   const to = weightGoalSchema.shape.targetDate.unwrap().safeParse(search.to);
+  const calories = typeof search.calories === "string" ? Number(search.calories) : search.calories;
   return {
     ...(search.strava === "connected" || search.strava === "error" ? { strava: search.strava } : {}),
     ...(search.entry === "weight" || search.entry === "meal" || search.entry === "goal" || search.entry === "baseline" ? { entry: search.entry } : {}),
@@ -23,8 +24,8 @@ export const parseHealthSearch = (search: Record<string, unknown>): HealthSearch
     ...(search.overlay === "running" || search.overlay === "body-fat" || search.overlay === "exercise-calories"
       ? { overlay: search.overlay }
       : search.running === "show" ? { overlay: "running" as const } : {}),
-    ...(Number.isSafeInteger(Number(search.calories)) && Number(search.calories) > 7 && Number(search.calories) % 7 === 0
-      ? { calories: Number(search.calories) }
+    ...(typeof calories === "number" && Number.isSafeInteger(calories) && calories > 7 && calories % 7 === 0
+      ? { calories }
       : {}),
     ...(range === undefined ? {} : { range }),
     ...(from.success && to.success && from.data < to.data ? { from: from.data, to: to.data } : {}),
