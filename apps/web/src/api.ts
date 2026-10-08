@@ -143,11 +143,6 @@ export const api = {
   saveAbstinenceGoal: async (input: AbstinenceGoalInput | null) => unwrap<null>(await client.api.v1.abstinence.goal.$put({ json: input })),
   createAbstinenceEvent: async (input: AbstinenceEventInput) => unwrap<null>(await client.api.v1.abstinence.events.$post({ json: input })),
   createWeight: async (input: Parameters<typeof client.api.v1.weights.$post>[0]["json"]) => unwrap<null>(await client.api.v1.weights.$post({ json: input })),
-  importWeightCsv: async (csv: string) => unwrap<number>(await fetch("/api/v1/weights/import", {
-    method: "POST",
-    headers: { "Content-Type": "text/csv" },
-    body: csv,
-  })),
   financeSummary: async () => unwrap<FinanceSummary>(await client.api.v1.finance.summary.$get()),
   createFinanceTransaction: async (input: Parameters<typeof client.api.v1.finance.transactions.$post>[0]["json"]) => unwrap<null>(await client.api.v1.finance.transactions.$post({ json: input })),
   createFinanceAdjustment: async (input: Parameters<typeof client.api.v1.finance.adjustments.$post>[0]["json"]) => unwrap<null>(await client.api.v1.finance.adjustments.$post({ json: input })),

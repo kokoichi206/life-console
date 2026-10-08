@@ -1,12 +1,10 @@
 import { calculate7DayMovingAverage, weightCalendarDate, weightCalendarDayTimestamp } from "@life-console/contracts";
-import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useInfiniteQuery, useQueries, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
-import { api } from "../../api";
-import { Eyebrow, Field, FormError, Panel } from "../../components/DesignSystem";
+import { FormError, Panel } from "../../components/DesignSystem";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/input";
 
 import { CalorieBaselineDialog } from "./_components/CalorieBaselineDialog";
 import { DailyCalorieBalanceList, type ExerciseTrackingState } from "./_components/DailyCalorieBalanceList";
@@ -56,7 +54,6 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, calorieDays
   readonly onWeightEntryOpenChange: (open: boolean) => void;
 }) => {
   const { read, readOnly, calorieBaselineQuery, mealDayCountsQuery, mealGalleryQueryKey, nutritionQuery, stravaCaloriesQuery, stravaCaloriesSyncStatusQuery, weightsQuery, weightGoalQuery } = useHealthQueries();
-  const queryClient = useQueryClient();
   const { data: weights } = useSuspenseQuery(weightsQuery);
   const { data: weightGoal } = useSuspenseQuery(weightGoalQuery);
   const { data: calorieBaseline } = useSuspenseQuery(calorieBaselineQuery);
@@ -160,17 +157,6 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, calorieDays
     ? 0
     : Math.round((weightCalendarDayTimestamp(lastVisibleWeight.occurredAt) - weightCalendarDayTimestamp(firstVisibleWeight.occurredAt)) / ONE_DAY_MILLISECONDS) + 1;
   const periodChange = firstVisibleWeight === undefined || lastVisibleWeight === undefined ? undefined : lastVisibleWeight.weightKg - firstVisibleWeight.weightKg;
-  const importCsv = useMutation({
-    mutationFn: async (file: File) => api.importWeightCsv(await file.text()),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["weights"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-  });
-  const selectWeightCsv = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file !== undefined) importCsv.mutate(file);
-  };
 
   return (
     <>
@@ -293,16 +279,6 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, calorieDays
       {mealGallery.isPending && <p role="status">食事を読み込んでいます。</p>}
       {mealGallery.error !== null && <FormError>{mealGallery.error.message}</FormError>}
       {mealGallery.data !== undefined && <MealGallery meals={galleryMeals} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} hasMore={mealGallery.hasNextPage} loadingMore={mealGallery.isFetchingNextPage} onLoadMore={() => { void mealGallery.fetchNextPage(); }} periodLabel="新しい順・直近 7 日間" />}
-      <div>
-        <Panel mobileLayout="section" className="gap-4 px-5">
-          <div className="space-y-1.5">
-            <Eyebrow className="max-sm:hidden">WEIGHT IMPORT</Eyebrow>
-            <h2 className="text-xl font-semibold sm:text-base">体重の CSV 取り込み</h2>
-          </div>
-          <Field label="CSV を取り込む"><Input disabled={readOnly} type="file" accept=".csv,text/csv" onChange={selectWeightCsv} /></Field>
-          {importCsv.error !== null && <FormError>{importCsv.error.message}</FormError>}
-        </Panel>
-      </div>
     </>
   );
 };
