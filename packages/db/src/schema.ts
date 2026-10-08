@@ -1,4 +1,5 @@
 import { workConfirmationKinds, workConfirmationCompletedBy, workConfirmationNotificationStatuses } from "@life-console/domain";
+import { calendarEventSources, calendarEventStatuses, calendarReminderSlots, calendarReminderStatuses, tokushimaCollectionDistricts } from "@life-console/domain";
 import { taskAreas, agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, stravaCaloriesStatuses, taskStatuses, weightSources } from "@life-console/domain";
 import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
@@ -48,6 +49,32 @@ export const replyDrafts = sqliteTable("reply_drafts", {
   editedAt: text("edited_at"),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const collectionSettings = sqliteTable("collection_settings", {
+  id: integer("id").primaryKey(), district: text("district", { enum: tokushimaCollectionDistricts }).notNull(),
+  previousDayTime: text("previous_day_time"), sameDayTime: text("same_day_time"),
+  notificationsEnabled: integer("notifications_enabled", { mode: "boolean" }).notNull(), updatedAt: text("updated_at").notNull(),
+});
+export const calendarEvents = sqliteTable("calendar_events", {
+  id: text("id").primaryKey(), source: text("source", { enum: calendarEventSources }).notNull(),
+  calendarKey: text("calendar_key").notNull(), sourceKey: text("source_key").notNull(), title: text("title").notNull(),
+  date: text("date").notNull(), notes: text("notes").notNull(), sourceUrl: text("source_url").notNull(),
+  status: text("status", { enum: calendarEventStatuses }).notNull(), ...timestamps,
+}, (table) => [uniqueIndex("calendar_source_uidx").on(table.source, table.sourceKey), index("calendar_dates_idx").on(table.calendarKey, table.date)]);
+export const calendarPreparations = sqliteTable("calendar_preparations", {
+  eventId: text("event_id").primaryKey().references(() => calendarEvents.id),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }), appliedDueAt: text("applied_due_at").notNull(),
+}, (table) => [uniqueIndex("calendar_preparation_task_uidx").on(table.taskId)]);
+export const calendarReminders = sqliteTable("calendar_reminders", {
+  id: text("id").primaryKey(), eventId: text("event_id").notNull().references(() => calendarEvents.id),
+  slot: text("slot", { enum: calendarReminderSlots }).notNull(), dueAt: text("due_at").notNull(), expiresAt: text("expires_at").notNull(),
+  status: text("status", { enum: calendarReminderStatuses }).notNull(),
+}, (table) => [uniqueIndex("calendar_reminder_slot_uidx").on(table.eventId, table.slot, table.dueAt), index("calendar_reminder_due_idx").on(table.status, table.dueAt)]);
+export const calendarDeliveries = sqliteTable("calendar_deliveries", {
+  id: text("id").primaryKey(), reminderId: text("reminder_id").notNull().references(() => calendarReminders.id), endpoint: text("endpoint").notNull(),
+  status: text("status", { enum: workConfirmationNotificationStatuses }).notNull(), attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at").notNull(), leaseToken: text("lease_token"), leaseExpiresAt: text("lease_expires_at"),
+}, (table) => [uniqueIndex("calendar_delivery_endpoint_uidx").on(table.reminderId, table.endpoint), index("calendar_delivery_due_idx").on(table.status, table.nextAttemptAt)]);
 
 export const connectorStates = sqliteTable("connector_states", {
   connector: text("connector", { enum: connectorKinds }).notNull(),

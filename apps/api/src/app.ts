@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { zValidator } from "@hono/zod-validator";
+import { calendarRangeSchema, collectionSettingsSchema, updateCalendarEventSchema } from "@life-console/contracts";
 import { createAgentQuestionSchema, answerAgentQuestionSchema } from "@life-console/contracts";
 import { importWorkConfirmationsSchema } from "@life-console/contracts";
 import { createConnectorScheduleSchema, updateConnectorScheduleSchema } from "@life-console/contracts";
@@ -18,6 +19,7 @@ import { z } from "zod";
 
 import { createLifeConsoleHandlers } from "./handlers/life-console-handlers";
 import { createAgentQuestionRepository } from "./repositories/agent-question-repository";
+import { createCalendarRepository } from "./repositories/calendar-repository";
 import { createConnectorScheduleRepository } from "./repositories/connector-schedule-repository";
 import { D1LifeConsoleRepository } from "./repositories/d1-life-console-repository";
 import { createMonitoringRepository } from "./repositories/monitoring-repository";
@@ -37,6 +39,7 @@ import { cryptoIdGenerator } from "./shared/id-generator";
 import { requestLogging, type RequestLogVariables } from "./shared/request-logging";
 import { createAbstinenceUsecase } from "./usecases/abstinence-usecase";
 import { createAgentQuestionUsecase } from "./usecases/agent-question-usecase";
+import { createCalendarUsecase } from "./usecases/calendar-usecase";
 import { createConnectorScheduleUsecase } from "./usecases/connector-schedule-usecase";
 import { createConversationUsecase } from "./usecases/conversation-usecase";
 import { createDashboardUsecase } from "./usecases/dashboard-usecase";
@@ -119,6 +122,10 @@ const pushKeys = (environment: ApiEnvironment) => environment.WEB_PUSH_PUBLIC_KE
     };
 const createPushHandlers = (environment: ApiEnvironment) => createPushNotificationUsecase(
   createPushSubscriptionRepository(environment.DB), createWebPushRepository(pushKeys(environment)), environment.WEB_PUSH_PUBLIC_KEY ?? null, systemClock,
+);
+export const createCalendarHandlers = (environment: ApiEnvironment) => createCalendarUsecase(
+  createCalendarRepository(environment.DB), createPushSubscriptionRepository(environment.DB), createWebPushRepository(pushKeys(environment)),
+  systemClock, cryptoIdGenerator, environment.WEB_PUSH_PUBLIC_KEY !== undefined,
 );
 export const createWorkConfirmationHandlers = (environment: ApiEnvironment) => createWorkConfirmationUsecase(
   createWorkConfirmationRepository(environment.DB), createPushSubscriptionRepository(environment.DB),
@@ -373,6 +380,10 @@ const _routes = app
   ))
   .get("/api/v1/health", (context) => context.json({ data: { status: "ok" as const } }))
   .get("/api/v1/dashboard", async (context) => respond(context, await createHandlers(context.get("environment")).dashboard()))
+  .get("/api/v1/calendar", zValidator("query", calendarRangeSchema), async (context) => respond(context, await createCalendarHandlers(context.get("environment")).list(context.req.valid("query"))))
+  .put("/api/v1/calendar/settings", zValidator("json", collectionSettingsSchema), async (context) => respond(context, await createCalendarHandlers(context.get("environment")).saveSettings(context.req.valid("json"))))
+  .patch("/api/v1/calendar/events/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateCalendarEventSchema), async (context) => respond(context, await createCalendarHandlers(context.get("environment")).updateEvent(context.req.valid("param").id, context.req.valid("json"))))
+  .post("/api/v1/calendar/events/:id/preparation", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createCalendarHandlers(context.get("environment")).createPreparation(context.req.valid("param").id)))
   .get("/api/v1/shopping", async (context) => respond(context, await createShoppingHandlers(context.get("environment")).list()))
   .post("/api/v1/shopping/places", zValidator("json", shoppingNameSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).createPlace(context.req.valid("json"))))
   .patch("/api/v1/shopping/places/:id", zValidator("param", identifierParameterSchema), zValidator("json", shoppingNameSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).renamePlace(context.req.valid("param").id, context.req.valid("json"))))
