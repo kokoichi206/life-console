@@ -47,7 +47,7 @@ export const ReadOnly: Story = {
     for (const name of ["体重", "食事", "目標を設定", "運動を同期", "接続を解除", "未解析の食事をまとめて解析"]) {
       await waitFor(() => expect(canvas.getByRole("button", { name: new RegExp(`^${name}$`) })).toBeDisabled());
     }
-    await expect(canvas.getByLabelText("CSV を取り込む")).toBeDisabled();
+    await expect(canvas.queryByLabelText("CSV を取り込む")).not.toBeInTheDocument();
     await expect(canvas.queryByRole("dialog")).not.toBeInTheDocument();
     await expect(canvas.queryByRole("button", { name: "共有リンク" })).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "30 日" }));
