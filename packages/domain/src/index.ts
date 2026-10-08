@@ -79,3 +79,9 @@ export const workConfirmationStatuses = ["pending", "done"] as const;
 export const workConfirmationEvidenceStates = ["confirmed", "unconfirmed"] as const;
 export const workConfirmationCompletedBy = ["user", "source"] as const;
 export const workConfirmationNotificationStatuses = ["pending", "sending", "accepted", "expired", "canceled"] as const;
+
+export const calendarEventSources = ["garbage"] as const;
+export const calendarEventStatuses = ["active", "canceled"] as const;
+export const tokushimaCollectionDistricts = ["C", "D"] as const;
+export const calendarReminderSlots = ["previous_day", "same_day"] as const;
+export const calendarReminderStatuses = ["scheduled", "delivering", "finished", "canceled", "missed"] as const;

@@ -43,7 +43,7 @@ describe("通知から本人確認画面への遷移", () => {
     } });
     await Promise.all(pending);
     expect(showNotification).toHaveBeenCalledWith(message.title, expect.objectContaining({
-      body: message.body, tag: message.tag, data: { workConfirmationId: message.workConfirmationId },
+      body: message.body, tag: message.tag, data: { workConfirmationId: message.workConfirmationId, calendarEventId: undefined },
     }));
     await click({ workConfirmationId: message.workConfirmationId });
     const destination = new URL(openWindow.mock.calls[0]![0]);
@@ -51,6 +51,16 @@ describe("通知から本人確認画面への遷移", () => {
     expect(destination.pathname).toBe("/tasks");
     expect(destination.searchParams.get("view")).toBe("confirmations");
     expect(destination.searchParams.get("confirmationId")).toBe(message.workConfirmationId);
+    expect(destination.searchParams.has("next")).toBe(false);
+  });
+  it("収集日の通知は対象のカレンダーを開く", async () => {
+    const { openWindow, click } = setup();
+    await click({ calendarEventId: "event&next=https://other.example" });
+    const destination = new URL(openWindow.mock.calls[0]![0]);
+    expect(destination.origin).toBe("https://console.example.com");
+    expect(destination.pathname).toBe("/todos");
+    expect(destination.searchParams.get("view")).toBe("calendar");
+    expect(destination.searchParams.get("eventId")).toBe("event&next=https://other.example");
     expect(destination.searchParams.has("next")).toBe(false);
   });
   it("既存の通知と、文字列以外の依頼 ID は実行状況を開く", async () => {
