@@ -42,7 +42,7 @@ const meta = {
     const router = useMemo(() => {
       const root = createRootRoute();
       const health = createRoute({ getParentRoute: () => root, path: "/health", validateSearch: parseHealthSearch, component: Story });
-      return createRouter({ routeTree: root.addChildren([health]), history: createMemoryHistory({ initialEntries: [context.parameters.initialUrl ?? (context.parameters.entry === undefined ? "/health" : `/health?entry=${context.parameters.entry}`)] }) });
+      return createRouter({ routeTree: root.addChildren([health]), search: { strict: true }, history: createMemoryHistory({ initialEntries: [context.parameters.initialUrl ?? (context.parameters.entry === undefined ? "/health" : `/health?entry=${context.parameters.entry}`)] }) });
     }, [context.parameters.entry, context.parameters.initialUrl, Story]);
     return <RouterProvider router={router} />;
   }],
@@ -747,5 +747,14 @@ export const LoadOlderCalorieBalance: Story = {
     await userEvent.click(panel.getByRole("button", { name: "さらに前の 7 日を表示" }));
     await expect(await panel.findByRole("rowheader", { name: "9/7" })).toBeInTheDocument();
     await expect(balanceRangeRequests).toHaveBeenCalledTimes(6);
+  },
+};
+
+export const MalformedCalorieDays: Story = {
+  ...LoadOlderCalorieBalance,
+  name: "不正な表示日数を含む URL でもカロリー収支を操作できる",
+  parameters: {
+    ...LoadOlderCalorieBalance.parameters,
+    initialUrl: `/health?from=2026-09-02&to=2026-09-20&calories=${encodeURIComponent(JSON.stringify({ toString: null }))}`,
   },
 };
