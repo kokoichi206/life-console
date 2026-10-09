@@ -3,6 +3,7 @@ import { Link, useSearch } from "@tanstack/react-router";
 import { ThemeMenu } from "../../components/ThemeMenu";
 import { buttonVariants } from "../../components/ui/Button";
 
+import { CollectionCalendarPanel } from "./CollectionCalendarPanel";
 import { ShoppingBoard } from "./ShoppingBoard";
 import { TodoTasks } from "./TodoTasks";
 
@@ -14,18 +15,21 @@ export const TodosPage = () => {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">やること</h1>
         <div className="flex items-center gap-2">
-          <Link from="/todos" to="/todos" search={(previous) => ({ ...previous, completed: previous.completed ? undefined : true })} className={buttonVariants({ variant: "outline", size: "sm" })}>
-            {search.completed ? "未完了を見る" : "完了済みを見る"}
-          </Link>
+          {view !== "calendar" && (
+            <Link from="/todos" to="/todos" search={(previous) => ({ ...previous, completed: previous.completed ? undefined : true })} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              {search.completed ? "未完了を見る" : "完了済みを見る"}
+            </Link>
+          )}
           <ThemeMenu />
         </div>
       </header>
       <nav aria-label="やることの表示" className="flex flex-wrap gap-2">
-        {([{ value: "all", label: "すべて" }, { value: "tasks", label: "タスク" }, { value: "work", label: "仕事" }, { value: "personal", label: "私生活" }, { value: "shopping", label: "買い物" }] as const).map((item) => (
+        {([{ value: "all", label: "すべて" }, { value: "tasks", label: "タスク" }, { value: "work", label: "仕事" }, { value: "personal", label: "私生活" }, { value: "shopping", label: "買い物" }, { value: "calendar", label: "カレンダー" }] as const).map((item) => (
           <Link key={item.value} from="/todos" to="/todos" search={(previous) => ({ ...previous, view: item.value })} aria-current={view === item.value ? "page" : undefined} className={buttonVariants({ variant: view === item.value ? "default" : "outline", size: "sm" })}>{item.label}</Link>
         ))}
       </nav>
-      <div hidden={view === "shopping"}><TodoTasks /></div>
+      <div hidden={view === "shopping" || view === "calendar"}><TodoTasks /></div>
+      {view === "calendar" && <CollectionCalendarPanel />}
       <div hidden={view !== "all" && view !== "shopping"}><ShoppingBoard /></div>
     </div>
   );

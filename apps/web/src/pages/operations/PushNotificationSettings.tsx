@@ -36,7 +36,7 @@ export const PushSettingsView = ({ state, configured, loading, pending, error, t
                         ? "この環境では通知の準備ができていません。"
                         : enabled ? "この端末への通知は有効です。" : "この端末への通知は無効です。"}
         </p>
-        <p className="text-xs text-muted-foreground">通知を押すと『同期・実行状況』を開きます。通知の許可は端末ごとに設定します。</p>
+        <p className="text-xs text-muted-foreground">テスト通知を押すと『同期・実行状況』を開きます。通知の許可は端末ごとに設定します。</p>
         <div className="flex flex-wrap gap-2">
           {!enabled && <Button type="button" disabled={loading || pending || !configured || state?.supported !== true || state.permission === "denied"} onClick={onEnable}>この端末で通知を有効にする</Button>}
           {state?.subscribed === true && <Button type="button" variant="outline" disabled={pending} onClick={onDisable}>この端末の通知を無効にする</Button>}

@@ -1,5 +1,5 @@
 import type { TaskStatus } from "@life-console/contracts";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { CountBadge, EmptyState, Eyebrow, MetricCard, Panel, SectionHeading, StatusDot } from "../../components/DesignSystem";
@@ -8,10 +8,12 @@ import { PageHeader } from "../../components/PageHeader";
 import { Badge } from "../../components/ui/badge";
 import { buttonVariants } from "../../components/ui/Button";
 import { AbstinencePanel } from "../../features/abstinence/AbstinencePanel";
+import { collectionCalendarQuery } from "../../features/calendar/queries";
 import { dashboardQuery } from "../../features/overview/queries";
 import { cn } from "../../lib/class-names";
 
 import { AgentQuestions } from "./_components/AgentQuestions";
+import { UpcomingCalendarPanel } from "./UpcomingCalendarPanel";
 
 const money = (value: number): string => new Intl.NumberFormat("ja-JP", {
   style: "currency",
@@ -38,6 +40,9 @@ const HealthItem = ({ healthy, label, detail }: { readonly healthy: boolean; rea
 
 export const DashboardPage = () => {
   const { data } = useSuspenseQuery(dashboardQuery);
+  const calendar = useQuery(collectionCalendarQuery);
+  const preparationIds = new Set(calendar.data?.events.flatMap((event) => event.preparation === null ? [] : [event.preparation.id]));
+  const otherTasks = data.todayTasks.filter((task) => !preparationIds.has(task.id));
   const latestWeight = data.weights.at(-1);
   const runner = data.runners[0];
   const connectorErrorCount = data.connectors.filter((connector) => connector.lastErrorCode !== null).length;
@@ -56,11 +61,12 @@ export const DashboardPage = () => {
         <Link className={buttonVariants({ variant: "outline" })} to="/finance" hash="expense-entry">支出を記録</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/operations" hash="note-entry">メモを記録</Link>
       </nav>
+      <UpcomingCalendarPanel />
       <AbstinencePanel />
       <AgentQuestions />
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="今日のタスク"
+          label="未完了のタスク"
           value={data.todayTasks.length}
           detail={`${data.todayTasks.filter((task) => task.status === "doing").length}件が進行中`}
           tone="orange"
@@ -83,11 +89,11 @@ export const DashboardPage = () => {
         <Panel mobileLayout="section">
           <SectionHeading
             eyebrow="FOCUS"
-            title="対応するタスク"
+            title="その他のタスク"
             action={<Link className={buttonVariants({ variant: "link", size: "sm" })} to="/todos">すべて見る</Link>}
           />
           <div className="sm:px-5">
-            {data.todayTasks.slice(0, 5).map((task) => (
+            {otherTasks.slice(0, 5).map((task) => (
               <article key={task.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t py-3 first:border-t-0">
                 <StatusDot status={task.status} />
                 <div className="min-w-0">
@@ -97,7 +103,7 @@ export const DashboardPage = () => {
                 <Badge variant="secondary">{taskStatusLabels[task.status]}</Badge>
               </article>
             ))}
-            {data.todayTasks.length === 0 && <EmptyState>今日対応するタスクはありません。</EmptyState>}
+            {otherTasks.length === 0 && <EmptyState>未完了のタスクはありません。</EmptyState>}
           </div>
         </Panel>
         <Panel mobileLayout="section">

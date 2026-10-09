@@ -48,6 +48,7 @@ src/
 - 各 `createRoute` は定数にしてから `addChildren` に渡します。配列内で直接生成すると型が `any` に広がる場合があり、`Register` の登録があっても不正な遷移先を検出できなくなります。
 - 内部遷移は `Link` / `useNavigate` を使います。ページ内で search を引き継ぐ `Link` は `from` を指定し、コールバックの型はルーターから推論させます。
 - `validateSearch` は URL の入力を検証し、`search.strict: true` で検証結果にない項目を URL と画面の状態から除去します。パーサーの戻り値から省くだけでは、元の不正な値が保持されます。パラメーターを消す操作には `undefined` を使うため、任意項目の型も明示的な `undefined` を許可します。常設フォームへのリンクは hash を使います。
+- 健康ページの `calories` は数値または数値文字列の、7 より大きい 7 の倍数を受け付けます。URL から復元した JSON の配列・オブジェクトなどは除外し、他の表示条件を保持します。本人画面と共有画面で同じ検証を使います。
 - ページは `lazyRouteComponent` で分割し、リンクの事前読み込みでコードも取得します。Query を使う loader では `ensureQueryData` を呼び、`defaultPreloadStaleTime: 0` でキャッシュの制御を Query に任せます。
 - 未定義の URL はホームへ戻れる 404 画面にします。取得エラーは Query のエラー状態をリセットし、`router.invalidate()` で再試行します。
 

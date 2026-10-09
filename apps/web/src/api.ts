@@ -1,4 +1,5 @@
 import type { AppType, HealthReadApp } from "@life-console/api";
+import type { CalendarRange, CollectionCalendar, CollectionSettings, UpdateCalendarEvent } from "@life-console/contracts";
 import type { AgentQuestion } from "@life-console/contracts";
 import type { WorkConfirmations } from "@life-console/contracts";
 import type { ConnectorScheduleStatus, CreateConnectorScheduleInput, UpdateConnectorScheduleInput } from "@life-console/contracts";
@@ -80,6 +81,10 @@ export const createHealthReadApi = (baseUrl: string) => {
 };
 
 export const api = {
+  collectionCalendar: async (range: CalendarRange) => unwrap<CollectionCalendar>(await client.api.v1.calendar.$get({ query: range })),
+  saveCollectionSettings: async (input: CollectionSettings) => unwrap<null>(await client.api.v1.calendar.settings.$put({ json: input })),
+  updateCalendarEvent: async (id: string, input: UpdateCalendarEvent) => unwrap<null>(await client.api.v1.calendar.events[":id"].$patch({ param: { id }, json: input })),
+  addCalendarPreparation: async (id: string) => unwrap<null>(await client.api.v1.calendar.events[":id"].preparation.$post({ param: { id } })),
   ...createHealthReadApi("/api/v1"),
   healthShare: async () => unwrap<string | null>(await client.api.v1["health-share"].$get()),
   agentQuestions: async () => unwrap<ReadonlyArray<AgentQuestion>>(await client.api.v1["agent-questions"].$get()),
@@ -138,11 +143,6 @@ export const api = {
   saveAbstinenceGoal: async (input: AbstinenceGoalInput | null) => unwrap<null>(await client.api.v1.abstinence.goal.$put({ json: input })),
   createAbstinenceEvent: async (input: AbstinenceEventInput) => unwrap<null>(await client.api.v1.abstinence.events.$post({ json: input })),
   createWeight: async (input: Parameters<typeof client.api.v1.weights.$post>[0]["json"]) => unwrap<null>(await client.api.v1.weights.$post({ json: input })),
-  importWeightCsv: async (csv: string) => unwrap<number>(await fetch("/api/v1/weights/import", {
-    method: "POST",
-    headers: { "Content-Type": "text/csv" },
-    body: csv,
-  })),
   financeSummary: async () => unwrap<FinanceSummary>(await client.api.v1.finance.summary.$get()),
   createFinanceTransaction: async (input: Parameters<typeof client.api.v1.finance.transactions.$post>[0]["json"]) => unwrap<null>(await client.api.v1.finance.transactions.$post({ json: input })),
   createFinanceAdjustment: async (input: Parameters<typeof client.api.v1.finance.adjustments.$post>[0]["json"]) => unwrap<null>(await client.api.v1.finance.adjustments.$post({ json: input })),
