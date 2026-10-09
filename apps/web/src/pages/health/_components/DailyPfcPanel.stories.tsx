@@ -27,6 +27,8 @@ export const Partial: Story = {
     await expect(canvas.getByText("10/9：記録した 2 食中 1 食を解析済み")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "2026-10-09 の PFC と食事を見る" })).toHaveAttribute("aria-pressed", "false");
     await expect(canvas.getByText("解析済み分の合計です。未解析の食事は含めていません。")).toBeVisible();
+    await expect(canvas.getAllByText("未解析あり")).toHaveLength(3);
+    await expect(canvas.queryByText(/計算例より −/)).not.toBeInTheDocument();
     await userEvent.click(canvas.getByText(/^割合の目安：/));
     const weight = canvas.getByRole("spinbutton", { name: "体重の例（kg）" });
     await userEvent.clear(weight);
@@ -38,7 +40,7 @@ export const Partial: Story = {
   },
 };
 export const Dark: Story = { globals: { theme: "dark" } };
-export const Mobile: Story = { decorators: [(Story) => <div className="max-w-90"><Story /></div>] };
+export const Mobile = { decorators: [(Story) => <div className="max-w-90"><Story /></div>] } satisfies Story;
 export const Loading: Story = { args: { nutrition: undefined, pending: true } };
 export const Failed: Story = { args: { nutrition: undefined, errorMessage: "栄養を取得できませんでした。" }, play: async ({ canvas }) => {
   await expect(canvas.getByRole("alert")).toBeVisible();
@@ -71,3 +73,26 @@ export const DecimalTotals: Story = {
     await expect(canvas.queryByText(/57\.9000/)).not.toBeInTheDocument();
   },
 };
+
+export const OverReference = {
+  args: { nutrition: [{ ...nutrition[0]!, estimate: { ...nutrition[0]!.estimate!, proteinGrams: 110, fatGrams: 68, carbohydrateGrams: 250 } }] },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText("計算例より +12.4 g")).toBeVisible();
+    await expect(canvas.getByText("計算例より −30 g")).toBeVisible();
+    await expect(canvas.getByText(/油・ドレッシング/)).toBeVisible();
+    await expect(canvas.getByText(/各食に魚・肉・卵/)).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "この日の食事に絞る" }));
+    await expect(canvas.getByRole("button", { name: "2026-10-09 の PFC と食事を見る" })).toHaveAttribute("aria-pressed", "true");
+  },
+} satisfies Story;
+export const PartialOverReference: Story = {
+  args: { nutrition: [{ ...nutrition[0]!, estimate: { ...nutrition[0]!.estimate!, fatGrams: 68 } }, nutrition[1]!] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("計算例より +12.4 g")).toBeVisible();
+    await expect(canvas.getAllByText("未解析あり")).toHaveLength(2);
+    await expect(canvas.getByText(/まず未解析の食事を確認/)).toBeVisible();
+    await expect(canvas.queryByText(/各食に魚・肉・卵/)).not.toBeInTheDocument();
+  },
+};
+export const OverReferenceDark: Story = { args: OverReference.args, globals: { theme: "dark" } };
+export const OverReferenceMobile: Story = { args: OverReference.args, decorators: Mobile.decorators };

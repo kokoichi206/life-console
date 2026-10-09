@@ -5,6 +5,7 @@ import { Field, FormError, Panel, SectionHeading } from "../../../components/Des
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/input";
 import { formatPfcGrams, pfcEnergyPercentages, pfcGoalExample, summarizeDailyPfc } from "../nutrition-summary";
+import { pfcReviewHints } from "../pfc-review";
 
 import { PfcComposition, PfcNutrients } from "./PfcNutrients";
 
@@ -33,6 +34,8 @@ export const DailyPfcPanel = ({ nutrition, from, to, selectedDay, onSelectDay, p
   const dates = Array.from({ length: Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1 }, (_, index) => new Date(Date.parse(to) - index * 86_400_000).toISOString().slice(0, 10));
   const selectedDate = selectedDay ?? days?.[0]?.date ?? to;
   const selected = days?.find((day) => day.date === selectedDate);
+  const complete = selected !== undefined && selected.analyzedMeals === selected.totalMeals;
+  const hints = selected === undefined ? [] : pfcReviewHints(selected, goal, complete);
   const applyGoalExample = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const weight = Number(goalInputs.weight);
@@ -75,7 +78,21 @@ export const DailyPfcPanel = ({ nutrition, from, to, selectedDay, onSelectDay, p
                 ? (
                     <>
                       {selected.analyzedMeals < selected.totalMeals && <p className="text-xs text-muted-foreground">解析済み分の合計です。未解析の食事は含めていません。</p>}
-                      <PfcNutrients grams={selected} goal={goal} />
+                      <PfcNutrients grams={selected} goal={goal} complete={complete} />
+                      <p className="text-xs text-muted-foreground">線は計算例の量、斜線はそれを超えた分です。差は解析済み分と仮の目安の比較です。</p>
+                      <div className="space-y-3 rounded-xl bg-muted/50 p-4">
+                        <h3 className="text-sm font-medium">次の日に意識すること</h3>
+                        {!complete && <p className="text-sm">まず未解析の食事を確認。解析済み分だけでは、少ない項目を判断できません。</p>}
+                        {hints.map((hint) => (
+                          <div key={hint.key} className="space-y-1">
+                            <p className="text-sm font-medium">{`${hint.label}：計算例より ${hint.difference > 0 ? "+" : "−"}${formatPfcGrams(Math.abs(hint.difference))} g`}</p>
+                            <p className="text-sm">{hint.suggestion}</p>
+                          </div>
+                        ))}
+                        {hints.length === 0 && complete && <p className="text-sm">まず食事の記録漏れを確認し、主食・主菜・副菜をそろえることを意識する。</p>}
+                        <p className="text-xs text-muted-foreground">計算例に対する差の割合が大きい順に表示しています。食べた内容は下の食事一覧で確認できます。前日の差を埋めるために、翌日の食事を抜く必要はありません。</p>
+                        <Button variant="outline" size="sm" onClick={() => onSelectDay(selectedDate)}>この日の食事に絞る</Button>
+                      </div>
                       <p className="text-xs text-muted-foreground">選択日の実績（解析済み分）</p>
                       <PfcComposition grams={selected} label="選択日の実績" />
                       <p className="text-xs text-muted-foreground">参考の構成比（計算例）</p>
