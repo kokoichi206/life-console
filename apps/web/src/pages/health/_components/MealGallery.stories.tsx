@@ -85,7 +85,7 @@ export const Estimated: Story = {
     await expect(await canvas.findByText("650 kcal", { selector: "td" })).toBeVisible();
     const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "食事の記録" }));
     await expect(await detail.findByText("推定 約 650 kcal")).toBeVisible();
-    await expect(detail.getByText(/炭水化物 87.5 g/)).toBeVisible();
+    await expect(detail.getByText("C 炭水化物").parentElement).toHaveTextContent("87.5 g");
   },
 };
 export const AnalysisPending: Story = {
@@ -155,10 +155,10 @@ export const EditCalories: Story = {
     await userEvent.type(input, "0");
     await userEvent.click(detail.getByRole("button", { name: "カロリーを保存" }));
     await expect(await detail.findByText("0 kcal（手入力）")).toBeVisible();
-    await expect(detail.getByText(/炭水化物 87.5 g/)).toBeVisible();
+    await expect(detail.getByText("C 炭水化物").parentElement).toHaveTextContent("87.5 g");
     await expect(detail.getByRole("button", { name: "栄養を再解析" })).toBeEnabled();
     await userEvent.click(detail.getByRole("button", { name: "栄養を再解析" }));
-    await expect(await detail.findByText(/たんぱく質 35 g/)).toBeVisible();
+    await waitFor(() => expect(detail.getByText("P たんぱく質").parentElement).toHaveTextContent("35 g"));
     await expect(detail.getByText("0 kcal（手入力）")).toBeVisible();
     await userEvent.click(detail.getByRole("button", { name: "食事の詳細を閉じる" }));
     await expect(await canvas.findByText("0 kcal", { selector: "td" })).toBeVisible();
