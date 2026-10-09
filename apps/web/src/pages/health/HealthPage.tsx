@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 
 import { CalorieBaselineDialog } from "./_components/CalorieBaselineDialog";
 import { DailyCalorieBalanceList, type ExerciseTrackingState } from "./_components/DailyCalorieBalanceList";
+import { DailyPfcPanel } from "./_components/DailyPfcPanel";
 import { HealthShareButton } from "./_components/HealthShareButton";
 import { MealEntryDialog } from "./_components/MealEntryDialog";
 import { MealGallery } from "./_components/MealGallery";
@@ -36,10 +37,11 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
 
 const currentJapanDate = (): string => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
 
-export const HealthPage = ({ search, onRangeChange, onOverlayChange, calorieDays, onCalorieDaysChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayChange, calorieDays, onCalorieDaysChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
   readonly search: HealthSearch;
   readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
   readonly onOverlayChange: (overlay: HealthSearch["overlay"]) => void;
+  readonly onPfcDayChange: (date: string | undefined) => void;
   readonly calorieDays: number;
   readonly onCalorieDaysChange: (days: number) => void;
   readonly goalEntryOpen: boolean;
@@ -82,8 +84,8 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, calorieDays
   const periodTo = new Date(visibleWindow.end).toISOString().slice(0, 10);
   const mealDayCounts = useQuery(mealDayCountsQuery(periodFrom, periodTo));
   const mealGallery = useInfiniteQuery({
-    queryKey: mealGalleryQueryKey,
-    initialPageParam: currentJapanDate(),
+    queryKey: search.pfcDay === undefined ? mealGalleryQueryKey : [...mealGalleryQueryKey, search.pfcDay],
+    initialPageParam: search.pfcDay ?? currentJapanDate(),
     queryFn: ({ pageParam }) => read.mealGallery(pageParam),
     getNextPageParam: (page) => page.nextTo ?? undefined,
   });
@@ -95,6 +97,17 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, calorieDays
     isPending: nutritionPages.some((page) => page.isPending),
     error: nutritionPages.find((page) => page.error !== null)?.error ?? null,
   };
+  const selectedPfcOutsideWindow = search.pfcDay !== undefined && (search.pfcDay < balanceWindow.from || search.pfcDay > periodTo);
+  const selectedPfcNutrition = useQuery({
+    ...nutritionQuery(search.pfcDay ?? periodTo, search.pfcDay ?? periodTo),
+    enabled: selectedPfcOutsideWindow,
+  });
+  const pfcPending = nutrition.isPending || (selectedPfcOutsideWindow && selectedPfcNutrition.isPending);
+  const pfcError = nutrition.error ?? (selectedPfcOutsideWindow ? selectedPfcNutrition.error : null);
+  const pfcNutrition = nutritionPages.every((page) => page.data !== undefined && !page.isError)
+    && (!selectedPfcOutsideWindow || (selectedPfcNutrition.data !== undefined && !selectedPfcNutrition.isError))
+    ? [...nutritionPages.flatMap((page) => page.data!), ...(selectedPfcOutsideWindow ? selectedPfcNutrition.data! : [])]
+    : undefined;
   const strava = useStravaActivities(periodFrom, periodTo);
   const caloriesEnabled = strava.connected && !strava.disconnect.isPending;
   const caloriePages = useQueries({ queries: balanceRanges.map((range) => stravaCaloriesQuery(range.from, range.to, caloriesEnabled)) });
@@ -274,11 +287,20 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, calorieDays
         onCollapse={() => onCalorieDaysChange(RECENT_BALANCE_DAYS)}
         syncStatus={syncStatus.data}
       />
+      <DailyPfcPanel
+        nutrition={pfcNutrition}
+        from={balanceWindow.from}
+        to={periodTo}
+        selectedDay={search.pfcDay}
+        onSelectDay={onPfcDayChange}
+        pending={pfcPending}
+        errorMessage={pfcError?.message ?? null}
+      />
       <StravaActivities strava={strava} from={periodFrom} to={periodTo} weights={weights} mealDayCounts={mealDayCounts.data} onSelectWeek={onRangeChange} />
       {mealDayCounts.error !== null && <FormError>{mealDayCounts.error.message}</FormError>}
       {mealGallery.isPending && <p role="status">食事を読み込んでいます。</p>}
       {mealGallery.error !== null && <FormError>{mealGallery.error.message}</FormError>}
-      {mealGallery.data !== undefined && <MealGallery meals={galleryMeals} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} hasMore={mealGallery.hasNextPage} loadingMore={mealGallery.isFetchingNextPage} onLoadMore={() => { void mealGallery.fetchNextPage(); }} periodLabel="新しい順・直近 7 日間" />}
+      {mealGallery.data !== undefined && <MealGallery meals={galleryMeals} selectedDay={search.pfcDay} onShowAll={() => onPfcDayChange(undefined)} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} hasMore={mealGallery.hasNextPage} loadingMore={mealGallery.isFetchingNextPage} onLoadMore={() => { void mealGallery.fetchNextPage(); }} periodLabel="新しい順・直近 7 日間" />}
     </>
   );
 };

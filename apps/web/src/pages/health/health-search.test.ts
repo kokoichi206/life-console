@@ -23,3 +23,13 @@ describe("カロリー収支の表示日数", () => {
     expect(parseSharedHealthSearch({ calories, range: "d90" })).toEqual({ range: "d90" });
   });
 });
+
+describe("PFC の選択日", () => {
+  it("本人・共有 URL の選択日を復元する", () => {
+    expect(parseHealthSearch({ pfcDay: "2026-10-08" })).toEqual({ pfcDay: "2026-10-08" });
+    expect(parseSharedHealthSearch({ pfcDay: "2026-10-08", entry: "meal" })).toEqual({ pfcDay: "2026-10-08" });
+  });
+  it.each(["2026-02-30", "2026-13-01", "today", "2026-10-8"])("不正な選択日 %s を除外する", (pfcDay) => {
+    expect(parseHealthSearch({ pfcDay })).toEqual({});
+  });
+});
