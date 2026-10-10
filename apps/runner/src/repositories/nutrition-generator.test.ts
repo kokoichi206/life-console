@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CommandRepository } from "./command-repository";
 import { createNutritionGenerator } from "./nutrition-generator";
 
-const meal = { id: "meal", photoId: "photo", memo: "ごはんは半分" };
+const meal = { id: "meal", photoId: "photo", additionalPhotoIds: [], memo: "ごはんは半分" };
 const estimate = { caloriesKcal: 600, proteinGrams: 25, fatGrams: 15, carbohydrateGrams: 90 };
 const reply = (value: unknown) => ok({ stdout: JSON.stringify({ type: "result", is_error: false, modelUsage: { "actual-model": {} }, structured_output: { estimate: value } }), stderr: "" });
 const signal = new AbortController().signal;
@@ -58,7 +58,7 @@ describe("Gemini による画像解析", () => {
       expect(args).toContain("gemini");
       expect(args[args.indexOf("--model") + 1]).toBe("gemini-test");
       expect(args.join(" ")).not.toContain(memo);
-      expect(await readFile(join(directory, "meal.jpeg"), "utf8")).toBe("image");
+      expect(await readFile(join(directory, "meal-0.jpeg"), "utf8")).toBe("image");
       expect(JSON.parse(await readFile(join(directory, "meal.json"), "utf8")) as unknown).toMatchObject({ memo });
       expect(JSON.parse(await readFile(join(directory, "home/.gemini/settings.json"), "utf8")) as unknown).toMatchObject({
         security: { auth: { selectedType: "oauth-personal" } }, tools: { core: [] }, context: { fileName: [] }, hooksConfig: { enabled: false },
@@ -122,5 +122,48 @@ describe("メモだけの栄養推定", () => {
     });
     expect(await createNutritionGenerator({ execute }, { readMealPhoto }, { provider, geminiAuth: "gemini-api-key" }).generate(textMeal, signal)).toMatchObject({ ok: true, value: estimate });
     expect(readMealPhoto).not.toHaveBeenCalled();
+  });
+});
+
+describe("複数写真の食事解析", () => {
+  it.each(["codex", "claude", "gemini"] as const)("%s に全写真を 1 回の推定入力として渡し、一時ファイルを削除する", async (provider) => {
+    const { readFile, writeFile, stat } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const photoIds = ["main", "second", "third", "fourth"];
+    let directory: string | undefined;
+    const readMealPhoto = vi.fn().mockImplementation(async (photoId: string) => ok({ contentType: "image/jpeg", base64: Buffer.from(photoId).toString("base64") }));
+    const execute = vi.fn<CommandRepository["execute"]>().mockImplementation(async (_command, args, options) => {
+      if (provider === "claude") {
+        const message = JSON.parse(options!.stdin!) as { message: { content: { type: string; source?: { data: string } }[] } };
+        expect(message.message.content.filter((block) => block.type === "image").map((block) => Buffer.from(block.source!.data, "base64").toString())).toEqual(photoIds);
+        expect(args[args.indexOf("--system-prompt") + 1]).toContain("写真ごとの推定値を単純に合算しない");
+        return reply(estimate);
+      }
+      directory = options!.cwd!;
+      for (const [index, photoId] of photoIds.entries()) expect(await readFile(join(directory, `meal-${index}.jpeg`), "utf8")).toBe(photoId);
+      if (provider === "codex") {
+        expect(args.filter((arg) => arg === "--image")).toHaveLength(4);
+        await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({ estimate }));
+        return ok({ stdout: JSON.stringify({ type: "turn.completed" }), stderr: "" });
+      }
+      expect(args[args.indexOf("--prompt") + 1]).toBe("@meal-0.jpeg @meal-1.jpeg @meal-2.jpeg @meal-3.jpeg @meal.json この食事の栄養を推定してください。");
+      return ok({ stdout: JSON.stringify({ response: JSON.stringify({ estimate }), stats: { models: { test: {} } } }), stderr: "" });
+    });
+    const generator = createNutritionGenerator({ execute }, { readMealPhoto }, { provider, geminiAuth: "gemini-api-key" });
+    const result = await generator.generate({ ...meal, photoId: photoIds[0]!, additionalPhotoIds: photoIds.slice(1) }, signal);
+    expect(result).toMatchObject({ ok: true, value: estimate });
+    expect(readMealPhoto.mock.calls.map(([id]) => id)).toEqual(photoIds);
+    expect(execute).toHaveBeenCalledOnce();
+    if (directory !== undefined) await expect(stat(directory)).rejects.toMatchObject({ code: "ENOENT" });
+    const single = await createNutritionGenerator({ execute: vi.fn().mockResolvedValue(reply(estimate)) }, { readMealPhoto }, { provider: "claude" }).generate({ ...meal, photoId: photoIds[0]! }, signal);
+    // 写真の追加で古い解析結果の入力 hash を使い回さない。
+    expect(single.ok && result.ok && single.value.inputHash !== result.value.inputHash).toBe(true);
+  });
+  it("追加写真の取得失敗を一部だけの成功に変えず、モデルを呼ばない", async () => {
+    const failure = err({ code: "photo_failed", summary: "写真を取得できません。" });
+    const execute = vi.fn();
+    const generator = createNutritionGenerator({ execute }, { readMealPhoto: vi.fn().mockResolvedValueOnce(ok({ contentType: "image/jpeg", base64: "aW1hZ2U=" })).mockResolvedValueOnce(failure) });
+    expect(await generator.generate({ ...meal, additionalPhotoIds: ["missing"] }, signal)).toEqual(failure);
+    expect(execute).not.toHaveBeenCalled();
   });
 });

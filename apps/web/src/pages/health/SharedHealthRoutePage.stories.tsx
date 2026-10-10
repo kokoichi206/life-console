@@ -9,7 +9,7 @@ import { SharedHealthRoutePage } from "./SharedHealthRoutePage";
 
 const token = "ab".repeat(32);
 const prefix = `*/api/v1/share/${token}`;
-const meal = { id: "shared-meal", photoId: "shared-photo", memo: "架空の食事", occurredAt: "2026-09-01T00:00:00Z", recordedAt: "2026-09-01T00:00:00Z", tags: [] };
+const meal = { id: "shared-meal", photoId: "shared-photo", additionalPhotoIds: ["shared-photo-2"], memo: "架空の食事", occurredAt: "2026-09-01T00:00:00Z", recordedAt: "2026-09-01T00:00:00Z", tags: [] };
 const meta = {
   title: "Pages/健康の共有",
   component: SharedHealthRoutePage,
@@ -60,7 +60,8 @@ export const ReadOnly: Story = {
     const dialog = within(await screen.findByRole("dialog", { name: "食事の記録" }));
     await expect(dialog.getByRole("button", { name: "カロリーを保存" })).toBeDisabled();
     await expect(dialog.getByRole("button", { name: "栄養を解析" })).toBeDisabled();
-    await expect(dialog.getByRole("img", { name: "食事の写真" })).toHaveAttribute("src", `/api/v1/share/${token}/meal-photos/shared-photo/content`);
+    await expect(dialog.getByRole("img", { name: "食事の写真 1" })).toHaveAttribute("src", `/api/v1/share/${token}/meal-photos/shared-photo/content`);
+    await expect(dialog.getByRole("img", { name: "食事の写真 2" })).toHaveAttribute("src", `/api/v1/share/${token}/meal-photos/shared-photo-2/content`);
     await userEvent.click(dialog.getByRole("button", { name: "食事の詳細を閉じる" }));
   },
 };

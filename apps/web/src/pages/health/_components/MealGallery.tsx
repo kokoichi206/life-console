@@ -152,7 +152,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, selectedDay, 
                   const mealNutrition = nutritionByMeal.get(meal.id);
                   return (
                     <button key={meal.id} type="button" className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => onSelectMeal(meal.id)} aria-label={`${mealDateTime(meal.occurredAt)} の食事を開く`}>
-                      <div className="aspect-square w-full shrink-0 overflow-hidden bg-muted">
+                      <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted">
                         {meal.photoId === null
                           ? (
                               <div className="grid h-full content-center justify-items-center gap-2 text-muted-foreground">
@@ -161,6 +161,7 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, selectedDay, 
                               </div>
                             )
                           : <MealPhoto photoId={meal.photoId} alt="食事の写真" className="size-full object-cover" />}
+                        {meal.additionalPhotoIds.length > 0 && <span className="absolute right-2 bottom-2 rounded-md bg-card/95 px-2 py-1 text-xs text-foreground">{`${1 + meal.additionalPhotoIds.length} 枚`}</span>}
                       </div>
                       <div className="grid w-full gap-2 p-3">
                         <time dateTime={meal.occurredAt} className="text-xs text-muted-foreground">{mealDateTime(meal.occurredAt)}</time>
@@ -189,7 +190,16 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, selectedDay, 
             <Dialog.Description className="mb-4 text-sm text-muted-foreground">{selectedMeal === undefined ? "この食事記録は一覧にありません。" : mealDateTime(selectedMeal.occurredAt)}</Dialog.Description>
             {selectedMeal !== undefined && (
               <div className="grid gap-4">
-                {selectedMeal.photoId !== null && <div className="overflow-hidden rounded-xl bg-muted"><MealPhoto key={selectedMeal.photoId} photoId={selectedMeal.photoId} alt="食事の写真" className="max-h-[60dvh] w-full object-contain" /></div>}
+                {selectedMeal.photoId !== null && (
+                  <div className="space-y-2">
+                    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto rounded-xl" role="region" aria-label="食事の写真" tabIndex={0}>
+                      {[selectedMeal.photoId, ...selectedMeal.additionalPhotoIds].map((photoId, index) => (
+                        <div key={photoId} className={`w-full shrink-0 snap-center overflow-hidden rounded-xl bg-muted ${selectedMeal.additionalPhotoIds.length > 0 ? "aspect-[4/3]" : ""}`}><MealPhoto photoId={photoId} alt={`食事の写真 ${index + 1}`} className={selectedMeal.additionalPhotoIds.length > 0 ? "size-full object-contain" : "max-h-[60dvh] w-full object-contain"} /></div>
+                      ))}
+                    </div>
+                    {selectedMeal.additionalPhotoIds.length > 0 && <p className="text-xs text-muted-foreground">{`${1 + selectedMeal.additionalPhotoIds.length} 枚 · 横にスワイプで写真を切り替え`}</p>}
+                  </div>
+                )}
                 {selectedMeal.memo !== "" && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{selectedMeal.memo}</p>}
                 {selectedNutrition !== undefined && selectedNutrition.manualCaloriesKcal !== null && <p className="text-xl font-semibold">{mealCaloriesLabel(selectedNutrition)}</p>}
                 {selectedNutrition !== undefined && selectedNutrition.estimate !== null && (

@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CommandRepository } from "./command-repository";
 import { createNutritionGenerator } from "./nutrition-generator";
 
-const meal = { id: "meal", photoId: "photo", memo: "ごはん半分。@/private/other.txt" };
+const meal = { id: "meal", photoId: "photo", additionalPhotoIds: [], memo: "ごはん半分。@/private/other.txt" };
 const estimate = { caloriesKcal: 380, proteinGrams: 6, fatGrams: 1, carbohydrateGrams: 80 };
 const photoApi = { readMealPhoto: vi.fn().mockResolvedValue(ok({ contentType: "image/jpeg", base64: "aW1hZ2U=" })) };
 const signal = new AbortController().signal;

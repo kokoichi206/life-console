@@ -48,7 +48,7 @@ const conversationColumns = {
   excerpt: conversations.excerpt, sourceUrl: conversations.sourceUrl, classification: conversations.classification, occurredAt: conversations.occurredAt,
 };
 const mealColumns = {
-  id: meals.id, photoId: meals.photoId, memo: meals.memo,
+  id: meals.id, photoId: meals.photoId, additionalPhotoIds: meals.additionalPhotoIds, memo: meals.memo,
   occurredAt: meals.occurredAt, recordedAt: meals.recordedAt, tagsJson: meals.tagsJson,
 };
 const sourceMappingColumns = {
@@ -279,7 +279,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
       payloadJson: sql`json_object('mealId', ${meals.id})`, createdAt: now, updatedAt: now,
     })).from(meals).where(and(eq(meals.clientId, input.clientId), or(isNotNull(meals.photoId), sql`length(trim(${meals.memo})) > 0`), isNull(meals.manualCaloriesKcal), isNull(meals.deletedAt)))).onConflictDoNothing();
     const inserted = await safeTry(() => this.#database.batch([
-      this.#database.insert(meals).values({ id, clientId: input.clientId, photoId: input.photoId, manualCaloriesKcal: input.manualCaloriesKcal, memo: input.memo,
+      this.#database.insert(meals).values({ id, clientId: input.clientId, photoId: input.photoId, additionalPhotoIds: input.additionalPhotoIds, manualCaloriesKcal: input.manualCaloriesKcal, memo: input.memo,
         occurredAt: input.occurredAt, recordedAt: now, tagsJson: JSON.stringify(input.tags), deletedAt: null,
       }).onConflictDoNothing(), initialJob,
     ]));

@@ -166,6 +166,7 @@ export const UnreadablePhoto: Story = {
     await userEvent.upload(await screen.findByLabelText("保存済みの写真"), new File(["invalid image"], "broken.jpg", { type: "image/jpeg" }));
     await expect(await screen.findByRole("alert")).toBeVisible();
     await expect(screen.getByRole("button", { name: "食事を保存" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "選択した写真を取り消す" }));
     await userEvent.upload(screen.getByLabelText("保存済みの写真"), photoFile());
     await expectPhotoPreview(canvasElement, { width: 80, height: 40, corners: ["red", "blue", "red", "blue"] });
     await expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -220,6 +221,7 @@ export const ReplacePhoto: Story = {
     await expect(await screen.findByRole("img", { name: "選択した食事の写真" })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "左に 90° 回転" }));
     await expectPhotoPreview(canvasElement, { width: 40, height: 80, corners: ["blue", "blue", "red", "red"] });
+    await userEvent.click(screen.getByRole("button", { name: "選択した写真を取り消す" }));
     await userEvent.upload(screen.getByLabelText("カメラで撮影する写真"), photoFile());
     await expectPhotoPreview(canvasElement, { width: 80, height: 40, corners: ["red", "blue", "red", "blue"] });
     await expect(screen.getAllByRole("img", { name: "選択した食事の写真" })).toHaveLength(1);
@@ -244,5 +246,52 @@ export const SavePhotoWithCalories: Story = {
     await expect(savedMeal).toHaveBeenCalledWith(expect.objectContaining({ photoId: "meal-photo", manualCaloriesKcal: 520 }));
     await userEvent.click(screen.getByRole("button", { name: "記録画面を開く" }));
     await expect(await screen.findByLabelText("カロリー（kcal・任意）")).toHaveValue(null);
+  },
+};
+
+export const MultiplePhotos: Story = {
+  name: "4 枚以上を追加し、削除・回転して同じ食事に保存",
+  parameters: { msw: { handlers: { photos: [
+    http.post("*/api/v1/meal-photos/upload", ({ request }) => HttpResponse.json({ data: {
+      photoId: crypto.randomUUID(), uploadUrl: new URL("/__meal-photo", request.url).href, requiredHeaders: { "Content-Type": "image/jpeg" }, expiresAt: "2026-09-08T00:00:00Z",
+    } })),
+    http.put("*/__meal-photo", () => new HttpResponse(null, { status: 204 })),
+  ] } } },
+  play: async ({ canvasElement, userEvent, args }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    const input = await screen.findByLabelText("保存済みの写真");
+    await userEvent.upload(input, [photoFile(), photoFile(), photoFile(), photoFile()]);
+    await expect(screen.getByText("写真（任意・4 枚）")).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: "食事を保存" })).toBeEnabled());
+    const firstPreview = screen.getByRole<HTMLImageElement>("img", { name: "選択した食事の写真" }).src;
+    await userEvent.click(screen.getByRole("button", { name: "写真 2 を左に 90° 回転" }));
+    await expect(screen.getByRole("img", { name: "選択した食事の写真" })).toHaveAttribute("src", firstPreview);
+    await waitFor(() => expect(screen.getByRole("button", { name: "食事を保存" })).toBeEnabled());
+    const preview = screen.getByRole<HTMLImageElement>("img", { name: "選択した食事の写真 2" });
+    await expect(await photoPixels(await fetch(preview.src).then((response) => response.blob()))).toMatchObject({ width: 40, height: 80 });
+    await userEvent.click(screen.getByRole("button", { name: "写真 3 を取り消す" }));
+    await userEvent.upload(input, photoFile());
+    await expect(screen.getByRole("img", { name: "選択した食事の写真" })).toHaveAttribute("src", firstPreview);
+    await waitFor(() => expect(screen.getByRole("button", { name: "食事を保存" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "食事を保存" }));
+    await waitFor(() => expect(args.onOpenChange).toHaveBeenCalledWith(false));
+    const saved = savedMeal.mock.calls[0]![0] as { photoId: string; additionalPhotoIds: string[] };
+    await expect(saved.additionalPhotoIds).toHaveLength(3);
+    await expect(new Set([saved.photoId, ...saved.additionalPhotoIds]).size).toBe(4);
+  },
+};
+
+export const MixedUnreadablePhoto: Story = {
+  name: "読み込めない 1 枚を取り消して他の写真を保持",
+  play: async ({ canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.upload(await screen.findByLabelText("保存済みの写真"), [photoFile(), new File(["invalid image"], "broken.jpg", { type: "image/jpeg" })]);
+    await expect(await screen.findByRole("img", { name: "選択した食事の写真" })).toBeVisible();
+    await expect(await screen.findByRole("alert")).toBeVisible();
+    await expect(screen.getByRole("button", { name: "食事を保存" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "写真 2 を取り消す" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "食事を保存" })).toBeEnabled());
+    await expect(screen.getByRole("img", { name: "選択した食事の写真" })).toBeVisible();
+    await expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   },
 };

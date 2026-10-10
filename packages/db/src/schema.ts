@@ -127,6 +127,7 @@ export const meals = sqliteTable("meals", {
   id: text("id").primaryKey(),
   clientId: text("client_id").notNull(),
   photoId: text("photo_id"),
+  additionalPhotoIds: text("additional_photo_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
   manualCaloriesKcal: integer("manual_calories_kcal"),
   memo: text("memo").notNull(),
   occurredAt: text("occurred_at").notNull(),

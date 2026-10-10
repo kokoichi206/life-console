@@ -10,7 +10,7 @@ export type CalorieBaseline = z.infer<typeof calorieBaselineSchema>;
 
 export const nutritionAnalysisPayloadSchema = z.object({ mealId: z.string().min(1).max(128).optional() });
 export const nutritionCandidateSchema = z.object({
-  id: z.string(), photoId: z.string().nullable(), memo: z.string(),
+  id: z.string(), photoId: z.string().nullable(), additionalPhotoIds: z.array(z.string()), memo: z.string(),
 });
 export const saveNutritionEstimateSchema = createNutritionEstimateSchema.extend({
   mealId: z.string().min(1).max(128), jobId: z.string().min(1).max(128), leaseToken: z.uuid(),

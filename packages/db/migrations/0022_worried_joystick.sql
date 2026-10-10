@@ -1,0 +1,1 @@
+ALTER TABLE `meals` ADD `additional_photo_ids` text DEFAULT '[]' NOT NULL;
