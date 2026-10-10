@@ -7,7 +7,7 @@ import { expect, fn, spyOn, waitFor, within } from "storybook/test";
 import { MealGallery } from "./MealGallery";
 
 const meals: Meal[] = Array.from({ length: 9 }, (_, index) => ({
-  id: `meal-${index}`, photoId: index === 1 ? null : `photo-${index}`, memo: index === 0 ? "ごはんと焼き魚\n味噌汁" : index === 1 ? "おにぎりとお茶" : "",
+  id: `meal-${index}`, photoId: index === 1 ? null : `photo-${index}`, additionalPhotoIds: [], memo: index === 0 ? "ごはんと焼き魚\n味噌汁" : index === 1 ? "おにぎりとお茶" : "",
   occurredAt: `2026-09-0${9 - index}T09:00:00Z`, recordedAt: "2026-09-09T09:00:00Z", tags: [],
 }));
 const nutrition: MealNutrition[] = meals.map((meal, index) => ({ mealId: meal.id, photoId: meal.photoId, occurredAt: meal.occurredAt,
@@ -54,7 +54,7 @@ export const Photos: Story = {
     await userEvent.click(mealButton);
     const detail = within(await screen.findByRole("dialog", { name: "食事の記録" }));
     await expect(detail.getByText(/ごはんと焼き魚/)).toHaveTextContent("味噌汁");
-    await expect(detail.getByRole("img", { name: "食事の写真" })).toBeVisible();
+    await expect(detail.getByRole("img", { name: "食事の写真 1" })).toBeVisible();
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(mealButton).toHaveFocus());
@@ -265,5 +265,18 @@ export const RefreshAnalysisResult: Story = {
     await expect(refreshedNutrition).toHaveBeenCalledTimes(2);
     await expect(nutritionIntervals.delays()).not.toContain(5_000);
     await expect(nutritionIntervals.delays()).not.toContain(60_000);
+  },
+};
+
+export const MultiplePhotos: Story = {
+  args: { meals: [{ ...meals[0]!, additionalPhotoIds: ["photo-second", "photo-third", "photo-fourth"] }] },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await expect(canvas.getByText("4 枚")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: /の食事を開く/ }));
+    const screen = within(canvasElement.ownerDocument.body);
+    const detail = within(await screen.findByRole("dialog", { name: "食事の記録" }));
+    await expect(detail.getAllByRole("img")).toHaveLength(4);
+    await expect(detail.getByRole("img", { name: "食事の写真 4" })).toHaveAttribute("src", "/api/v1/meal-photos/photo-fourth/content");
+    await expect(detail.getByText(/4 枚 · 横にスワイプ/)).toBeVisible();
   },
 };
