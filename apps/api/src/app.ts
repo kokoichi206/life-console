@@ -460,8 +460,8 @@ const _routes = app
   .post("/api/v1/meals", zValidator("json", createMealSchema), async (context) => {
     const input = context.req.valid("json");
     const handlers = createHandlers(context.get("environment"));
-    if (input.photoId !== null) {
-      const confirmed = await handlers.confirmMealPhotoUploaded(input.photoId);
+    for (const photoId of input.photoId === null ? [] : [input.photoId, ...input.additionalPhotoIds]) {
+      const confirmed = await handlers.confirmMealPhotoUploaded(photoId);
       if (!confirmed.ok) return respond(context, confirmed);
     }
     return respond(context, await handlers.createMeal(input));

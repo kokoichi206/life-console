@@ -120,10 +120,15 @@ export const createMealUploadSchema = z.object({
 export const createMealSchema = z.object({
   clientId: z.uuid(),
   photoId: identifierSchema.nullable().default(null),
+  additionalPhotoIds: z.array(identifierSchema).default([]),
   manualCaloriesKcal: z.number().int().nonnegative().optional(),
   memo: z.string().trim().max(2_000).default(""),
   occurredAt: isoDateTimeSchema,
   tags: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
+}).refine((input) => input.additionalPhotoIds.length === 0 || input.photoId !== null, {
+  message: "追加の写真には代表写真が必要です。", path: ["additionalPhotoIds"],
+}).refine((input) => new Set([input.photoId, ...input.additionalPhotoIds]).size === input.additionalPhotoIds.length + 1, {
+  message: "同じ写真を複数回追加できません。", path: ["additionalPhotoIds"],
 }).refine((input) => input.photoId !== null || input.memo.length > 0, {
   message: "写真またはメモのどちらかが必要です。",
   path: ["memo"],

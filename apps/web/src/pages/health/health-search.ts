@@ -5,6 +5,7 @@ export type HealthSearch = {
   readonly strava?: "connected" | "error" | undefined;
   readonly entry?: "weight" | "meal" | "goal" | "baseline" | undefined;
   readonly meal?: string | undefined;
+  readonly pfcDay?: string | undefined;
   readonly range?: WeightRange | undefined;
   readonly overlay?: "running" | "body-fat" | "exercise-calories" | undefined;
   readonly calories?: number | undefined;
@@ -17,10 +18,12 @@ export const parseHealthSearch = (search: Record<string, unknown>): HealthSearch
   const from = weightGoalSchema.shape.targetDate.unwrap().safeParse(search.from);
   const to = weightGoalSchema.shape.targetDate.unwrap().safeParse(search.to);
   const calories = typeof search.calories === "string" ? Number(search.calories) : search.calories;
+  const pfcDay = weightGoalSchema.shape.targetDate.unwrap().safeParse(search.pfcDay);
   return {
     ...(search.strava === "connected" || search.strava === "error" ? { strava: search.strava } : {}),
     ...(search.entry === "weight" || search.entry === "meal" || search.entry === "goal" || search.entry === "baseline" ? { entry: search.entry } : {}),
     ...(typeof search.meal === "string" && search.meal.length > 0 ? { meal: search.meal } : {}),
+    ...(pfcDay.success ? { pfcDay: pfcDay.data } : {}),
     ...(search.overlay === "running" || search.overlay === "body-fat" || search.overlay === "exercise-calories"
       ? { overlay: search.overlay }
       : search.running === "show" ? { overlay: "running" as const } : {}),

@@ -19,7 +19,10 @@ export const HealthRouteContent = ({ search, navigate }: {
     <HealthPage
       search={search}
       onRangeChange={(range) => {
-        void navigate({ search: { ...search, range: undefined, from: undefined, to: undefined, calories: undefined, ...range }, replace: true, resetScroll: false });
+        void navigate({ search: { ...search, range: undefined, from: undefined, to: undefined, calories: undefined, pfcDay: undefined, ...range }, replace: true, resetScroll: false });
+      }}
+      onPfcDayChange={(pfcDay) => {
+        void navigate({ search: { ...search, pfcDay, meal: undefined }, replace: false, resetScroll: false });
       }}
       onOverlayChange={(overlay) => {
         void navigate({ search: { ...search, overlay }, replace: true, resetScroll: false });

@@ -60,7 +60,7 @@ export const Recorded: Story = {
   },
 };
 export const Empty: Story = { parameters: { msw: { handlers: handlers([]) } } };
-const galleryMeal = (id: string, occurredAt: string): Meal => ({ id, photoId: null, memo: "", occurredAt, recordedAt: occurredAt, tags: [] });
+const galleryMeal = (id: string, occurredAt: string): Meal => ({ id, photoId: null, additionalPhotoIds: [], memo: "", occurredAt, recordedAt: occurredAt, tags: [] });
 export const LoadOlderMeals: Story = {
   name: "食事は 1 週間ずつ追加で読み込む",
   parameters: { msw: { handlers: [
@@ -290,8 +290,8 @@ export const WeeklyExerciseAndMeals: Story = {
     }),
     http.get("*/api/v1/meal-day-counts", () => HttpResponse.json({ data: [{ occurredAt: "2026-09-07", count: 1 }, { occurredAt: "2026-08-31", count: 1 }] })),
     http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [
-      { id: "current-meal", photoId: null, memo: "架空の食事メモ・今週", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
-      { id: "previous-meal", photoId: null, memo: "架空の食事メモ・前週", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
+      { id: "current-meal", photoId: null, additionalPhotoIds: [], memo: "架空の食事メモ・今週", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
+      { id: "previous-meal", photoId: null, additionalPhotoIds: [], memo: "架空の食事メモ・前週", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
     ], nextTo: null } })),
     ...handlers(weights),
   ] } },
@@ -444,7 +444,7 @@ export const NarrowHealthRecords: Story = {
     initialUrl: "/health?from=2026-09-01&to=2026-09-07",
     msw: { handlers: [
       http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: calorieMeals.map((meal) => ({
-        id: meal.mealId, photoId: null, memo: "架空の食事", tags: [], occurredAt: meal.occurredAt, recordedAt: meal.occurredAt,
+        id: meal.mealId, photoId: null, additionalPhotoIds: [], memo: "架空の食事", tags: [], occurredAt: meal.occurredAt, recordedAt: meal.occurredAt,
       })), nextTo: null } })),
       ...calorieBalanceHandlers(() => measuredCalories),
     ] },
@@ -756,5 +756,36 @@ export const MalformedCalorieDays: Story = {
   parameters: {
     ...LoadOlderCalorieBalance.parameters,
     initialUrl: `/health?from=2026-09-02&to=2026-09-20&calories=${encodeURIComponent(JSON.stringify({ toString: null }))}`,
+  },
+};
+
+const pfcMeals: Meal[] = [
+  { id: "pfc-analyzed", photoId: null, additionalPhotoIds: [], memo: "ごはんと鶏肉", occurredAt: "2026-10-08T12:00:00+09:00", recordedAt: "2026-10-08T12:00:00+09:00", tags: [] },
+  { id: "pfc-manual", photoId: null, additionalPhotoIds: [], memo: "手入力の夕食", occurredAt: "2026-10-08T19:00:00+09:00", recordedAt: "2026-10-08T19:00:00+09:00", tags: [] },
+  { id: "pfc-other-day", photoId: null, additionalPhotoIds: [], memo: "前日の朝食", occurredAt: "2026-10-07T09:00:00+09:00", recordedAt: "2026-10-07T09:00:00+09:00", tags: [] },
+];
+const pfcNutrition: MealNutrition[] = pfcMeals.map((meal, index) => ({ mealId: meal.id, photoId: null, occurredAt: meal.occurredAt, manualCaloriesKcal: index === 1 ? 750 : null, analysisStatus: null, analysisSummary: null, estimate: index === 1 ? null : { caloriesKcal: 600, proteinGrams: 40, fatGrams: 18, carbohydrateGrams: 80, model: "sample", analyzedAt: meal.occurredAt, inputHash: "a".repeat(64) } }));
+export const PfcDaySelection: Story = {
+  name: "日別 PFC から食事を絞り込み、全日へ戻る",
+  parameters: { initialUrl: "/health?from=2026-10-02&to=2026-10-09", msw: { handlers: [
+    http.get("*/api/v1/nutrition", ({ request }) => {
+      const query = new URL(request.url).searchParams;
+      return HttpResponse.json({ data: pfcNutrition.filter((meal) => meal.occurredAt.slice(0, 10) >= query.get("from")! && meal.occurredAt.slice(0, 10) <= query.get("to")!) });
+    }),
+    http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: pfcMeals, nextTo: null } })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "2026-10-08 の PFC と食事を見る" }));
+    await expect(await canvas.findByRole("heading", { name: "2026-10-08 の食事" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "2026/10/7 09:00 の食事を開く" })).not.toBeInTheDocument();
+    await userEvent.click(await canvas.findByRole("button", { name: "2026/10/8 12:00 の食事を開く" }));
+    const dialog = within(await within(document.body).findByRole("dialog", { name: "食事の記録" }));
+    await expect(dialog.getByText(/sample/)).toBeVisible();
+    await expect(dialog.getByText("栄養素は写真・メモからの推定値です。実際の分量や調理方法で変わります。")).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: "食事の詳細を閉じる" }));
+    await userEvent.click(canvas.getAllByRole("button", { name: "全日を見る" })[0]!);
+    await expect(await canvas.findByRole("button", { name: "2026/10/7 09:00 の食事を開く" })).toBeVisible();
+    await expect(canvas.getByText("PFC 未解析")).toBeVisible();
   },
 };

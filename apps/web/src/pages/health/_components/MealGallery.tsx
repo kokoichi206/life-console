@@ -11,6 +11,8 @@ import { Input } from "../../../components/ui/input";
 import { nutritionIsPending, summarizeDailyNutrition } from "../nutrition-summary";
 import { useHealthQueries } from "../queries";
 
+import { PfcNutrients } from "./PfcNutrients";
+
 const mealDateTime = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
 }).format(new Date(occurredAt));
@@ -65,11 +67,13 @@ const MealCaloriesForm = ({ nutrition }: { readonly nutrition: MealNutrition }) 
   );
 };
 
-export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = false, loadingMore = false, onLoadMore, periodLabel = "新しい順・直近 7 日間" }: {
+export const MealGallery = ({ meals, selectedMealId, onSelectMeal, selectedDay, onShowAll, hasMore = false, loadingMore = false, onLoadMore, periodLabel = "新しい順・直近 7 日間" }: {
   readonly periodLabel?: string;
   readonly meals: ReadonlyArray<Meal>;
   readonly selectedMealId: string | undefined;
   readonly onSelectMeal: (id: string | undefined) => void;
+  readonly selectedDay?: string | undefined;
+  readonly onShowAll?: () => void;
   readonly hasMore?: boolean;
   readonly loadingMore?: boolean;
   readonly onLoadMore?: () => void;
@@ -92,17 +96,21 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = fal
   const selectedNutrition = selectedMealId === undefined ? undefined : nutritionByMeal.get(selectedMealId);
   const pending = nutritionIsPending(selectedNutrition?.analysisStatus ?? null);
   const selectedMeal = meals.find((meal) => meal.id === selectedMealId);
+  const visibleMeals = selectedDay === undefined ? meals : meals.filter((meal) => weightCalendarDate(meal.occurredAt) === selectedDay);
   return (
     <Panel mobileLayout="section" className="mb-6" id="meals">
       <header className="space-y-1.5 pb-4 sm:px-5">
         <Eyebrow className="max-sm:hidden">MEALS</Eyebrow>
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold sm:text-base">食事の記録</h2>
+          <h2 className="text-xl font-semibold sm:text-base">{selectedDay === undefined ? "食事の記録" : `${selectedDay} の食事`}</h2>
           <Button variant="outline" size="sm" disabled={nutrition.isFetching} onClick={() => { void queryClient.invalidateQueries({ queryKey: nutritionQueryKey }); }}>{nutrition.isFetching ? "更新中…" : "栄養の結果を更新"}</Button>
         </div>
       </header>
       <div className="sm:px-5">
-        <p className="mb-4 text-xs text-muted-foreground">{periodLabel}</p>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">{selectedDay === undefined ? periodLabel : "選択日の記録・新しい順"}</p>
+          {selectedDay !== undefined && <Button variant="outline" size="sm" onClick={onShowAll}>全日を見る</Button>}
+        </div>
         <div className="mb-4 space-y-3">
           <p className="text-xs text-muted-foreground">{readOnly ? "保存済みの食事と栄養の推定値を表示しています。" : "カロリーが未入力の食事は、写真またはメモから保存後に自動で解析します。写真とメモは設定した AI サービスへ送られ、Mac の runner が起動している間に概算します。"}</p>
           <Button variant="outline" size="sm" disabled={readOnly || analyze.isPending || nutrition.data === undefined || nutrition.data.some((entry) => nutritionIsPending(entry.analysisStatus)) || !nutrition.data.some((entry) => entry.manualCaloriesKcal === null && entry.estimate === null)} onClick={() => analyze.mutate({})}>未解析の食事をまとめて解析</Button>
@@ -136,33 +144,40 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = fal
             </div>
           )}
         </div>
-        {meals.length === 0
-          ? <EmptyState>{readOnly ? "まだ食事記録がありません。" : "まだ食事記録がありません。『食事』から写真やメモを残せます。"}</EmptyState>
+        {visibleMeals.length === 0
+          ? <EmptyState>{selectedDay !== undefined ? "この日の食事記録はありません。" : readOnly ? "まだ食事記録がありません。" : "まだ食事記録がありません。『食事』から写真やメモを残せます。"}</EmptyState>
           : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-                {meals.map((meal) => (
-                  <button key={meal.id} type="button" className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => onSelectMeal(meal.id)} aria-label={`${mealDateTime(meal.occurredAt)} の食事を開く`}>
-                    <div className="aspect-square w-full shrink-0 overflow-hidden bg-muted">
-                      {meal.photoId === null
-                        ? (
-                            <div className="grid h-full content-center justify-items-center gap-2 text-muted-foreground">
-                              <Utensils aria-hidden="true" className="size-7" />
-                              <span className="text-xs">メモのみ</span>
-                            </div>
-                          )
-                        : <MealPhoto photoId={meal.photoId} alt="食事の写真" className="size-full object-cover" />}
-                    </div>
-                    <div className="grid w-full gap-2 p-3">
-                      <time dateTime={meal.occurredAt} className="text-xs text-muted-foreground">{mealDateTime(meal.occurredAt)}</time>
-                      <p className="text-sm font-medium tabular-nums">{mealCaloriesLabel(nutritionByMeal.get(meal.id))}</p>
-                      {nutritionIsPending(nutritionByMeal.get(meal.id)?.analysisStatus ?? null) && <p className="text-xs text-muted-foreground">解析待ち・解析中</p>}
-                      {meal.memo !== "" && <p className="line-clamp-2 text-sm break-words whitespace-pre-wrap">{meal.memo}</p>}
-                    </div>
-                  </button>
-                ))}
+                {visibleMeals.map((meal) => {
+                  const mealNutrition = nutritionByMeal.get(meal.id);
+                  return (
+                    <button key={meal.id} type="button" className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => onSelectMeal(meal.id)} aria-label={`${mealDateTime(meal.occurredAt)} の食事を開く`}>
+                      <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted">
+                        {meal.photoId === null
+                          ? (
+                              <div className="grid h-full content-center justify-items-center gap-2 text-muted-foreground">
+                                <Utensils aria-hidden="true" className="size-7" />
+                                <span className="text-xs">メモのみ</span>
+                              </div>
+                            )
+                          : <MealPhoto photoId={meal.photoId} alt="食事の写真" className="size-full object-cover" />}
+                        {meal.additionalPhotoIds.length > 0 && <span className="absolute right-2 bottom-2 rounded-md bg-card/95 px-2 py-1 text-xs text-foreground">{`${1 + meal.additionalPhotoIds.length} 枚`}</span>}
+                      </div>
+                      <div className="grid w-full gap-2 p-3">
+                        <time dateTime={meal.occurredAt} className="text-xs text-muted-foreground">{mealDateTime(meal.occurredAt)}</time>
+                        <p className="text-sm font-medium tabular-nums">{mealCaloriesLabel(nutritionByMeal.get(meal.id))}</p>
+                        {mealNutrition?.estimate != null
+                          ? <p className="text-[0.65rem] text-muted-foreground">{`P ${mealNutrition.estimate.proteinGrams} g · F ${mealNutrition.estimate.fatGrams} g · C ${mealNutrition.estimate.carbohydrateGrams} g`}</p>
+                          : nutritionByMeal.has(meal.id) && <p className="text-[0.65rem] text-muted-foreground">PFC 未解析</p>}
+                        {nutritionIsPending(nutritionByMeal.get(meal.id)?.analysisStatus ?? null) && <p className="text-xs text-muted-foreground">解析待ち・解析中</p>}
+                        {meal.memo !== "" && <p className="line-clamp-2 text-sm break-words whitespace-pre-wrap">{meal.memo}</p>}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
-        {hasMore && <div className="mt-4 flex justify-center"><Button variant="outline" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? "読み込んでいます…" : "もっと見る"}</Button></div>}
+        {hasMore && selectedDay === undefined && <div className="mt-4 flex justify-center"><Button variant="outline" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? "読み込んでいます…" : "もっと見る"}</Button></div>}
       </div>
       <Dialog.Root open={selectedMealId !== undefined} onOpenChange={(open) => { if (!open) onSelectMeal(undefined); }}>
         <Dialog.Portal>
@@ -175,13 +190,22 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, hasMore = fal
             <Dialog.Description className="mb-4 text-sm text-muted-foreground">{selectedMeal === undefined ? "この食事記録は一覧にありません。" : mealDateTime(selectedMeal.occurredAt)}</Dialog.Description>
             {selectedMeal !== undefined && (
               <div className="grid gap-4">
-                {selectedMeal.photoId !== null && <div className="overflow-hidden rounded-xl bg-muted"><MealPhoto key={selectedMeal.photoId} photoId={selectedMeal.photoId} alt="食事の写真" className="max-h-[60dvh] w-full object-contain" /></div>}
+                {selectedMeal.photoId !== null && (
+                  <div className="space-y-2">
+                    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto rounded-xl" role="region" aria-label="食事の写真" tabIndex={0}>
+                      {[selectedMeal.photoId, ...selectedMeal.additionalPhotoIds].map((photoId, index) => (
+                        <div key={photoId} className={`w-full shrink-0 snap-center overflow-hidden rounded-xl bg-muted ${selectedMeal.additionalPhotoIds.length > 0 ? "aspect-[4/3]" : ""}`}><MealPhoto photoId={photoId} alt={`食事の写真 ${index + 1}`} className={selectedMeal.additionalPhotoIds.length > 0 ? "size-full object-contain" : "max-h-[60dvh] w-full object-contain"} /></div>
+                      ))}
+                    </div>
+                    {selectedMeal.additionalPhotoIds.length > 0 && <p className="text-xs text-muted-foreground">{`${1 + selectedMeal.additionalPhotoIds.length} 枚 · 横にスワイプで写真を切り替え`}</p>}
+                  </div>
+                )}
                 {selectedMeal.memo !== "" && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{selectedMeal.memo}</p>}
                 {selectedNutrition !== undefined && selectedNutrition.manualCaloriesKcal !== null && <p className="text-xl font-semibold">{mealCaloriesLabel(selectedNutrition)}</p>}
                 {selectedNutrition !== undefined && selectedNutrition.estimate !== null && (
                   <div className="space-y-2 rounded-xl bg-muted/50 p-4">
                     {selectedNutrition.manualCaloriesKcal === null && <p className="text-xl font-semibold">{`推定 約 ${selectedNutrition.estimate.caloriesKcal} kcal`}</p>}
-                    <p className="text-sm">{`たんぱく質 ${selectedNutrition.estimate.proteinGrams} g ・ 脂質 ${selectedNutrition.estimate.fatGrams} g ・ 炭水化物 ${selectedNutrition.estimate.carbohydrateGrams} g`}</p>
+                    <PfcNutrients grams={selectedNutrition.estimate} />
                     <p className="text-xs text-muted-foreground">{`${selectedNutrition.estimate.model} ・ ${mealDateTime(selectedNutrition.estimate.analyzedAt)} に解析`}</p>
                     <p className="text-xs text-muted-foreground">栄養素は写真・メモからの推定値です。実際の分量や調理方法で変わります。</p>
                   </div>
