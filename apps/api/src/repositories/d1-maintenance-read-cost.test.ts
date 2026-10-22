@@ -62,9 +62,9 @@ it("ローカル D1 で保守の結果を保ち、復旧履歴と将来予約の
     } as D1Database;
     const monitor = createMonitoringRepository(measuredDatabase);
     const measuredCalendar = createCalendarRepository(measuredDatabase);
-    const measureMonitor = async () => {
+    const measureMonitor = async (decision: "recover" | "hold" = "recover") => {
       measuredRows = 0;
-      expect(await monitor.decide(target, "recover", "正常", now)).toMatchObject({ ok: true });
+      expect(await monitor.decide(target, decision, "正常", now)).toMatchObject({ ok: true });
       return measuredRows;
     };
     const measureCalendar = async () => {
@@ -72,14 +72,26 @@ it("ローカル D1 で保守の結果を保ち、復旧履歴と将来予約の
       expect(await measuredCalendar.reconcileUpcoming(now)).toMatchObject({ ok: true });
       return measuredRows;
     };
+    const monitorCatchup = await measureMonitor();
     const monitorAfter = await measureMonitor();
+    expect(monitorCatchup).toBeGreaterThan(monitorAfter);
     const calendarAfter = await measureCalendar();
     expect(await snapshot()).toEqual(original);
     expect(monitorAfter).toBeLessThan(monitorBefore / 10);
     expect(calendarAfter).toBeLessThan(calendarBefore / 10);
     await addResolvedHistory(100, 1000);
+    await db.prepare("UPDATE monitor_incidents SET recovery_reservation_pending = 1 WHERE recovery_reservation_pending = 0").run();
     expect(await measureMonitor()).toBeGreaterThan(monitorAfter);
     expect(await measureMonitor()).toBe(monitorAfter);
+    await db.prepare(`INSERT INTO monitor_incidents(id,target_id,opened_at,reason)
+      VALUES ('ongoing-outage','other-target',?,'fixture')`).bind(now).run();
+    await db.prepare(`WITH RECURSIVE seq(i) AS (SELECT 0 UNION ALL SELECT i+1 FROM seq WHERE i<1199)
+      INSERT INTO monitor_notifications(id,incident_id,endpoint,kind,slot,body,status,next_attempt_at,accepted_at,created_at)
+      SELECT 'ongoing-alert-'||i,'ongoing-outage','endpoint','alert',i,'fixture','accepted',?,?,? FROM seq`).bind(now, now, now).run();
+    expect(await measureMonitor()).toBe(monitorAfter);
+    const holdingRows = await measureMonitor("hold");
+    await db.prepare("UPDATE monitor_incidents SET target_id = 'target' WHERE id = 'ongoing-outage'").run();
+    expect(await measureMonitor("hold")).toBe(holdingRows);
     await db.prepare(`WITH RECURSIVE seq(i) AS (SELECT 0 UNION ALL SELECT i+1 FROM seq WHERE i<999)
       INSERT INTO calendar_events(id,source,calendar_key,source_key,title,date,notes,source_url,status,created_at,updated_at)
       SELECT 'future-'||i,'garbage','tokushima-2026-D','future-'||i,'fixture','2027-03-01','','https://example.com/','active',?,? FROM seq`).bind(now, now).run();
@@ -87,7 +99,7 @@ it("ローカル D1 で保守の結果を保ち、復旧履歴と将来予約の
     expect(await measureCalendar()).toBe(calendarAfter);
     // 測定値は架空データの比較で、本番の日次消費量とは区別する。
     expect({ monitorBefore, monitorAfter, calendarBefore, calendarAfter }).toMatchObject({
-      monitorBefore: 305, monitorAfter: 8, calendarBefore: 573, calendarAfter: 37,
+      monitorBefore: 305, monitorAfter: 9, calendarBefore: 573, calendarAfter: 37,
     });
   } finally {
     await platform.dispose();

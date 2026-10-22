@@ -20,8 +20,6 @@ export const createMonitoringRepository = (database: D1Database) => {
   const awaitingRecovery = (notification: typeof monitorNotifications | typeof acceptedAlert) => and(
     sql`${notification.kind} = 'alert'`, isNotNull(notification.acceptedAt), isNull(notification.recoveryReservedAt),
   );
-  const pendingRecoveryEndpoints = db.selectDistinct({ incidentId: acceptedAlert.incidentId, endpoint: acceptedAlert.endpoint })
-    .from(acceptedAlert).where(awaitingRecovery(acceptedAlert)).as("pending_recovery_endpoints");
   return {
     async expectRunners(runnerIds: ReadonlyArray<string>, now: string) {
       if (runnerIds.length === 0) return ok(undefined);
@@ -104,6 +102,11 @@ export const createMonitoringRepository = (database: D1Database) => {
       const updates: BatchItem<"sqlite">[] = [];
       const current = exists(db.select({ id: monitorTargets.id }).from(monitorTargets).where(and(eq(monitorTargets.id, target.id), eq(monitorTargets.revision, target.revision))));
       const openIncident = and(eq(monitorIncidents.targetId, target.id), isNull(monitorIncidents.resolvedAt));
+      const pendingRecoveryIncidents = and(eq(monitorIncidents.targetId, target.id), sql`${monitorIncidents.recoveryReservationPending} = 1`);
+      const pendingIncidentIds = db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(pendingRecoveryIncidents);
+      // 未復旧の警告が蓄積しても、復旧済みで確認待ちの障害だけを起点にする。
+      const pendingRecoveryEndpoints = db.selectDistinct({ incidentId: acceptedAlert.incidentId, endpoint: acceptedAlert.endpoint })
+        .from(acceptedAlert).where(and(awaitingRecovery(acceptedAlert), inArray(acceptedAlert.incidentId, pendingIncidentIds))).as("pending_recovery_endpoints");
       const slot = sql<number>`cast((unixepoch(${now}) - unixepoch(${monitorIncidents.openedAt})) / 1800 as integer)`;
       const notificationSelection = (kind: MonitorNotificationKind, body: string) => ({
         id: sql`lower(hex(randomblob(16)))`.as("id"), incidentId: monitorIncidents.id, endpoint: pushSubscriptions.endpoint,
@@ -114,6 +117,7 @@ export const createMonitoringRepository = (database: D1Database) => {
       if (decision === "open") {
         updates.push(db.insert(monitorIncidents).select(db.select({ id: sql`${crypto.randomUUID()}`.as("id"), targetId: monitorTargets.id,
           openedAt: sql`${now}`.as("openedAt"), resolvedAt: sql`null`.as("resolvedAt"), reason: sql`${reason}`.as("reason"),
+          recoveryReservationPending: sql`0`.as("recoveryReservationPending"),
         }).from(monitorTargets).where(and(eq(monitorTargets.id, target.id), eq(monitorTargets.revision, target.revision)))).onConflictDoNothing());
         // 未送信の古い再通知を積み上げず、同じ通知枠は端末ごとに一意にする。
         updates.push(db.update(monitorNotifications).set({ status: "canceled" }).where(and(eq(monitorNotifications.status, "pending"), eq(monitorNotifications.kind, "alert"),
@@ -127,30 +131,30 @@ export const createMonitoringRepository = (database: D1Database) => {
         updates.push(db.update(monitorNotifications).set({ status: "canceled" }).where(and(inArray(monitorNotifications.status, ["pending", "sending"]), eq(monitorNotifications.kind, "alert"),
           inArray(monitorNotifications.incidentId, db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(openIncident)), current,
         )));
-        updates.push(db.update(monitorIncidents).set({ resolvedAt: now }).where(and(openIncident, current)));
+        updates.push(db.update(monitorIncidents).set({ resolvedAt: now, recoveryReservationPending: true }).where(and(openIncident, current)));
       }
       // 配送の完了と復旧判定が前後しても、受付済みの端末へ復旧を一度予約する。
       const reservedRecovery = alias(monitorNotifications, "reserved_recovery");
-      // 障害履歴を JOIN の起点に選ばせず、未予約の受付からだけ障害を引く。
+      const alreadyReserved = db.select({ id: reservedRecovery.id }).from(reservedRecovery).where(and(
+        eq(reservedRecovery.incidentId, pendingRecoveryEndpoints.incidentId), eq(reservedRecovery.kind, "recovery"),
+        eq(reservedRecovery.slot, 0), eq(reservedRecovery.endpoint, pushSubscriptions.endpoint),
+      ));
       const recovery = db.insert(monitorNotifications).select(db.select({
         ...notificationSelection("recovery", `${target.runnerId} / ${target.service} (${target.account}): 復旧しました。`), incidentId: pendingRecoveryEndpoints.incidentId,
       })
         .from(pendingRecoveryEndpoints)
         .innerJoin(pushSubscriptions, eq(pushSubscriptions.endpoint, pendingRecoveryEndpoints.endpoint))
-        .where(and(exists(db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(and(eq(monitorIncidents.id, pendingRecoveryEndpoints.incidentId),
-          eq(monitorIncidents.targetId, target.id), isNotNull(monitorIncidents.resolvedAt)))),
         // 復旧を予約済みの端末では、過去の警告履歴の走査と競合 INSERT を繰り返さない。
-        notExists(db.select({ id: reservedRecovery.id }).from(reservedRecovery).where(and(eq(reservedRecovery.incidentId, pendingRecoveryEndpoints.incidentId),
-          eq(reservedRecovery.kind, "recovery"), eq(reservedRecovery.slot, 0), eq(reservedRecovery.endpoint, pushSubscriptions.endpoint)))),
-        ))).onConflictDoNothing();
+        .where(notExists(alreadyReserved))).onConflictDoNothing();
       // 予約と同じ batch で印を付け、途中失敗で受付済み警告を取りこぼさない。
       const markReserved = db.update(monitorNotifications).set({ recoveryReservedAt: now }).where(and(awaitingRecovery(monitorNotifications),
-        exists(db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(and(eq(monitorIncidents.id, monitorNotifications.incidentId),
-          eq(monitorIncidents.targetId, target.id), isNotNull(monitorIncidents.resolvedAt)))),
+        inArray(monitorNotifications.incidentId, pendingIncidentIds),
         exists(db.select({ id: reservedRecovery.id }).from(reservedRecovery).where(and(eq(reservedRecovery.incidentId, monitorNotifications.incidentId),
           eq(reservedRecovery.kind, "recovery"), eq(reservedRecovery.slot, 0), eq(reservedRecovery.endpoint, monitorNotifications.endpoint)))),
       ));
-      const statements = [...updates, recovery, markReserved];
+      const statements = [...updates, recovery, markReserved,
+        db.update(monitorIncidents).set({ recoveryReservationPending: false }).where(pendingRecoveryIncidents),
+      ];
       return batch([statements[0]!, ...statements.slice(1)]);
     },
     async claim(now: string) {
@@ -174,10 +178,19 @@ export const createMonitoringRepository = (database: D1Database) => {
       const next = new Date(Date.parse(now) + Math.min(1800, 60 * 2 ** Math.min(delivery.attempts - 1, 5)) * 1000).toISOString();
       const statements: [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]] = [
         db.update(monitorDeliveryAttempts).set({ finishedAt: now, outcome }).where(eq(monitorDeliveryAttempts.id, delivery.leaseToken)),
+      ];
+      // lease の消去前に受付元を照合し、復旧より遅い受付だけを再確認待ちに戻す。
+      if (outcome === "accepted") statements.push(db.update(monitorIncidents).set({ recoveryReservationPending: true }).where(and(
+        isNotNull(monitorIncidents.resolvedAt),
+        inArray(monitorIncidents.id, db.select({ incidentId: monitorNotifications.incidentId }).from(monitorNotifications).where(and(
+          eq(monitorNotifications.id, delivery.id), eq(monitorNotifications.leaseToken, delivery.leaseToken), eq(monitorNotifications.kind, "alert"),
+        ))),
+      )));
+      statements.push(
         db.update(monitorNotifications).set({ status: sql`case when ${monitorNotifications.status} = 'canceled' then ${monitorNotifications.status} else ${outcome === "failed" ? "pending" : outcome} end`,
           acceptedAt: outcome === "accepted" ? now : monitorNotifications.acceptedAt, nextAttemptAt: next, leaseToken: null, leaseExpiresAt: null,
         }).where(and(eq(monitorNotifications.id, delivery.id), eq(monitorNotifications.leaseToken, delivery.leaseToken))),
-      ];
+      );
       if (outcome === "expired") statements.push(db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, delivery.endpoint)));
       return batch(statements);
     },
