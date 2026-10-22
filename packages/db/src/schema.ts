@@ -69,7 +69,11 @@ export const calendarReminders = sqliteTable("calendar_reminders", {
   id: text("id").primaryKey(), eventId: text("event_id").notNull().references(() => calendarEvents.id),
   slot: text("slot", { enum: calendarReminderSlots }).notNull(), dueAt: text("due_at").notNull(), expiresAt: text("expires_at").notNull(),
   status: text("status", { enum: calendarReminderStatuses }).notNull(),
-}, (table) => [uniqueIndex("calendar_reminder_slot_uidx").on(table.eventId, table.slot, table.dueAt), index("calendar_reminder_due_idx").on(table.status, table.dueAt)]);
+}, (table) => [
+  uniqueIndex("calendar_reminder_slot_uidx").on(table.eventId, table.slot, table.dueAt),
+  index("calendar_reminder_due_idx").on(table.status, table.dueAt),
+  index("calendar_reminder_expiry_idx").on(table.status, table.expiresAt),
+]);
 export const calendarDeliveries = sqliteTable("calendar_deliveries", {
   id: text("id").primaryKey(), reminderId: text("reminder_id").notNull().references(() => calendarReminders.id), endpoint: text("endpoint").notNull(),
   status: text("status", { enum: workConfirmationNotificationStatuses }).notNull(), attempts: integer("attempts").notNull().default(0),
@@ -306,7 +310,13 @@ export const monitorNotifications = sqliteTable("monitor_notifications", {
   status: text("status", { enum: monitorNotificationStatuses }).notNull(), attempts: integer("attempts").notNull().default(0),
   nextAttemptAt: text("next_attempt_at").notNull(), leaseToken: text("lease_token"), leaseExpiresAt: text("lease_expires_at"),
   acceptedAt: text("accepted_at"), createdAt: text("created_at").notNull(),
-}, (table) => [uniqueIndex("monitor_delivery_uidx").on(table.incidentId, table.kind, table.slot, table.endpoint), index("monitor_delivery_due_idx").on(table.status, table.nextAttemptAt)]);
+  recoveryReservedAt: text("recovery_reserved_at"),
+}, (table) => [
+  uniqueIndex("monitor_delivery_uidx").on(table.incidentId, table.kind, table.slot, table.endpoint),
+  index("monitor_delivery_due_idx").on(table.status, table.nextAttemptAt),
+  index("monitor_recovery_pending_idx").on(table.incidentId, table.endpoint)
+    .where(sql`${table.kind} = 'alert' AND ${table.acceptedAt} IS NOT NULL AND ${table.recoveryReservedAt} IS NULL`),
+]);
 export const monitorDeliveryAttempts = sqliteTable("monitor_delivery_attempts", {
   id: text("id").primaryKey(), notificationId: text("notification_id").notNull(), startedAt: text("started_at").notNull(),
   finishedAt: text("finished_at"), outcome: text("outcome", { enum: monitorDeliveryOutcomes }),

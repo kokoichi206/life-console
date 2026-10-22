@@ -1,7 +1,7 @@
 import type { CalendarEvent, CalendarRange, CollectionCalendar, CollectionSettings, UpdateCalendarEvent } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
 import { calendarDeliveries, calendarEvents, calendarPreparations, calendarReminders, collectionSettings, pushSubscriptions, tasks } from "@life-console/db";
-import { and, asc, between, eq, exists, gt, inArray, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, between, eq, exists, gt, gte, inArray, lt, lte, notInArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 
 import { collectionPeriod, tokushimaCollections } from "../calendar/tokushima-2026";
@@ -19,6 +19,32 @@ export const createCalendarRepository = (database: D1Database) => {
     ? sql<string>`strftime('%Y-%m-%dT%H:%M:%fZ', ${calendarEvents.date} || 'T' || ${collectionSettings.previousDayTime} || ':00+09:00', '-1 day')`
     : sql<string>`strftime('%Y-%m-%dT%H:%M:%fZ', ${calendarEvents.date} || 'T' || ${collectionSettings.sameDayTime} || ':00+09:00')`;
   const eligible = (now: string) => and(eq(calendarEvents.status, "active"), eq(collectionSettings.notificationsEnabled, true), selectedCalendar, preparationPending, gt(expiry, now));
+  const reconcile = async (now: string, upcomingOnly: boolean): Promise<Result<void, AppError>> => {
+    // 予約作成を日本時間の今日・明日の収集に絞り、年度全体の再走査を避ける。
+    const japanNow = Date.parse(now) + 9 * 60 * 60_000;
+    const today = new Date(japanNow).toISOString().slice(0, 10);
+    const throughDate = new Date(japanNow + 2 * 24 * 60 * 60_000).toISOString().slice(0, 10);
+    const throughTime = new Date(`${throughDate}T00:00:00+09:00`).toISOString();
+    const upcomingEvents = upcomingOnly ? and(gte(calendarEvents.date, today), lt(calendarEvents.date, throughDate)) : undefined;
+    const upcomingReminders = upcomingOnly ? lt(calendarReminders.dueAt, throughTime) : undefined;
+    const current = db.select({ id: calendarEvents.id }).from(calendarEvents).innerJoin(collectionSettings, eq(collectionSettings.id, 1))
+      .where(and(eq(calendarEvents.id, calendarReminders.eventId), eligible(now), or(and(eq(calendarReminders.slot, "previous_day"), eq(calendarReminders.dueAt, due("previous_day"))), and(eq(calendarReminders.slot, "same_day"), eq(calendarReminders.dueAt, due("same_day"))))));
+    const reservations = (["previous_day", "same_day"] as const).map((slot) => db.insert(calendarReminders).select(db.select({
+      id: sql<string>`${calendarEvents.id} || ':' || ${slot} || ':' || ${due(slot)}`.as("id"), eventId: calendarEvents.id, slot: sql`${slot}`.as("slot"),
+      dueAt: due(slot).as("dueAt"), expiresAt: expiry.as("expiresAt"), status: sql`'scheduled'`.as("status"),
+    }).from(calendarEvents).innerJoin(collectionSettings, eq(collectionSettings.id, 1)).where(and(upcomingEvents, eligible(now), gt(due(slot), now), gt(expiry, due(slot)))))
+      .onConflictDoUpdate({ target: [calendarReminders.eventId, calendarReminders.slot, calendarReminders.dueAt], set: { status: "scheduled" }, setWhere: eq(calendarReminders.status, "canceled") }));
+    const result = await safeTry(() => db.batch([
+      db.update(calendarReminders).set({ status: "missed" }).where(and(inArray(calendarReminders.status, ["scheduled", "delivering"]), lte(calendarReminders.expiresAt, now))),
+      db.update(calendarReminders).set({ status: "canceled" }).where(and(inArray(calendarReminders.status, ["scheduled", "delivering"]), upcomingReminders, notInArray(calendarReminders.eventId, current))),
+      db.update(calendarDeliveries).set({ status: "canceled", leaseToken: null, leaseExpiresAt: null }).where(and(activeDeliveries, or(
+        inArray(calendarDeliveries.reminderId, db.select({ id: calendarReminders.id }).from(calendarReminders).where(inArray(calendarReminders.status, ["canceled", "missed"]))),
+        notInArray(calendarDeliveries.endpoint, db.select({ endpoint: pushSubscriptions.endpoint }).from(pushSubscriptions)),
+      ))),
+      ...reservations,
+    ]));
+    return result.ok ? ok(undefined) : err(appError.storage(result.error));
+  };
   return {
     async list(range: CalendarRange): Promise<Result<CollectionCalendar, AppError>> {
       const result = await safeTry(() => db.batch([
@@ -82,25 +108,8 @@ export const createCalendarRepository = (database: D1Database) => {
       if (!result.ok) return err(appError.storage(result.error));
       return result.value[0].meta.changes > 0 ? ok(undefined) : err(appError.conflict("準備は登録済みか、予定が中止されています。"));
     },
-    async reconcile(now: string): Promise<Result<void, AppError>> {
-      const current = db.select({ id: calendarEvents.id }).from(calendarEvents).innerJoin(collectionSettings, eq(collectionSettings.id, 1))
-        .where(and(eq(calendarEvents.id, calendarReminders.eventId), eligible(now), or(and(eq(calendarReminders.slot, "previous_day"), eq(calendarReminders.dueAt, due("previous_day"))), and(eq(calendarReminders.slot, "same_day"), eq(calendarReminders.dueAt, due("same_day"))))));
-      const reservations = (["previous_day", "same_day"] as const).map((slot) => db.insert(calendarReminders).select(db.select({
-        id: sql<string>`${calendarEvents.id} || ':' || ${slot} || ':' || ${due(slot)}`.as("id"), eventId: calendarEvents.id, slot: sql`${slot}`.as("slot"),
-        dueAt: due(slot).as("dueAt"), expiresAt: expiry.as("expiresAt"), status: sql`'scheduled'`.as("status"),
-      }).from(calendarEvents).innerJoin(collectionSettings, eq(collectionSettings.id, 1)).where(and(eligible(now), gt(due(slot), now), gt(expiry, due(slot)))))
-        .onConflictDoUpdate({ target: [calendarReminders.eventId, calendarReminders.slot, calendarReminders.dueAt], set: { status: "scheduled" }, setWhere: eq(calendarReminders.status, "canceled") }));
-      const result = await safeTry(() => db.batch([
-        db.update(calendarReminders).set({ status: "missed" }).where(and(inArray(calendarReminders.status, ["scheduled", "delivering"]), lte(calendarReminders.expiresAt, now))),
-        db.update(calendarReminders).set({ status: "canceled" }).where(and(inArray(calendarReminders.status, ["scheduled", "delivering"]), notInArray(calendarReminders.eventId, current))),
-        db.update(calendarDeliveries).set({ status: "canceled", leaseToken: null, leaseExpiresAt: null }).where(and(activeDeliveries, or(
-          inArray(calendarDeliveries.reminderId, db.select({ id: calendarReminders.id }).from(calendarReminders).where(inArray(calendarReminders.status, ["canceled", "missed"]))),
-          notInArray(calendarDeliveries.endpoint, db.select({ endpoint: pushSubscriptions.endpoint }).from(pushSubscriptions)),
-        ))),
-        ...reservations,
-      ]));
-      return result.ok ? ok(undefined) : err(appError.storage(result.error));
-    },
+    reconcile: (now: string) => reconcile(now, false),
+    reconcileUpcoming: (now: string) => reconcile(now, true),
     async expandDue(now: string): Promise<Result<void, AppError>> {
       const dueReminders = and(eq(calendarReminders.status, "scheduled"), lte(calendarReminders.dueAt, now), gt(calendarReminders.expiresAt, now));
       const result = await safeTry(() => db.batch([
