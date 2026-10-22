@@ -20,6 +20,20 @@ GitHub Environment の配置許可ブランチは `development` が `develop`、
 
 migration 後に配置が失敗すると、適用済みの migration は残ります。稼働中の Worker との互換性を保ってください。通常の変更は feature ブランチから `develop` へ取り込み、開発環境で確認後、`develop` → `main` の PR を merge commit でマージします。
 
+## Node.js の更新
+
+開発・テスト・ビルドに使う Node.js は、リポジトリ直下の [.node-version](../.node-version) に固定する。GitHub Actions の CI・Terraform plan・デプロイも `node-version-file` で同じ指定を読む。指定ファイルだけを更新した場合も、デプロイの変更検出は全工程を対象にする。
+
+root と runner の `package.json` の `engines.node` は、修正済みの Node.js 24 系と 26 系の範囲を指定する。標準の開発・検証環境は `.node-version` の 24 系であり、26 系へ切り替える指定ではない。npm パッケージとして依存する Undici は Node.js 内蔵版とは別に更新する。`pnpm-workspace.yaml` の override は、Miniflare の固定依存を含む修正前の 7 系だけに適用する。
+
+Mac の常駐 runner は LaunchAgent から起動する実体の Node.js パスも確認する。対話シェルの `node --version` や `.node-version` の変更だけでは、既に動いているプロセスのランタイムは変わらない。
+
+更新時は実行中・本人の回答待ちのジョブを確認し、処理を中断しない時点で切り替える。現行の runner 配布物を新しい Node.js と隔離したテスト API で起動確認した後、既存の起動スクリプトの Node.js パスを変更し、同じ LaunchAgent を再起動する。実行中プロセスの実体パスと、API に届く runner の観測を確認する。Node.js の更新のために配布物や資格情報を入れ替える必要はない。
+
+Cloudflare 上の Web/API は Workers runtime で動くため、この Node.js 指定は Workers の実行エンジンを選ぶものではない。GitHub Actions の JavaScript action 自体の Node.js も runner 側の管理であり、`setup-node` の指定は後続のコマンド実行用である。
+
+2026 年 10 月の影響と確認結果は [セキュリティ更新の調査記録](reviews/node-security-2026-10-22.md)を参照。
+
 ## Mac runner の接続
 
 runner は起動すると API を poll し、実際の同期や job を実行します。画面確認だけなら起動は不要です。環境変数は shell または secret store から渡し、コード・設定を変えたら再起動します。`.env.example` は自動では読み込みません。

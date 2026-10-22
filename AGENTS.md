@@ -29,7 +29,7 @@
 
 ## 実装から検証まで
 
-Node.js 24 以上、pnpm は `package.json` の `packageManager` を使う。初回は `pnpm install --frozen-lockfile`。ローカル API と Web は `pnpm local:setup`、`pnpm dev` で準備する。runner は外部 CLI やジョブを実行するため、画面確認だけなら起動しない。
+Node.js は `.node-version` のバージョン、pnpm は `package.json` の `packageManager` を使う。初回は `pnpm install --frozen-lockfile`。ローカル API と Web は `pnpm local:setup`、`pnpm dev` で準備する。runner は外部 CLI やジョブを実行するため、画面確認だけなら起動しない。
 
 - 実装中は変更箇所のテストと lint・型検査を選んで実行する。バグ修正では再現条件を確認し、継続して守る必要がある挙動に回帰テストを追加する。
 - コード・実行設定の変更を仕上げるときは `pnpm check` を実行する。AI 指示・ルール・スキル本文のみなら `pnpm harness:check` と参照先・内容の確認でよい。CI は `develop` 向け PR で全チェックを実行する。
