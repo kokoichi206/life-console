@@ -300,9 +300,12 @@ export const monitorObservations = sqliteTable("monitor_observations", {
 export const monitorIncidents = sqliteTable("monitor_incidents", {
   id: text("id").primaryKey(), targetId: text("target_id").notNull(), openedAt: text("opened_at").notNull(), resolvedAt: text("resolved_at"),
   reason: text("reason").notNull(),
+  recoveryReservationPending: integer("recovery_reservation_pending", { mode: "boolean" }).notNull().default(false),
 }, (table) => [
   uniqueIndex("monitor_open_incident_uidx").on(table.targetId).where(sql`resolved_at IS NULL`),
   index("monitor_incidents_target_resolved_idx").on(table.targetId, table.resolvedAt),
+  index("monitor_incident_recovery_pending_idx").on(table.targetId)
+    .where(sql`${table.recoveryReservationPending} = 1`),
 ]);
 export const monitorNotifications = sqliteTable("monitor_notifications", {
   id: text("id").primaryKey(), incidentId: text("incident_id").notNull(), endpoint: text("endpoint").notNull(),
