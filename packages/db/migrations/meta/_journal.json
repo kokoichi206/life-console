@@ -169,6 +169,13 @@
       "when": 1792628954802,
       "tag": "0023_sloppy_sage",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1792689119375,
+      "tag": "0024_smooth_mac_gargan",
+      "breakpoints": true
     }
   ]
 }
