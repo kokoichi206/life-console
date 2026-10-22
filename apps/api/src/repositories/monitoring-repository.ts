@@ -16,6 +16,12 @@ export const createMonitoringRepository = (database: D1Database) => {
     const result = await safeTry(() => db.batch(statements));
     return result.ok ? ok(undefined) : err(appError.storage(result.error));
   };
+  const acceptedAlert = alias(monitorNotifications, "accepted_alert");
+  const awaitingRecovery = (notification: typeof monitorNotifications | typeof acceptedAlert) => and(
+    sql`${notification.kind} = 'alert'`, isNotNull(notification.acceptedAt), isNull(notification.recoveryReservedAt),
+  );
+  const pendingRecoveryEndpoints = db.selectDistinct({ incidentId: acceptedAlert.incidentId, endpoint: acceptedAlert.endpoint })
+    .from(acceptedAlert).where(awaitingRecovery(acceptedAlert)).as("pending_recovery_endpoints");
   return {
     async expectRunners(runnerIds: ReadonlyArray<string>, now: string) {
       if (runnerIds.length === 0) return ok(undefined);
@@ -103,6 +109,7 @@ export const createMonitoringRepository = (database: D1Database) => {
         id: sql`lower(hex(randomblob(16)))`.as("id"), incidentId: monitorIncidents.id, endpoint: pushSubscriptions.endpoint,
         kind: sql`${kind}`.as("kind"), slot: kind === "alert" ? slot.as("slot") : sql`0`.as("slot"), body: sql`${body}`.as("body"), status: sql`'pending'`.as("status"), attempts: sql`0`.as("attempts"),
         nextAttemptAt: sql`${now}`.as("nextAttemptAt"), leaseToken: sql`null`.as("leaseToken"), leaseExpiresAt: sql`null`.as("leaseExpiresAt"), acceptedAt: sql`null`.as("acceptedAt"), createdAt: sql`${now}`.as("createdAt"),
+        recoveryReservedAt: sql`null`.as("recoveryReservedAt"),
       });
       if (decision === "open") {
         updates.push(db.insert(monitorIncidents).select(db.select({ id: sql`${crypto.randomUUID()}`.as("id"), targetId: monitorTargets.id,
@@ -117,24 +124,33 @@ export const createMonitoringRepository = (database: D1Database) => {
           .from(monitorIncidents).innerJoin(pushSubscriptions, sql`1`).where(and(openIncident, current))).onConflictDoNothing());
       }
       if (decision === "recover") {
-        const resolvedIncident = and(eq(monitorIncidents.targetId, target.id), isNotNull(monitorIncidents.resolvedAt));
-        updates.push(db.update(monitorIncidents).set({ resolvedAt: now }).where(and(openIncident, current)));
         updates.push(db.update(monitorNotifications).set({ status: "canceled" }).where(and(inArray(monitorNotifications.status, ["pending", "sending"]), eq(monitorNotifications.kind, "alert"),
-          inArray(monitorNotifications.incidentId, db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(resolvedIncident)), current,
+          inArray(monitorNotifications.incidentId, db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(openIncident)), current,
         )));
+        updates.push(db.update(monitorIncidents).set({ resolvedAt: now }).where(and(openIncident, current)));
       }
       // 配送の完了と復旧判定が前後しても、受付済みの端末へ復旧を一度予約する。
-      const accepted = alias(monitorNotifications, "accepted_alert");
       const reservedRecovery = alias(monitorNotifications, "reserved_recovery");
-      const recovery = db.insert(monitorNotifications).select(db.select(notificationSelection("recovery", `${target.runnerId} / ${target.service} (${target.account}): 復旧しました。`))
-        .from(monitorIncidents).innerJoin(pushSubscriptions, sql`1`).where(and(eq(monitorIncidents.targetId, target.id), isNotNull(monitorIncidents.resolvedAt),
-          // 復旧を予約済みの端末では、過去の警告履歴の走査と競合 INSERT を繰り返さない。
-          notExists(db.select({ id: reservedRecovery.id }).from(reservedRecovery).where(and(eq(reservedRecovery.incidentId, monitorIncidents.id),
-            eq(reservedRecovery.kind, "recovery"), eq(reservedRecovery.slot, 0), eq(reservedRecovery.endpoint, pushSubscriptions.endpoint)))),
-          exists(db.select({ id: accepted.id }).from(accepted).where(and(eq(accepted.incidentId, monitorIncidents.id), eq(accepted.endpoint, pushSubscriptions.endpoint),
-            isNotNull(accepted.acceptedAt), eq(accepted.kind, "alert")))),
+      // 障害履歴を JOIN の起点に選ばせず、未予約の受付からだけ障害を引く。
+      const recovery = db.insert(monitorNotifications).select(db.select({
+        ...notificationSelection("recovery", `${target.runnerId} / ${target.service} (${target.account}): 復旧しました。`), incidentId: pendingRecoveryEndpoints.incidentId,
+      })
+        .from(pendingRecoveryEndpoints)
+        .innerJoin(pushSubscriptions, eq(pushSubscriptions.endpoint, pendingRecoveryEndpoints.endpoint))
+        .where(and(exists(db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(and(eq(monitorIncidents.id, pendingRecoveryEndpoints.incidentId),
+          eq(monitorIncidents.targetId, target.id), isNotNull(monitorIncidents.resolvedAt)))),
+        // 復旧を予約済みの端末では、過去の警告履歴の走査と競合 INSERT を繰り返さない。
+        notExists(db.select({ id: reservedRecovery.id }).from(reservedRecovery).where(and(eq(reservedRecovery.incidentId, pendingRecoveryEndpoints.incidentId),
+          eq(reservedRecovery.kind, "recovery"), eq(reservedRecovery.slot, 0), eq(reservedRecovery.endpoint, pushSubscriptions.endpoint)))),
         ))).onConflictDoNothing();
-      const statements = [...updates, recovery];
+      // 予約と同じ batch で印を付け、途中失敗で受付済み警告を取りこぼさない。
+      const markReserved = db.update(monitorNotifications).set({ recoveryReservedAt: now }).where(and(awaitingRecovery(monitorNotifications),
+        exists(db.select({ id: monitorIncidents.id }).from(monitorIncidents).where(and(eq(monitorIncidents.id, monitorNotifications.incidentId),
+          eq(monitorIncidents.targetId, target.id), isNotNull(monitorIncidents.resolvedAt)))),
+        exists(db.select({ id: reservedRecovery.id }).from(reservedRecovery).where(and(eq(reservedRecovery.incidentId, monitorNotifications.incidentId),
+          eq(reservedRecovery.kind, "recovery"), eq(reservedRecovery.slot, 0), eq(reservedRecovery.endpoint, monitorNotifications.endpoint)))),
+      ));
+      const statements = [...updates, recovery, markReserved];
       return batch([statements[0]!, ...statements.slice(1)]);
     },
     async claim(now: string) {

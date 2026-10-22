@@ -23,7 +23,7 @@ export const createCalendarUsecase = (repository: CalendarRepository, subscripti
   },
   createPreparation: (id: string): Promise<Result<void, AppError>> => repository.createPreparation(id, ids.create(), clock.now().toISOString()),
   async maintain(): Promise<Result<void, AppError>> {
-    const reconciled = await repository.reconcile(clock.now().toISOString());
+    const reconciled = await repository.reconcileUpcoming(clock.now().toISOString());
     if (!reconciled.ok) return reconciled;
     if (!pushConfigured) return ok(undefined);
     const expanded = await repository.expandDue(clock.now().toISOString());

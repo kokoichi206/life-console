@@ -30,6 +30,30 @@ const month = { from: "2026-10-01", through: "2026-10-31" };
 const burnable = "tokushima-2026-D-burnable-2026-10-09";
 
 describe("収集カレンダーの保存と通知", () => {
+  it("毎分の照合は日本時間の日付境界で対象を進め、翌日の前日通知と当日通知を予約する", async () => {
+    const { repository, settings, database } = setup();
+    expect(await repository.saveSettings({ ...settings, sameDayTime: "07:00" }, "2026-10-08T00:00:00.000Z")).toMatchObject({ ok: true });
+    const eventId = "tokushima-2026-D-pet-2026-10-12";
+    database.prepare("UPDATE calendar_events SET date='2026-10-10' WHERE id=?").run(eventId);
+    expect(await repository.reconcileUpcoming("2026-10-08T14:59:00.000Z")).toMatchObject({ ok: true });
+    expect(database.prepare("SELECT count(*) AS n FROM calendar_reminders WHERE event_id=?").get(eventId)!.n).toBe(0);
+    expect(await repository.reconcileUpcoming("2026-10-08T15:00:00.000Z")).toMatchObject({ ok: true });
+    expect(database.prepare("SELECT slot,due_at FROM calendar_reminders WHERE event_id=? ORDER BY slot").all(eventId)).toEqual([
+      { slot: "previous_day", due_at: "2026-10-09T12:00:00.000Z" },
+      { slot: "same_day", due_at: "2026-10-09T22:00:00.000Z" },
+    ]);
+  });
+  it("準備の完了で直近の予約を止め、通知時刻前に戻せば同じ予約を再開する", async () => {
+    const { usecase, repository, settings, database } = setup();
+    expect(await usecase.saveSettings(settings)).toMatchObject({ ok: true });
+    expect(await usecase.createPreparation(burnable)).toMatchObject({ ok: true });
+    database.prepare("UPDATE tasks SET status='done'").run();
+    expect(await repository.reconcileUpcoming("2026-10-08T00:01:00.000Z")).toMatchObject({ ok: true });
+    expect(database.prepare("SELECT status FROM calendar_reminders WHERE event_id=?").get(burnable)!.status).toBe("canceled");
+    database.prepare("UPDATE tasks SET status='todo'").run();
+    expect(await repository.reconcileUpcoming("2026-10-08T00:02:00.000Z")).toMatchObject({ ok: true });
+    expect(database.prepare("SELECT status FROM calendar_reminders WHERE event_id=?").get(burnable)!.status).toBe("scheduled");
+  });
   it("年度の取り込みを再実行しても増えず、個別の日付変更を保つ", async () => {
     const { usecase, repository, settings, setNow, database } = setup();
     expect(await usecase.saveSettings(settings)).toMatchObject({ ok: true });

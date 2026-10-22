@@ -7,9 +7,8 @@ import { getPlatformProxy } from "wrangler";
 
 import { createJobStorage } from "../../../../tests/support/d1-storage";
 
-import { createMonitoringRepository } from "./monitoring-repository";
 import { createNutritionRepository } from "./nutrition-repository";
-it("ローカル D1 で修正前後を比較", async () => {
+it("ローカル D1 で栄養一覧と監視の過去の修正前後を比較", async () => {
   const storage = createJobStorage();
   const captured: { sql: string; params: unknown[] }[] = [];
   const prepare = storage.binding.prepare.bind(storage.binding);
@@ -24,9 +23,8 @@ it("ローカル D1 で修正前後を比較", async () => {
   });
   await createNutritionRepository(storage.binding).list();
   const nutrition = captured[0]!;
-  captured.length = 0;
-  await createMonitoringRepository(storage.binding).decide({ id: "target", runnerId: "test", service: "runner", account: "process", revision: 0, registeredAt: "2026-09-20T00:00:00.000Z", receivedAt: null, outcome: null, failures: 0 }, "hold", "", "2026-09-26T00:00:00.000Z");
-  const recovery = captured[0]!;
+  const maintenanceBefore = JSON.parse(readFileSync(new URL("./fixtures/d1-maintenance-before.json", import.meta.url), "utf8")) as { monitor: { sql: string; params: unknown[] }[] };
+  const recovery = maintenanceBefore.monitor[2]!;
 
   const old = JSON.parse(readFileSync(new URL("./fixtures/d1-read-cost-before.json", import.meta.url), "utf8")) as { query: string }[];
   const directory = mkdtempSync(join(tmpdir(), "life-console-d1-read-cost-"));

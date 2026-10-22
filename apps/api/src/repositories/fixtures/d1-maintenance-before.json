@@ -1,0 +1,109 @@
+{
+  "monitor": [
+    {
+      "sql": "update \"monitor_incidents\" set \"resolved_at\" = ? where ((\"monitor_incidents\".\"target_id\" = ? and \"monitor_incidents\".\"resolved_at\" is null) and exists (select \"id\" from \"monitor_targets\" where (\"monitor_targets\".\"id\" = ? and \"monitor_targets\".\"revision\" = ?)))",
+      "params": [
+        "2026-10-22T00:00:00.000Z",
+        "target",
+        "target",
+        0
+      ]
+    },
+    {
+      "sql": "update \"monitor_notifications\" set \"status\" = ? where (\"monitor_notifications\".\"status\" in (?, ?) and \"monitor_notifications\".\"kind\" = ? and \"monitor_notifications\".\"incident_id\" in (select \"id\" from \"monitor_incidents\" where (\"monitor_incidents\".\"target_id\" = ? and \"monitor_incidents\".\"resolved_at\" is not null)) and exists (select \"id\" from \"monitor_targets\" where (\"monitor_targets\".\"id\" = ? and \"monitor_targets\".\"revision\" = ?)))",
+      "params": [
+        "canceled",
+        "pending",
+        "sending",
+        "alert",
+        "target",
+        "target",
+        0
+      ]
+    },
+    {
+      "sql": "insert into \"monitor_notifications\" (\"id\", \"incident_id\", \"endpoint\", \"kind\", \"slot\", \"body\", \"status\", \"attempts\", \"next_attempt_at\", \"lease_token\", \"lease_expires_at\", \"accepted_at\", \"created_at\") select lower(hex(randomblob(16))) as \"id\", \"monitor_incidents\".\"id\", \"push_subscriptions\".\"endpoint\", ? as \"kind\", 0 as \"slot\", ? as \"body\", 'pending' as \"status\", 0 as \"attempts\", ? as \"nextAttemptAt\", null as \"leaseToken\", null as \"leaseExpiresAt\", null as \"acceptedAt\", ? as \"createdAt\" from \"monitor_incidents\" inner join \"push_subscriptions\" on 1 where (\"monitor_incidents\".\"target_id\" = ? and \"monitor_incidents\".\"resolved_at\" is not null and not exists (select \"id\" from \"monitor_notifications\" \"reserved_recovery\" where (\"reserved_recovery\".\"incident_id\" = \"monitor_incidents\".\"id\" and \"reserved_recovery\".\"kind\" = ? and \"reserved_recovery\".\"slot\" = ? and \"reserved_recovery\".\"endpoint\" = \"push_subscriptions\".\"endpoint\")) and exists (select \"id\" from \"monitor_notifications\" \"accepted_alert\" where (\"accepted_alert\".\"incident_id\" = \"monitor_incidents\".\"id\" and \"accepted_alert\".\"endpoint\" = \"push_subscriptions\".\"endpoint\" and \"accepted_alert\".\"accepted_at\" is not null and \"accepted_alert\".\"kind\" = ?))) on conflict do nothing",
+      "params": [
+        "recovery",
+        "test / runner (process): 復旧しました。",
+        "2026-10-22T00:00:00.000Z",
+        "2026-10-22T00:00:00.000Z",
+        "target",
+        "recovery",
+        0,
+        "alert"
+      ]
+    }
+  ],
+  "calendar": [
+    {
+      "sql": "update \"calendar_reminders\" set \"status\" = ? where (\"calendar_reminders\".\"status\" in (?, ?) and \"calendar_reminders\".\"expires_at\" <= ?)",
+      "params": [
+        "missed",
+        "scheduled",
+        "delivering",
+        "2026-10-22T00:00:00.000Z"
+      ]
+    },
+    {
+      "sql": "update \"calendar_reminders\" set \"status\" = ? where (\"calendar_reminders\".\"status\" in (?, ?) and \"calendar_reminders\".\"event_id\" not in (select \"calendar_events\".\"id\" from \"calendar_events\" inner join \"collection_settings\" on \"collection_settings\".\"id\" = ? where (\"calendar_events\".\"id\" = \"calendar_reminders\".\"event_id\" and (\"calendar_events\".\"status\" = ? and \"collection_settings\".\"notifications_enabled\" = ? and \"calendar_events\".\"calendar_key\" = 'tokushima-2026-' || \"collection_settings\".\"district\" and \"calendar_events\".\"id\" not in (select \"calendar_preparations\".\"event_id\" from \"calendar_preparations\" inner join \"tasks\" on \"tasks\".\"id\" = \"calendar_preparations\".\"task_id\" where \"tasks\".\"status\" in (?, ?)) and strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T08:30:00+09:00') > ?) and ((\"calendar_reminders\".\"slot\" = ? and \"calendar_reminders\".\"due_at\" = strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"previous_day_time\" || ':00+09:00', '-1 day')) or (\"calendar_reminders\".\"slot\" = ? and \"calendar_reminders\".\"due_at\" = strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"same_day_time\" || ':00+09:00'))))))",
+      "params": [
+        "canceled",
+        "scheduled",
+        "delivering",
+        1,
+        "active",
+        1,
+        "done",
+        "canceled",
+        "2026-10-22T00:00:00.000Z",
+        "previous_day",
+        "same_day"
+      ]
+    },
+    {
+      "sql": "update \"calendar_deliveries\" set \"status\" = ?, \"lease_token\" = ?, \"lease_expires_at\" = ? where (\"calendar_deliveries\".\"status\" in (?, ?) and (\"calendar_deliveries\".\"reminder_id\" in (select \"id\" from \"calendar_reminders\" where \"calendar_reminders\".\"status\" in (?, ?)) or \"calendar_deliveries\".\"endpoint\" not in (select \"endpoint\" from \"push_subscriptions\")))",
+      "params": [
+        "canceled",
+        null,
+        null,
+        "pending",
+        "sending",
+        "canceled",
+        "missed"
+      ]
+    },
+    {
+      "sql": "insert into \"calendar_reminders\" (\"id\", \"event_id\", \"slot\", \"due_at\", \"expires_at\", \"status\") select \"calendar_events\".\"id\" || ':' || ? || ':' || strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"previous_day_time\" || ':00+09:00', '-1 day') as \"id\", \"calendar_events\".\"id\", ? as \"slot\", strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"previous_day_time\" || ':00+09:00', '-1 day') as \"dueAt\", strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T08:30:00+09:00') as \"expiresAt\", 'scheduled' as \"status\" from \"calendar_events\" inner join \"collection_settings\" on \"collection_settings\".\"id\" = ? where ((\"calendar_events\".\"status\" = ? and \"collection_settings\".\"notifications_enabled\" = ? and \"calendar_events\".\"calendar_key\" = 'tokushima-2026-' || \"collection_settings\".\"district\" and \"calendar_events\".\"id\" not in (select \"calendar_preparations\".\"event_id\" from \"calendar_preparations\" inner join \"tasks\" on \"tasks\".\"id\" = \"calendar_preparations\".\"task_id\" where \"tasks\".\"status\" in (?, ?)) and strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T08:30:00+09:00') > ?) and strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"previous_day_time\" || ':00+09:00', '-1 day') > ? and strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T08:30:00+09:00') > strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"previous_day_time\" || ':00+09:00', '-1 day')) on conflict (\"calendar_reminders\".\"event_id\", \"calendar_reminders\".\"slot\", \"calendar_reminders\".\"due_at\") do update set \"status\" = ? where \"calendar_reminders\".\"status\" = ?",
+      "params": [
+        "previous_day",
+        "previous_day",
+        1,
+        "active",
+        1,
+        "done",
+        "canceled",
+        "2026-10-22T00:00:00.000Z",
+        "2026-10-22T00:00:00.000Z",
+        "scheduled",
+        "canceled"
+      ]
+    },
+    {
+      "sql": "insert into \"calendar_reminders\" (\"id\", \"event_id\", \"slot\", \"due_at\", \"expires_at\", \"status\") select \"calendar_events\".\"id\" || ':' || ? || ':' || strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"same_day_time\" || ':00+09:00') as \"id\", \"calendar_events\".\"id\", ? as \"slot\", strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"same_day_time\" || ':00+09:00') as \"dueAt\", strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T08:30:00+09:00') as \"expiresAt\", 'scheduled' as \"status\" from \"calendar_events\" inner join \"collection_settings\" on \"collection_settings\".\"id\" = ? where ((\"calendar_events\".\"status\" = ? and \"collection_settings\".\"notifications_enabled\" = ? and \"calendar_events\".\"calendar_key\" = 'tokushima-2026-' || \"collection_settings\".\"district\" and \"calendar_events\".\"id\" not in (select \"calendar_preparations\".\"event_id\" from \"calendar_preparations\" inner join \"tasks\" on \"tasks\".\"id\" = \"calendar_preparations\".\"task_id\" where \"tasks\".\"status\" in (?, ?)) and strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T08:30:00+09:00') > ?) and strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"same_day_time\" || ':00+09:00') > ? and strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T08:30:00+09:00') > strftime('%Y-%m-%dT%H:%M:%fZ', \"calendar_events\".\"date\" || 'T' || \"collection_settings\".\"same_day_time\" || ':00+09:00')) on conflict (\"calendar_reminders\".\"event_id\", \"calendar_reminders\".\"slot\", \"calendar_reminders\".\"due_at\") do update set \"status\" = ? where \"calendar_reminders\".\"status\" = ?",
+      "params": [
+        "same_day",
+        "same_day",
+        1,
+        "active",
+        1,
+        "done",
+        "canceled",
+        "2026-10-22T00:00:00.000Z",
+        "2026-10-22T00:00:00.000Z",
+        "scheduled",
+        "canceled"
+      ]
+    }
+  ]
+}
