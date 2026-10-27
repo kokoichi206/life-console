@@ -11,8 +11,8 @@ android {
         applicationId = "dev.kokoichi.lifeconsole"
         minSdk = 31
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
     }
 
     compileOptions {
@@ -26,6 +26,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(libs.appauth)
     testImplementation(libs.junit)
     testImplementation(libs.json)
 }

@@ -27,4 +27,9 @@
     <string name="weight_period">直近 30 日の体重</string>
     <string name="collection_deadline">朝 8:30 まで</string>
     <string name="display_hint">体重グラフとゴミの日は、このアプリでログインすると同期できます。ウィジェットをタップすると Life Console の詳細画面を開きます。通常は約 1 時間ごとに更新します。ゴミの日は朝 8:30 から翌日分を先頭に表示します。</string>
+    <string name="oauth_preparing">Chrome でログインする準備をしています…</string>
+    <string name="oauth_close">閉じる</string>
+    <string name="oauth_chrome_required">Chrome をインストール・有効化してください</string>
+    <string name="oauth_browser_prompt">Chrome でログインしてください。完了後はアプリに戻れます。</string>
+    <string name="oauth_finishing">接続を完了しています…</string>
 </resources>

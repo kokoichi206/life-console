@@ -18,7 +18,14 @@ ij_kotlin_allow_trailing_comma_on_call_site = true
 life_console_forbidden_import_prefixes = android.webkit, java.net, javax.net, okhttp3, retrofit2
 
 [app/src/main/java/dev/kokoichi/lifeconsole/WidgetSyncService.kt]
-life_console_forbidden_import_prefixes = okhttp3, retrofit2
+life_console_forbidden_import_prefixes = android.webkit, okhttp3, retrofit2
 
-[app/src/main/java/dev/kokoichi/lifeconsole/WidgetLoginActivity.kt]
-life_console_forbidden_import_prefixes = java.net, javax.net, okhttp3, retrofit2
+[app/src/main/java/dev/kokoichi/lifeconsole/WidgetOAuth.kt]
+life_console_forbidden_import_prefixes = android.webkit, okhttp3, retrofit2
+
+[app/src/main/java/dev/kokoichi/lifeconsole/LoopbackOAuthReceiver.kt]
+life_console_forbidden_import_prefixes = android.webkit, okhttp3, retrofit2
+
+# localhost の実通信を使い、state が異なる応答を受け付けないことを検証する。
+[app/src/test/java/dev/kokoichi/lifeconsole/LoopbackOAuthReceiverTest.kt]
+life_console_forbidden_import_prefixes = android.webkit, okhttp3, retrofit2

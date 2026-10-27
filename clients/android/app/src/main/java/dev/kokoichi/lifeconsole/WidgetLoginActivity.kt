@@ -1,54 +1,163 @@
 package dev.kokoichi.lifeconsole
 
-import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.webkit.CookieManager
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+import java.io.IOException
+import java.util.UUID
+import java.util.concurrent.Executors
+import net.openid.appauth.AuthState
+import net.openid.appauth.AuthorizationRequest
+import net.openid.appauth.AuthorizationResponse
+import net.openid.appauth.AuthorizationService
+import net.openid.appauth.NoClientAuthentication
+import net.openid.appauth.RegistrationRequest
+import net.openid.appauth.ResponseTypeValues
+import net.openid.appauth.TokenResponse
+import org.json.JSONException
 
 class WidgetLoginActivity : Activity() {
-    private lateinit var webView: WebView
+    private val executor = Executors.newSingleThreadExecutor()
+    private lateinit var authorizationService: AuthorizationService
+    private lateinit var status: TextView
+    private var receiver: LoopbackOAuthReceiver? = null
+    private var pendingAuthorization: AuthorizationResponse? = null
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        webView = WebView(this)
-        setContentView(webView)
-        webView.setOnApplyWindowInsetsListener { view, insets ->
-            val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars())
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            insets
+        if (intent.action == Intent.ACTION_VIEW) {
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return
         }
-        // Cloudflare Access のログイン画面が JavaScript を要求する。ネイティブ bridge は公開しない。
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.allowFileAccess = false
-        webView.settings.allowContentAccess = false
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(
-                view: WebView,
-                request: WebResourceRequest,
-            ): Boolean = request.url.scheme != "https"
+        status = TextView(this).apply {
+            setText(R.string.oauth_preparing)
+            textSize = 18f
+        }
+        val cancel = Button(this).apply {
+            setText(R.string.oauth_close)
+            setOnClickListener { finish() }
+        }
+        setContentView(
+            LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(48, 120, 48, 48)
+                addView(status)
+                addView(cancel)
+            },
+        )
+        authorizationService = WidgetOAuth.service(this)
+        if (authorizationService.browserDescriptor == null) {
+            status.setText(R.string.oauth_chrome_required)
+            return
+        }
+        runAuthorization { connect() }
+    }
 
-            override fun onPageFinished(view: WebView, url: String) {
-                val uri = Uri.parse(url)
-                if (uri.scheme == "https" && uri.host == Uri.parse(CONSOLE_ORIGIN).host &&
-                    !uri.path.orEmpty().startsWith("/cdn-cgi/")
-                ) {
-                    CookieManager.getInstance().flush()
-                    scheduleWidgetSync(this@WidgetLoginActivity, immediately = true)
-                    finish()
-                }
+    private fun runAuthorization(operation: () -> Unit) {
+        executor.execute {
+            try {
+                operation()
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } catch (error: WidgetOAuthFailure) {
+                showFailure(error.message!!)
+            } catch (_: IOException) {
+                showFailure("認証の通信に失敗しました。アプリから接続し直してください")
+            } catch (_: JSONException) {
+                showFailure("OAuth の応答を確認できません。接続設定を確認してください")
             }
         }
-        webView.loadUrl("$CONSOLE_ORIGIN/health")
+    }
+
+    private fun connect() {
+        val localReceiver = LoopbackOAuthReceiver()
+        receiver = localReceiver
+        localReceiver.use {
+            val configuration = WidgetOAuth.discover()
+            val registration = RegistrationRequest.Builder(
+                configuration,
+                listOf(Uri.parse(localReceiver.redirectUri)),
+            ).setGrantTypeValues("authorization_code", "refresh_token")
+                .setResponseTypeValues("code")
+                .setTokenEndpointAuthenticationMethod("none")
+                .setAdditionalParameters(mapOf("client_name" to "Life Console Widget"))
+                .build()
+            val clientId = WidgetOAuth.register(registration)
+            val state = UUID.randomUUID().toString()
+            val request = AuthorizationRequest.Builder(
+                configuration,
+                clientId,
+                ResponseTypeValues.CODE,
+                Uri.parse(localReceiver.redirectUri),
+            ).setState(state).setScope("offline_access")
+                .setAdditionalParameters(mapOf("resource" to CONSOLE_ORIGIN)).build()
+            runOnUiThread {
+                status.setText(R.string.oauth_browser_prompt)
+                val tab = authorizationService.createCustomTabsIntentBuilder(
+                    request.toUri(),
+                ).build()
+                tab.intent.setPackage("com.android.chrome")
+                tab.launchUrl(this, request.toUri())
+            }
+            localReceiver.receive(state) { code ->
+                val response = AuthorizationResponse.Builder(
+                    request,
+                ).setAuthorizationCode(code).build()
+                runOnUiThread { pendingAuthorization = response }
+            }
+        }
+    }
+
+    private fun completeAuthorization() {
+        val response = pendingAuthorization ?: return
+        pendingAuthorization = null
+        status.setText(R.string.oauth_finishing)
+        runAuthorization {
+            val tokens = awaitOAuth<TokenResponse> {
+                authorizationService.performTokenRequest(
+                    response.createTokenExchangeRequest(mapOf("resource" to CONSOLE_ORIGIN)),
+                    NoClientAuthentication.INSTANCE,
+                    it,
+                )
+            }
+            val authorized = AuthState(response.request.configuration).apply {
+                update(response, null)
+                update(tokens, null)
+            }
+            WidgetOAuth.save(this, authorized)
+            runOnUiThread {
+                scheduleWidgetSync(this, immediately = true)
+                finish()
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        completeAuthorization()
+    }
+
+    private fun showFailure(message: String) {
+        if (!isFinishing) {
+            WidgetStore(this).saveError(message)
+            runOnUiThread { status.text = message }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == Intent.ACTION_VIEW) completeAuthorization()
     }
 
     override fun onDestroy() {
-        webView.destroy()
+        receiver?.close()
+        executor.shutdownNow()
+        if (::authorizationService.isInitialized) authorizationService.dispose()
         super.onDestroy()
     }
 }

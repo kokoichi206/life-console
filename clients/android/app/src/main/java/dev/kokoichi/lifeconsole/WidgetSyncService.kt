@@ -8,24 +8,30 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.webkit.CookieManager
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.concurrent.Executors
+import net.openid.appauth.AuthorizationService
 import org.json.JSONException
 import org.json.JSONObject
 
 class WidgetSyncService : JobService() {
+    private lateinit var authorizationService: AuthorizationService
+
+    override fun onCreate() {
+        super.onCreate()
+        authorizationService = WidgetOAuth.service(this)
+    }
+
     private val executor = Executors.newSingleThreadExecutor()
     private val completionHandler = Handler(Looper.getMainLooper())
     private val queue = WidgetSyncQueue(executor) { completionHandler.post(it) }
 
     override fun onStartJob(params: JobParameters): Boolean {
-        val cookie = CookieManager.getInstance().getCookie(CONSOLE_ORIGIN)
-        queue.start(params.jobId, { synchronize(cookie) }) {
+        queue.start(params.jobId, { synchronize() }) {
             DisplayWidgets.update(this)
             jobFinished(params, false)
         }
@@ -37,21 +43,23 @@ class WidgetSyncService : JobService() {
         return true
     }
 
-    private fun synchronize(cookie: String?) {
+    private fun synchronize() {
         val store = WidgetStore(this)
         try {
-            if (cookie == null) throw WidgetLoginRequired()
-            val weights = read("/api/v1/weights", cookie).getJSONArray("data")
+            val token = WidgetOAuth.freshToken(this, authorizationService)
+            val weights = read("/api/v1/weights", token).getJSONArray("data")
             val today = Instant.now().atZone(japanZone).toLocalDate()
             val calendar = read(
                 "/api/v1/calendar?from=$today&through=${today.plusDays(31)}",
-                cookie,
+                token,
             ).getJSONObject("data")
             calendar.put("queriedFrom", today.toString())
                 .put("queriedThrough", today.plusDays(31).toString())
             store.save(weights, calendar)
         } catch (_: WidgetLoginRequired) {
             store.saveError("アプリでログインしてください")
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
         } catch (_: IOException) {
             store.saveError("通信に失敗しました。アプリから再同期")
         } catch (_: JSONException) {
@@ -65,17 +73,19 @@ class WidgetSyncService : JobService() {
 
     override fun onDestroy() {
         executor.shutdownNow()
+        authorizationService.dispose()
         super.onDestroy()
     }
 
-    private fun read(path: String, cookie: String): JSONObject {
+    private fun read(path: String, token: String): JSONObject {
         val connection = URL(CONSOLE_ORIGIN + path).openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 15_000
             connection.readTimeout = 15_000
-            connection.setRequestProperty("Cookie", cookie)
+            connection.setRequestProperty("Authorization", "Bearer $token")
             connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("User-Agent", WidgetOAuth.USER_AGENT)
             val status = connection.responseCode
             if (status in 300..399 || status == 401 || status == 403) throw WidgetLoginRequired()
             if (status != 200) throw IOException("HTTP $status")
@@ -85,8 +95,6 @@ class WidgetSyncService : JobService() {
         }
     }
 }
-
-private class WidgetLoginRequired : IOException()
 
 internal fun scheduleWidgetSync(context: Context, immediately: Boolean = false) {
     val scheduler = context.getSystemService(JobScheduler::class.java)

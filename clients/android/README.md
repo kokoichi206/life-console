@@ -4,7 +4,7 @@ Android 12 以上向けのホーム画面ウィジェット。体重の推移、
 
 ## 表示用ウィジェット
 
-アプリを開き、『表示用ウィジェットにログイン』から本番 Life Console の Cloudflare Access にログインします。Chrome とはセッションが別です。ログイン後に同期し、『体重グラフを追加』『ゴミの日を追加』からランチャーの確認画面で追加します。対応しないランチャーではホーム画面のウィジェット一覧から追加してください。
+アプリを開き、『表示用ウィジェットにログイン』から本番 Life Console の Cloudflare Access にログインします。Chrome Custom Tabs を使うため、Chrome の既存のログイン状態を利用できます。Chrome に複数のアカウントがある場合の選択や、初回の認証・同意はブラウザ側で行います。認証後は『Life Console に戻る』でアプリへ戻ります。ログイン後に同期し、『体重グラフを追加』『ゴミの日を追加』からランチャーの確認画面で追加します。対応しないランチャーではホーム画面のウィジェット一覧から追加してください。
 
 - 体重の推移: 最新の体重・記録日と、日本時間の今日を含む直近 30 日の実測値をグラフで表示。記録なし、1 点だけ、全点同じ体重にも対応します。
 - ゴミの日: 日本時間の朝 8:30 までは今日・明日、8:30 以降は明日・明後日の収集予定を表示。Web で選択した地区、個別の日付変更、中止を反映します。地区未設定、未同期、取得範囲外・年度外の日程を、収集なしとは区別します。
@@ -16,11 +16,13 @@ Android 12 以上向けのホーム画面ウィジェット。体重の推移、
 
 同期失敗・認証切れはエラーとして表示し、取得済みデータと取得日時を残します。アプリから再ログイン・同期してください。朝 8:30 の日付切り替えは通信不要です。非厳密アラームと 30 分ごとのウィジェット更新を使い、再起動・時刻変更後も切り替えを再予約します。省電力中の 8:30 ちょうどの反映は保証しません。
 
-認証 Cookie は WebView の CookieManager、取得したデータはアプリ専用 SharedPreferences に保存します。バックアップは無効です。Cookie・実データをログや Git 管理対象へ出力しません。同期は GET のみで、記録の追加、予定・通知の変更、本番 API の変更は行いません。
+認証は Cloudflare Access Managed OAuth と AppAuth Android の Authorization Code + PKCE を使用します。動的クライアント登録のリダイレクト先は `127.0.0.1` の一時ポートだけを許可し、端末内の HTTP listener で state を検証します。ブラウザの『Life Console に戻る』でアプリを前面に戻してからコードを交換します。戻るリンクの独自 scheme にコードや token は含めません。Access token は 15 分、grant は 24 時間で、バックグラウンド同期時に refresh token を使って更新します。grant が切れた場合は再接続が必要です。Chrome の Cookie をアプリへコピーする方式ではありません。
+
+OAuth の認証状態と取得したデータはアプリ専用 SharedPreferences に保存します。バックアップは無効です。token・実データをログや Git 管理対象へ出力しません。旧 WebView 版から更新した場合は Chrome で一度接続し直してください。同期は GET のみで、記録の追加、予定・通知の変更、本番 API の変更は行いません。
 
 ## 記録用ウィジェット
 
-『体重ウィジェットを追加』『食事ウィジェットを追加』で、各 2 × 1 の入力ボタンを配置します。タップすると外部ブラウザまたはインストール済み Web アプリで開きます。表示用ウィジェットとは別に、ブラウザ側の Cloudflare Access ログインが必要です。
+『体重ウィジェットを追加』『食事ウィジェットを追加』で、各 2 × 1 の入力ボタンを配置します。タップすると外部ブラウザまたはインストール済み Web アプリで開きます。ブラウザ側の Cloudflare Access のセッションを使います。
 
 - 体重: `https://life-console.kokoichi206.workers.dev/health?entry=weight`
 - 食事: `https://life-console.kokoichi206.workers.dev/health?entry=meal`
@@ -47,13 +49,15 @@ Kotlin と Android 標準の AppWidgetProvider / RemoteViews を使用します�
 - `WidgetStore.kt`: API 応答の検証と端末内保存。
 - `WidgetSyncService.kt`: JobScheduler、固定 origin への通信、失敗の表示。
 - `WidgetSyncQueue.kt`: 実行単位の停止と完了。停止済みの完了通知で、同じ ID の次の実行を取り除かない。
-- `WidgetLoginActivity.kt`: Cloudflare Access のログイン。JavaScript bridge は公開しません。
+- `WidgetLoginActivity.kt`: Chrome Custom Tabs での OAuth 認証と動的クライアント登録。
+- `WidgetOAuth.kt`: OAuth metadata の取得、認証状態の保存、token の更新。
+- `LoopbackOAuthReceiver.kt`: 端末内の callback の受信と state の検証。
 - `DisplayWidgets.kt`: 体重グラフ・収集予定の描画と表示日の更新。目盛りと線を別の画像にし、ホーム側のリソースで配色を切り替えます。
 - `WidgetLinks.kt`: 体重グラフと各収集日の Web リンク。
 - `res/values/colors.xml` / `res/values-night/colors.xml`: Web の配色に対応するライト／ダークの色。
 - `WeightEntry.kt` / `MealEntry.kt`: 記録 URL。
 
-単体テストで同期の停止・同じジョブ ID の再実行・遅れて届く完了通知・予期しない例外の伝達、および 8:30 の境界、月末・年末、日本時間の 30 日間、収集中止・複数区分・未登録期間・地区未設定・不正な API 値を検証します。実データとランチャー上の表示は実機で別途確認します。
+単体テストで OAuth callback の state・パス・重複パラメーターの検証と loopback の HTTP 応答、同期の停止・同じジョブ ID の再実行・遅れて届く完了通知・予期しない例外の伝達、および 8:30 の境界、月末・年末、日本時間の 30 日間、収集中止・複数区分・未登録期間・地区未設定・不正な API 値を検証します。実データとランチャー上の表示は実機で別途確認します。
 
 ## Lint と CI
 
