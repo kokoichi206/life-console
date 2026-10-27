@@ -1,6 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import type { AbstinenceGoalInput } from "@life-console/contracts";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useRef, useState, type FormEvent, type RefObject } from "react";
 
@@ -124,15 +124,37 @@ const EventDialog = ({ open, onOpenChange, triggerRef }: { readonly open: boolea
 );
 
 export const AbstinencePanel = () => {
-  const { data } = useSuspenseQuery(abstinenceQuery);
+  const query = useQuery(abstinenceQuery);
   const goalTriggerRef = useRef<HTMLButtonElement>(null);
   const eventTriggerRef = useRef<HTMLButtonElement>(null);
   const [goalOpen, setGoalOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
+  if (query.data === undefined) {
+    return (
+      <Panel mobileLayout="section" className="mb-6 gap-3 rounded-3xl px-5">
+        <h2 className="text-xl font-semibold sm:text-sm">禁欲の継続</h2>
+        {query.isPending
+          ? (
+              <>
+                <p role="status" className="text-sm text-muted-foreground">禁欲記録を読み込んでいます。</p>
+                <div aria-hidden="true" className="h-24 rounded-xl bg-muted motion-safe:animate-pulse" />
+              </>
+            )
+          : (
+              <>
+                <FormError>{query.error.message}</FormError>
+                <Button variant="outline" className="w-fit" onClick={() => { void query.refetch(); }}>禁欲記録を再読み込み</Button>
+              </>
+            )}
+      </Panel>
+    );
+  }
+  const data = query.data;
   const goal = data.goal;
   return (
     <>
       <Panel mobileLayout="section" className="mb-6 rounded-3xl px-5">
+        {query.error !== null && <FormError>{query.error.message}</FormError>}
         {goal === null
           ? (
               <div className="flex flex-wrap items-center justify-between gap-3">

@@ -50,6 +50,7 @@ src/
 - `validateSearch` は URL の入力を検証し、`search.strict: true` で検証結果にない項目を URL と画面の状態から除去します。パーサーの戻り値から省くだけでは、元の不正な値が保持されます。パラメーターを消す操作には `undefined` を使うため、任意項目の型も明示的な `undefined` を許可します。常設フォームへのリンクは hash を使います。
 - 健康ページの `calories` は数値または数値文字列の、7 より大きい 7 の倍数を受け付けます。URL から復元した JSON の配列・オブジェクトなどは除外し、他の表示条件を保持します。本人画面と共有画面で同じ検証を使います。
 - ページは `lazyRouteComponent` で分割し、リンクの事前読み込みでコードも取得します。Query を使う loader では `ensureQueryData` を呼び、`defaultPreloadStaleTime: 0` でキャッシュの制御を Query に任せます。
+- ページ切り替えでコードやデータを待つ場合は、遷移先の見出しとスケルトンをすぐ表示します。`defaultPendingMs` と `defaultPendingMinMs` は `0` とし、読み込み表示のために本文の表示を遅らせません。本人画面では取得済みの Query データをそのまま使い、再取得では本文を隠しません。ホームの禁欲記録は概要と並列に取得し、読み込み・失敗・再試行をその欄で表示します。
 - 未定義の URL はホームへ戻れる 404 画面にします。取得エラーは Query のエラー状態をリセットし、`router.invalidate()` で再試行します。
 
 Web の `build` は型チェック後に Vite を実行します。`router.test-d.tsx` は型チェック専用で、存在しない path・不正な search・hook の対象ルートを `@ts-expect-error` で検証します。型の制約が抜けると、期待したエラーが消えたこと自体で失敗します。
