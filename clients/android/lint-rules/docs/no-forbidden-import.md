@@ -1,6 +1,8 @@
 # 直接通信・WebView の import を禁止する
 
-この Android クライアントは記録 URL を外部ブラウザへ渡します。認証と記録を Web 側に集約するため、アプリ内の通信処理や WebView を持ちません。
+記録 URL は外部ブラウザへ渡します。表示用ウィジェットの API 通信は `WidgetSyncService.kt`、OAuth metadata と token 更新は `WidgetOAuth.kt`、端末内 callback は `LoopbackOAuthReceiver.kt` に限定します。他のファイルから直接通信や WebView を追加することを防ぎます。
+
+`.editorconfig` ではこの 3 ファイルと loopback の単体テストにだけ `java.net` の例外を設けます。API 通信は固定した本番 origin の GET のみで、リダイレクト先へ Bearer token を転送しません。認証画面は AppAuth Android と Chrome Custom Tabs を使い、WebView は使用しません。loopback listener は `127.0.0.1` にだけ bind します。
 
 `clients/android/.editorconfig` の `app/src/**.kt` に、`life_console_forbidden_import_prefixes` で禁止対象を指定しています。
 
