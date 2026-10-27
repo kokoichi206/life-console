@@ -15,6 +15,14 @@
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="16dp" android:text="@string/widget_instructions"
                 android:textColor="#535868" android:textSize="16sp" android:lineSpacingExtra="5dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="20dp" android:text="@string/display_hint" android:textColor="#535868" android:textSize="14sp" />
+            <TextView android:id="@+id/sync_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="12dp" android:textColor="#086B6D" android:textSize="14sp" />
+            <Button android:id="@+id/widget_login" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_login" />
+            <Button android:id="@+id/widget_sync" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_sync" />
+            <Button android:id="@+id/add_weight_trend_widget" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/add_weight_trend_widget" />
+            <Button android:id="@+id/add_collection_widget" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/add_collection_widget" />
             <include layout="@layout/weight_widget"
                 android:layout_width="220dp" android:layout_height="100dp"
                 android:layout_marginTop="28dp" android:layout_gravity="center_horizontal" />

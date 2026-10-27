@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/display_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="18dp" android:background="@drawable/display_widget_background">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/weight_trend" android:textSize="14sp" android:textColor="@color/widget_muted" />
+    <TextView android:id="@+id/weight_value" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/sync_pending" android:textSize="34sp" android:textStyle="bold" android:textColor="@color/widget_foreground" />
+    <TextView android:id="@+id/weight_period" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/weight_period" android:textSize="12sp" android:textColor="@color/widget_muted" />
+    <FrameLayout android:id="@+id/weight_chart" android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:contentDescription="@string/weight_period">
+        <ImageView android:id="@+id/weight_chart_axes" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:scaleType="fitCenter" android:tint="@color/widget_muted" android:importantForAccessibility="no" />
+        <ImageView android:id="@+id/weight_chart_line" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:scaleType="fitCenter" android:tint="@color/widget_chart" android:importantForAccessibility="no" />
+    </FrameLayout>
+    <TextView android:id="@+id/weight_empty" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:gravity="center" android:text="@string/sync_hint" android:textColor="@color/widget_muted" android:textSize="14sp" />
+    <TextView android:id="@+id/display_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/sync_hint" android:textSize="11sp" android:textColor="@color/widget_muted" />
+</LinearLayout>

@@ -13,6 +13,12 @@ ktlint_function_naming_ignore_when_annotated_with = Test
 ij_kotlin_allow_trailing_comma = true
 ij_kotlin_allow_trailing_comma_on_call_site = true
 
-# 記録と認証は外部ブラウザで扱い、ウィジェットは通信や WebView を持たない。
+# 通信とログインを専用の境界に閉じ込める。
 [app/src/**.kt]
 life_console_forbidden_import_prefixes = android.webkit, java.net, javax.net, okhttp3, retrofit2
+
+[app/src/main/java/dev/kokoichi/lifeconsole/WidgetSyncService.kt]
+life_console_forbidden_import_prefixes = okhttp3, retrofit2
+
+[app/src/main/java/dev/kokoichi/lifeconsole/WidgetLoginActivity.kt]
+life_console_forbidden_import_prefixes = java.net, javax.net, okhttp3, retrofit2

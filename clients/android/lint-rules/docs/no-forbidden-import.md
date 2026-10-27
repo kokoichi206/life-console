@@ -1,6 +1,8 @@
 # 直接通信・WebView の import を禁止する
 
-この Android クライアントは記録 URL を外部ブラウザへ渡します。認証と記録を Web 側に集約するため、アプリ内の通信処理や WebView を持ちません。
+記録 URL は外部ブラウザへ渡します。表示用ウィジェットの同期は `WidgetSyncService.kt`、Cloudflare Access のログインは `WidgetLoginActivity.kt` に限定します。他のファイルから通信処理や WebView を追加することを防ぎます。
+
+`.editorconfig` では上記 2 ファイルにだけ例外を設けます。同期処理は固定した本番 origin の GET のみを実行し、リダイレクト先へ Cookie を転送しません。ログイン画面は HTTPS のみを許可し、JavaScript bridge・ファイルアクセスを公開しません。
 
 `clients/android/.editorconfig` の `app/src/**.kt` に、`life_console_forbidden_import_prefixes` で禁止対象を指定しています。
 
