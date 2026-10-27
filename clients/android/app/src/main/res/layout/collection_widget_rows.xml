@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/display_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="10dp" android:background="@drawable/display_widget_background">
+    <LinearLayout android:id="@+id/collection_day" android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical" android:baselineAligned="false">
+        <TextView android:id="@+id/collection_date" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:includeFontPadding="false" android:textSize="11sp" android:textColor="@color/widget_muted" />
+        <TextView android:id="@+id/collection_title" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:layout_marginStart="12dp" android:gravity="end"
+            android:includeFontPadding="false" android:textSize="16sp" android:textColor="@color/widget_foreground" />
+    </LinearLayout>
+    <ImageView android:layout_width="match_parent" android:layout_height="1dp"
+        android:background="@color/widget_border" android:importantForAccessibility="no" />
+    <LinearLayout android:id="@+id/collection_next_day" android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical" android:baselineAligned="false">
+        <TextView android:id="@+id/collection_next_date" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:includeFontPadding="false" android:textSize="11sp" android:textColor="@color/widget_muted" />
+        <TextView android:id="@+id/collection_next_title" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:layout_marginStart="12dp" android:gravity="end"
+            android:includeFontPadding="false" android:textSize="16sp" android:textColor="@color/widget_foreground" />
+    </LinearLayout>
+    <TextView android:id="@+id/display_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:includeFontPadding="false" android:textSize="10sp" android:textColor="@color/widget_muted" />
+</LinearLayout>

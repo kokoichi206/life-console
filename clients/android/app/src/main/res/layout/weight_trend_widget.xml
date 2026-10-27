@@ -3,16 +3,30 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" tools:ignore="UseAppTint"
     android:id="@+id/display_root" android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:padding="10dp" android:background="@drawable/display_widget_background">
-    <TextView android:id="@+id/weight_value" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:includeFontPadding="false" android:text="@string/sync_pending" android:textSize="26sp"
-        android:textColor="@color/widget_foreground" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:baselineAligned="false">
+        <TextView android:id="@+id/weight_value" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:includeFontPadding="false" android:text="@string/sync_pending"
+            android:textSize="26sp" android:textColor="@color/widget_foreground" />
+        <TextView android:id="@+id/weight_difference" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:includeFontPadding="false" android:textSize="11sp" android:textColor="@color/widget_muted" />
+    </LinearLayout>
     <FrameLayout android:id="@+id/weight_chart" android:layout_width="match_parent" android:layout_height="0dp"
         android:layout_weight="1" android:contentDescription="@string/weight_period">
+        <ImageView android:id="@+id/weight_chart_axes" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:scaleType="fitCenter" android:tint="@color/widget_muted" android:importantForAccessibility="no" />
         <ImageView android:id="@+id/weight_chart_line" android:layout_width="match_parent" android:layout_height="match_parent"
             android:scaleType="fitCenter" android:tint="@color/widget_chart" android:importantForAccessibility="no" />
     </FrameLayout>
     <TextView android:id="@+id/weight_empty" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
         android:gravity="center" android:text="@string/sync_hint" android:textColor="@color/widget_muted" android:textSize="14sp" />
+    <LinearLayout android:id="@+id/weight_details" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:baselineAligned="false">
+        <TextView android:id="@+id/weight_record_date" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:includeFontPadding="false" android:textSize="10sp" android:textColor="@color/widget_muted" />
+        <TextView android:id="@+id/weight_record_count" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:includeFontPadding="false" android:textSize="10sp" android:textColor="@color/widget_muted" />
+    </LinearLayout>
     <TextView android:id="@+id/display_status" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="@string/sync_hint" android:textSize="11sp" android:textColor="@color/widget_muted" />
 </LinearLayout>
