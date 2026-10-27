@@ -3,19 +3,11 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" tools:ignore="UseAppTint"
     android:id="@+id/display_root" android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:padding="10dp" android:background="@drawable/display_widget_background">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical" android:baselineAligned="false">
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:text="@string/weight_trend" android:textSize="14sp" android:textColor="@color/widget_muted" />
-        <TextView android:id="@+id/weight_value" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="@string/sync_pending" android:textSize="28sp" android:textStyle="bold" android:textColor="@color/widget_foreground" />
-    </LinearLayout>
-    <TextView android:id="@+id/weight_period" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="@string/weight_period" android:textSize="12sp" android:textColor="@color/widget_muted" />
+    <TextView android:id="@+id/weight_value" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:includeFontPadding="false" android:text="@string/sync_pending" android:textSize="26sp"
+        android:textColor="@color/widget_foreground" />
     <FrameLayout android:id="@+id/weight_chart" android:layout_width="match_parent" android:layout_height="0dp"
         android:layout_weight="1" android:contentDescription="@string/weight_period">
-        <ImageView android:id="@+id/weight_chart_axes" android:layout_width="match_parent" android:layout_height="match_parent"
-            android:scaleType="fitCenter" android:tint="@color/widget_muted" android:importantForAccessibility="no" />
         <ImageView android:id="@+id/weight_chart_line" android:layout_width="match_parent" android:layout_height="match_parent"
             android:scaleType="fitCenter" android:tint="@color/widget_chart" android:importantForAccessibility="no" />
     </FrameLayout>

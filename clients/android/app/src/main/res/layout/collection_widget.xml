@@ -2,32 +2,24 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/display_root" android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:paddingHorizontal="10dp" android:paddingVertical="6dp" android:background="@drawable/display_widget_background">
-    <LinearLayout android:id="@+id/collection_header" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical" android:baselineAligned="false">
-        <TextView android:includeFontPadding="false" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="8dp"
-            android:text="@string/collection_days" android:textSize="12sp" android:textColor="@color/widget_muted" />
-        <TextView android:includeFontPadding="false" android:id="@+id/display_status" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:maxLines="1" android:ellipsize="end"
-            android:text="@string/sync_hint" android:textSize="10sp" android:textColor="@color/widget_muted" />
-        <TextView android:includeFontPadding="false" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp"
-            android:text="@string/collection_deadline" android:textSize="10sp" android:textColor="@color/widget_muted" />
-    </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
-        android:layout_marginTop="0dp" android:layout_marginBottom="0dp"
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
         android:orientation="horizontal" android:baselineAligned="false">
         <LinearLayout android:id="@+id/collection_day" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
-            android:layout_marginEnd="12dp" android:orientation="vertical">
+            android:layout_marginEnd="12dp" android:orientation="vertical" android:gravity="center_vertical">
             <TextView android:includeFontPadding="false" android:id="@+id/collection_date" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:textSize="12sp" android:textColor="@color/widget_accent" />
+                android:textSize="11sp" android:textColor="@color/widget_muted" />
             <TextView android:includeFontPadding="false" android:id="@+id/collection_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="0dp" android:textSize="16sp" android:textStyle="bold" android:textColor="@color/widget_foreground" />
+                android:layout_marginTop="2dp" android:textSize="16sp" android:textColor="@color/widget_foreground" />
         </LinearLayout>
         <LinearLayout android:id="@+id/collection_next_day" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
-            android:orientation="vertical">
+            android:orientation="vertical" android:gravity="center_vertical">
             <TextView android:includeFontPadding="false" android:id="@+id/collection_next_date" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:textSize="12sp" android:textColor="@color/widget_muted" />
+                android:textSize="11sp" android:textColor="@color/widget_muted" />
             <TextView android:includeFontPadding="false" android:id="@+id/collection_next_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginTop="0dp" android:textSize="16sp" android:textColor="@color/widget_foreground" />
+                android:layout_marginTop="2dp" android:textSize="16sp" android:textColor="@color/widget_foreground" />
         </LinearLayout>
     </LinearLayout>
+    <TextView android:id="@+id/display_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:includeFontPadding="false" android:text="@string/sync_hint" android:textSize="10sp"
+        android:maxLines="1" android:ellipsize="end" android:textColor="@color/widget_muted" />
 </LinearLayout>

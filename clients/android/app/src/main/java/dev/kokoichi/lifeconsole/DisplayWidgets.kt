@@ -66,27 +66,17 @@ internal object DisplayWidgets {
             WidgetLinks.weightIntent(),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val syncedAt = store.syncedAt?.atZone(
-            japanZone,
-        )?.format(DateTimeFormatter.ofPattern("M/d HH:mm"))
-        val status = listOfNotNull(store.error, syncedAt?.let { "$it 更新" }).joinToString(" / ")
-            .ifEmpty { "アプリアイコンからログイン・同期" }
+        val status = store.error ?: if (store.syncedAt == null) "アプリアイコンからログイン・同期" else null
         val weights = recentWeights(store.weights, now)
         val latest = store.weights.maxByOrNull { it.occurredAt }
-        val latestDate = latest?.occurredAt?.atZone(japanZone)?.format(
-            DateTimeFormatter.ofPattern("M/d"),
-        )
         val trend = RemoteViews(context.packageName, R.layout.weight_trend_widget).apply {
             setOnClickPendingIntent(R.id.display_root, openWeight)
             setTextViewText(R.id.display_status, status)
+            setViewVisibility(R.id.display_status, if (status == null) View.GONE else View.VISIBLE)
             setTextViewText(
                 R.id.weight_value,
                 latest?.let { String.format(Locale.JAPAN, "%.1f kg", it.kg) }
                     ?: if (store.syncedAt == null) "未同期" else "未記録",
-            )
-            setTextViewText(
-                R.id.weight_period,
-                latestDate?.let { "$it の記録 · 直近 30 日" } ?: "直近 30 日の体重",
             )
             setTextViewText(
                 R.id.weight_empty,
@@ -95,9 +85,7 @@ internal object DisplayWidgets {
             setViewVisibility(R.id.weight_chart, if (weights.isEmpty()) View.GONE else View.VISIBLE)
             setViewVisibility(R.id.weight_empty, if (weights.isEmpty()) View.VISIBLE else View.GONE)
             if (weights.isNotEmpty()) {
-                val chart = weightChart(weights, now)
-                setImageViewBitmap(R.id.weight_chart_axes, chart.axes)
-                setImageViewBitmap(R.id.weight_chart_line, chart.trend)
+                setImageViewBitmap(R.id.weight_chart_line, weightChart(weights, now))
             }
         }
         manager.updateAppWidget(
@@ -105,7 +93,7 @@ internal object DisplayWidgets {
             trend,
         )
         val firstDate = collectionDisplayDate(now)
-        val dateFormat = DateTimeFormatter.ofPattern("M 月 d 日（E）", Locale.JAPAN)
+        val dateFormat = DateTimeFormatter.ofPattern("M/d（E）", Locale.JAPAN)
         val events = store.calendar?.events.orEmpty()
         val secondDate = firstDate.plusDays(1)
         val openFirstDate = PendingIntent.getActivity(
@@ -125,6 +113,7 @@ internal object DisplayWidgets {
             setOnClickPendingIntent(R.id.collection_day, openFirstDate)
             setOnClickPendingIntent(R.id.collection_next_day, openSecondDate)
             setTextViewText(R.id.display_status, status)
+            setViewVisibility(R.id.display_status, if (status == null) View.GONE else View.VISIBLE)
             setTextViewText(R.id.collection_date, firstDate.format(dateFormat))
             setTextViewText(
                 R.id.collection_title,
@@ -156,31 +145,17 @@ internal object DisplayWidgets {
     }
 }
 
-private data class WeightChartBitmaps(val axes: Bitmap, val trend: Bitmap)
-
-private fun weightChart(weights: List<WidgetWeight>, now: Instant): WeightChartBitmaps {
+private fun weightChart(weights: List<WidgetWeight>, now: Instant): Bitmap {
     val width = 720
-    val height = 300
-    val axes = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val height = 180
     val trend = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(axes)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     val min = weights.minOf { it.kg } - 0.5
     val max = weights.maxOf { it.kg } + 0.5
-    val left = 76f
-    val right = width - 18f
-    val top = 22f
-    val bottom = height - 32f
-    paint.textSize = 26f
-    paint.color = Color.WHITE
-    for (value in listOf(min, (min + max) / 2, max)) {
-        val y = bottom - ((value - min) / (max - min) * (bottom - top)).toFloat()
-        canvas.drawText(String.format(Locale.JAPAN, "%.1f", value), 0f, y + 8f, paint)
-        paint.alpha = 45
-        paint.strokeWidth = 1f
-        canvas.drawLine(left, y, right, y, paint)
-        paint.alpha = 255
-    }
+    val left = 12f
+    val right = width - 12f
+    val top = 12f
+    val bottom = height - 12f
     val today = now.atZone(japanZone).toLocalDate()
     val start = today.minusDays(29).atStartOfDay(japanZone).toInstant().toEpochMilli()
     val end = today.plusDays(1).atStartOfDay(japanZone).toInstant().toEpochMilli()
@@ -201,14 +176,7 @@ private fun weightChart(weights: List<WidgetWeight>, now: Instant): WeightChartB
     val trendCanvas = Canvas(trend)
     trendCanvas.drawPath(path, paint)
     paint.style = Paint.Style.FILL
-    coordinates.forEach { (x, y) -> trendCanvas.drawCircle(x, y, 3f, paint) }
     val (lastX, lastY) = coordinates.last()
     trendCanvas.drawCircle(lastX, lastY, 6f, paint)
-    paint.color = Color.WHITE
-    paint.textSize = 26f
-    val dateFormat = DateTimeFormatter.ofPattern("M/d")
-    canvas.drawText(today.minusDays(29).format(dateFormat), left, height - 3f, paint)
-    paint.textAlign = Paint.Align.RIGHT
-    canvas.drawText(today.format(dateFormat), right, height - 3f, paint)
-    return WeightChartBitmaps(axes, trend)
+    return trend
 }
