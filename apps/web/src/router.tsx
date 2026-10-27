@@ -5,6 +5,7 @@ import { createRootRouteWithContext, createRoute, createRouter, lazyRouteCompone
 import { createHealthReadApi } from "./api";
 import { AppShell } from "./components/AppShell";
 import { Eyebrow, Panel } from "./components/DesignSystem";
+import { PagePending } from "./components/PagePending";
 import { RouteError } from "./components/RouteError";
 import { buttonVariants } from "./components/ui/Button";
 import { abstinenceQuery } from "./features/abstinence/queries";
@@ -42,10 +43,12 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  loader: ({ context }) => Promise.all([
-    context.queryClient.ensureQueryData(dashboardQuery),
-    context.queryClient.ensureQueryData(abstinenceQuery),
-  ]),
+  loader: ({ context }) => {
+    // 禁欲記録は並列に取得し、その欄の読み込み状態で表示を待つ。
+    void context.queryClient.prefetchQuery(abstinenceQuery);
+    return context.queryClient.ensureQueryData(dashboardQuery);
+  },
+  pendingComponent: () => <PagePending title="ホーム" />,
   component: lazyRouteComponent(() => import("./pages/dashboard/DashboardPage"), "DashboardPage"),
 });
 
@@ -53,6 +56,7 @@ const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks",
   validateSearch: parseWorkSearch,
+  pendingComponent: () => <PagePending title="仕事" />,
   component: lazyRouteComponent(() => import("./pages/work/TasksPage"), "TasksPage"),
 });
 
@@ -60,6 +64,7 @@ const todosRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/todos",
   validateSearch: parseTodoSearch,
+  pendingComponent: () => <PagePending title="やること" />,
   component: lazyRouteComponent(() => import("./pages/todos/TodosPage"), "TodosPage"),
 });
 
@@ -67,6 +72,7 @@ const healthRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/health",
   validateSearch: parseHealthSearch,
+  pendingComponent: () => <PagePending title="体重・運動・食事" />,
   loader: async ({ context }) => Promise.all([
     context.queryClient.ensureQueryData(weightsQuery),
     context.queryClient.ensureQueryData(weightGoalQuery),
@@ -80,6 +86,7 @@ const sharedHealthRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/share/health/$token",
   validateSearch: parseSharedHealthSearch,
+  pendingComponent: () => <PagePending title="体重・運動・食事" shared />,
   loader: async ({ context, params }) => {
     const queries = createHealthQueries(createHealthReadApi(`/api/v1/share/${encodeURIComponent(params.token)}`), ["health-share", params.token], true);
     await Promise.all([
@@ -95,6 +102,7 @@ const sharedHealthRoute = createRoute({
 const financeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/finance",
+  pendingComponent: () => <PagePending title="収支と資産" />,
   loader: ({ context }) => context.queryClient.ensureQueryData(financeQuery),
   component: lazyRouteComponent(() => import("./pages/finance/FinancePage"), "FinancePage"),
 });
@@ -103,6 +111,7 @@ const operationsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/operations",
   validateSearch: (search) => monitoringSearchSchema.parse(search),
+  pendingComponent: () => <PagePending title="同期・実行状況" />,
   loader: async ({ context }) => Promise.all([
     context.queryClient.ensureQueryData(dashboardQuery),
     context.queryClient.ensureQueryData(repositoriesQuery),
@@ -149,6 +158,9 @@ export const router = createRouter({
   context: { queryClient },
   search: { strict: true },
   defaultPreload: "intent",
+  // タブ選択と本文の遷移先をそろえ、取得済みデータの表示を引き延ばさない。
+  defaultPendingMs: 0,
+  defaultPendingMinMs: 0,
   // データの鮮度と重複取得の制御を Query に任せる。
   defaultPreloadStaleTime: 0,
 });

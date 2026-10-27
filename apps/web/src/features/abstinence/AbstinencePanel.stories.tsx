@@ -1,6 +1,6 @@
 import type { AbstinenceOverview } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
 
 import { AbstinencePanel } from "./AbstinencePanel";
@@ -67,6 +67,35 @@ export const Active: Story = {
 export const Empty: Story = {
   name: "目標未設定",
   parameters: { msw: { handlers: [http.get("*/api/v1/abstinence", () => HttpResponse.json({ data: { goal: null, events: [], totalEventDurationMinutes: 0, currentStreakDays: 0, longestStreakDays: 0 } }))] } },
+};
+
+export const Loading: Story = {
+  name: "記録の読み込み中",
+  parameters: { msw: { handlers: [http.get("*/api/v1/abstinence", async () => {
+    await delay("infinite");
+    return HttpResponse.json({ data: overview });
+  })] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole("status")).toHaveTextContent("禁欲記録を読み込んでいます。");
+    await expect(canvas.queryByRole("button", { name: "禁欲目標を設定" })).not.toBeInTheDocument();
+  },
+};
+
+const recordRequest = fn();
+export const Failure: Story = {
+  name: "記録の取得失敗と再試行",
+  beforeEach: () => { recordRequest.mockClear(); },
+  parameters: { msw: { handlers: [http.get("*/api/v1/abstinence", () => {
+    recordRequest();
+    return recordRequest.mock.calls.length === 1
+      ? HttpResponse.json({ error: { message: "禁欲記録の取得に失敗しました。" } }, { status: 503 })
+      : HttpResponse.json({ data: overview });
+  })] } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(await canvas.findByRole("alert")).toHaveTextContent("禁欲記録の取得に失敗しました。");
+    await userEvent.click(canvas.getByRole("button", { name: "禁欲記録を再読み込み" }));
+    await expect(await canvas.findByRole("timer", { name: "禁欲の経過時間" })).toBeVisible();
+  },
 };
 
 export const WithoutMemo: Story = {
