@@ -20,12 +20,12 @@
     <string name="collection_days_description">朝 8:30 に表示日を切り替え、2 日分の収集予定を表示します。</string>
     <string name="add_weight_trend_widget">体重グラフを追加</string>
     <string name="add_collection_widget">ゴミの日を追加</string>
-    <string name="widget_login">表示用ウィジェットにログイン</string>
+    <string name="widget_login">ウィジェットを接続・再接続</string>
     <string name="widget_sync">今すぐ同期</string>
     <string name="sync_hint">アプリアイコンからログイン・同期</string>
     <string name="sync_pending">未同期</string>
     <string name="weight_period">直近 30 日の体重</string>
-    <string name="display_hint">体重グラフとゴミの日は、このアプリでログインすると同期できます。ウィジェットをタップすると Life Console の詳細画面を開きます。通常は約 1 時間ごとに更新します。ゴミの日は朝 8:30 から翌日分を先頭に表示します。</string>
+    <string name="display_hint">体重グラフとゴミの日は「ウィジェットを接続・再接続」から接続すると同期できます。Web アプリのログインとは別に接続が必要です。通常時はウィジェットのタップで Life Console の詳細画面を開きます。通常は約 1 時間ごとに更新します。ゴミの日は朝 8:30 から翌日分を先頭に表示します。</string>
     <string name="oauth_preparing">Chrome でログインする準備をしています…</string>
     <string name="oauth_close">閉じる</string>
     <string name="oauth_chrome_required">Chrome をインストール・有効化してください</string>

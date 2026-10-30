@@ -143,15 +143,21 @@ class WidgetLoginActivity : Activity() {
     }
 
     private fun showFailure(message: String) {
-        if (!isFinishing) {
-            WidgetStore(this).saveError(message)
-            runOnUiThread { status.text = message }
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                WidgetStore(this).saveError(message)
+                status.text = message
+            }
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.action == Intent.ACTION_VIEW) completeAuthorization()
+        if (intent.action == Intent.ACTION_VIEW) {
+            completeAuthorization()
+        } else {
+            recreate()
+        }
     }
 
     override fun onDestroy() {
