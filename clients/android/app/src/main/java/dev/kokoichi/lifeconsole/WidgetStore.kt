@@ -1,13 +1,16 @@
 package dev.kokoichi.lifeconsole
 
 import android.content.Context
+import android.content.SharedPreferences
 import java.time.Instant
 import java.time.LocalDate
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal class WidgetStore(context: Context) {
-    val preferences = context.getSharedPreferences("widget_data", Context.MODE_PRIVATE)
+internal class WidgetStore(val preferences: SharedPreferences) {
+    constructor(context: Context) : this(
+        context.getSharedPreferences("widget_data", Context.MODE_PRIVATE),
+    )
 
     val weights: List<WidgetWeight> get() = preferences.getString("weights", null)?.let {
         parseWeights(JSONArray(it))
@@ -16,6 +19,7 @@ internal class WidgetStore(context: Context) {
         parseCalendar(JSONObject(it))
     }
     val syncedAt: Instant? get() = preferences.getString("synced_at", null)?.let(Instant::parse)
+    val requiresLogin: Boolean get() = preferences.getBoolean("requires_login", false)
     val error: String? get() = preferences.getString("error", null)
 
     fun save(weights: JSONArray, calendar: JSONObject) {
@@ -26,11 +30,13 @@ internal class WidgetStore(context: Context) {
             "weights",
             weights.toString(),
         ).putString("calendar", calendar.toString())
-            .putString("synced_at", Instant.now().toString()).remove("error").apply()
+            .putString("synced_at", Instant.now().toString()).remove("error")
+            .remove("requires_login").apply()
     }
 
-    fun saveError(message: String) {
-        preferences.edit().putString("error", message).apply()
+    fun saveError(message: String, requiresLogin: Boolean = false) {
+        preferences.edit().putString("error", message)
+            .putBoolean("requires_login", requiresLogin).apply()
     }
 }
 
