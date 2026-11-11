@@ -21,7 +21,7 @@
     "@life-console/core": "workspace:*",
     "@life-console/env": "workspace:*",
     "csv-parse": "^7.0.2",
-    "drizzle-orm": "0.45.2",
+    "drizzle-orm": "0.45.4",
     "zod": "^4.5.4"
   },
   "devDependencies": {
