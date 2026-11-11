@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import webPush from "web-push";
+import * as webPush from "web-push";
 
 import { createWebPushRepository } from "./web-push-repository";
 
