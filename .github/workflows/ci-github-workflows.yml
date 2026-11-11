@@ -31,4 +31,4 @@ jobs:
     permissions:
       contents: read
       actions: read
-    uses: kokoichi206/gh-actions/.github/workflows/workflow-ci.yml@main
+    uses: kokoichi206/gh-actions/.github/workflows/workflow-ci.yml@23f7cfcd0c343c037a3063ffbac9d7d62c945d8d # main
