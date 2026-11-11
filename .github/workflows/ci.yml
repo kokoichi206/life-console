@@ -17,6 +17,9 @@ jobs:
   check:
     name: Quality checks
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.0-noble@sha256:6e3fb709361521eb27161606e6da6d2674e5e89fa16516cb37d6fdd91372273d
+      options: --init --ipc=host
     timeout-minutes: 20
     env:
       WRANGLER_SEND_METRICS: "false"
@@ -75,9 +78,6 @@ jobs:
 
       - name: Build Storybook
         run: pnpm storybook:build
-
-      - name: Install Chromium
-        run: pnpm --filter @life-console/web exec playwright install --with-deps chromium
 
       - name: Test Storybook in Chromium
         run: pnpm storybook:test

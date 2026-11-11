@@ -35,6 +35,12 @@
       groupName: 'Android dependencies',
       groupSlug: 'android-updates',
     },
+    {
+      // 公式コンテナのブラウザと npm パッケージは同じバージョンが必要。
+      matchPackageNames: ['playwright', 'mcr.microsoft.com/playwright'],
+      groupName: 'Playwright',
+      groupSlug: 'playwright',
+    },
   ],
   vulnerabilityAlerts: {
     labels: ['security', 'dependencies'],
