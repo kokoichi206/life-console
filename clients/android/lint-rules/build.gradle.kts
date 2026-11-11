@@ -14,7 +14,7 @@ dependencies {
     testImplementation(libs.ktlint.test)
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.3")
-    testRuntimeOnly("org.slf4j:slf4j-simple:2.0.16")
+    testRuntimeOnly("org.slf4j:slf4j-simple:2.0.20")
 }
 
 tasks.test {
