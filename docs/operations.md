@@ -20,6 +20,14 @@ GitHub Environment の配置許可ブランチは `development` が `develop`、
 
 migration 後に配置が失敗すると、適用済みの migration は残ります。稼働中の Worker との互換性を保ってください。通常の変更は feature ブランチから `develop` へ取り込み、開発環境で確認後、`develop` → `main` の PR を merge commit でマージします。
 
+## 依存関係の更新
+
+[Renovate の設定](../.github/renovate.json5)で、更新 PR の向き先を `develop` に固定する。通常の更新ブランチは日本時間の月曜 0:00〜4:00 に作成し、脆弱性アラートに基づく更新は通常のスケジュールを待たない。npm の workspace 依存、GitHub Actions、Terraform、Android の依存は、それぞれグループ化する。GitHub Actions はリリースタグに対応する SHA に固定する。
+
+自動マージと自動 rebase は無効。更新 PR は CI と差分を確認して手動でマージする。ベースブランチの変更を取り込む必要があるときは、Renovate の PR または Dependency Dashboard から rebase を要求する。Node.js を更新する場合は、次節の常駐 runner の切り替えも確認する。
+
+利用開始には [Renovate GitHub App](https://github.com/apps/renovate) の対象リポジトリに `kokoichi206/life-console` を含め、この設定を `develop` に取り込む。[導入手順](https://docs.renovatebot.com/getting-started/installing-onboarding/)に従い、Dependency Dashboard と更新 PR で稼働を確認する。
+
 ## Node.js の更新
 
 開発・テスト・ビルドに使う Node.js は、リポジトリ直下の [.node-version](../.node-version) に固定する。GitHub Actions の CI・Terraform plan・デプロイも `node-version-file` で同じ指定を読む。指定ファイルだけを更新した場合も、デプロイの変更検出は全工程を対象にする。
