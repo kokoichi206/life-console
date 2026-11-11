@@ -12,7 +12,7 @@
 
 ## 開発環境
 
-Node.js は [.node-version](.node-version)、pnpm は [package.json](package.json) の `packageManager` に指定したバージョンを使う。CI とデプロイも同じ Node.js 指定を参照する。初回は `pnpm install --frozen-lockfile`、検証は `pnpm check`。健康読み取り skill のテストには Python 3.11 以降と uv を使う。
+Node.js は [.node-version](.node-version)、pnpm は [package.json](package.json) の `packageManager` に指定したバージョンを使う。CI とデプロイも同じ Node.js 指定を参照する。初回は `pnpm install --frozen-lockfile`、検証は `pnpm check`。pnpm のバージョンを変更したときは `pnpm install` で lockfile の pnpm 本体の固定情報も更新し、差分をコミットする。健康読み取り skill のテストには Python 3.11 以降と uv を使う。
 
 Mac の常駐 runner の更新方法は [運用上の注意](docs/operations.md#nodejs-の更新)、2026 年 10 月のセキュリティ更新の影響は [調査記録](docs/reviews/node-security-2026-10-22.md)を参照。
 
