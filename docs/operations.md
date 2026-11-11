@@ -32,7 +32,7 @@ migration 後に配置が失敗すると、適用済みの migration は残り�
 
 開発・テスト・ビルドに使う Node.js は、リポジトリ直下の [.node-version](../.node-version) に固定する。GitHub Actions の CI・Terraform plan・デプロイも `node-version-file` で同じ指定を読む。指定ファイルだけを更新した場合も、デプロイの変更検出は全工程を対象にする。
 
-root と runner の `package.json` の `engines.node` は、修正済みの Node.js 24 系と 26 系の範囲を指定する。標準の開発・検証環境は `.node-version` の 24 系であり、26 系へ切り替える指定ではない。npm パッケージとして依存する Undici は Node.js 内蔵版とは別に更新する。`pnpm-workspace.yaml` の override は、Miniflare の固定依存を含む修正前の 7 系だけに適用する。
+標準の開発・検証環境は `.node-version` の Node.js 26 系とする。root と runner の `package.json` の `engines.node` は 26.13.0 以降の 26 系を指定し、`@types/node` と runner のビルド target も 26 系に揃える。npm パッケージとして依存する Undici は Node.js 内蔵版とは別に更新する。`pnpm-workspace.yaml` の override は、Miniflare の固定依存を含む修正前の 7 系だけに適用する。
 
 Mac の常駐 runner は LaunchAgent から起動する実体の Node.js パスも確認する。対話シェルの `node --version` や `.node-version` の変更だけでは、既に動いているプロセスのランタイムは変わらない。
 
