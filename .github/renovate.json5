@@ -15,12 +15,14 @@
   packageRules: [
     {
       matchManagers: ['github-actions'],
+      matchDatasources: ['github-tags'],
       groupName: 'GitHub Actions',
       groupSlug: 'github-actions',
     },
     {
-      // 全 workspace が同じ pnpm-lock.yaml を共有するため、まとめて更新する。
+      // major の移行を個別に検証できるよう、通常更新だけをまとめる。
       matchManagers: ['npm'],
+      matchUpdateTypes: ['minor', 'patch'],
       groupName: 'npm dependencies',
       groupSlug: 'npm-updates',
     },
@@ -34,6 +36,20 @@
       matchManagers: ['gradle', 'gradle-wrapper'],
       groupName: 'Android dependencies',
       groupSlug: 'android-updates',
+    },
+    {
+      // Miniflare が要求する Undici 7 系の API を保つ。
+      matchManagers: ['npm'],
+      matchDepTypes: ['pnpm-workspace.overrides'],
+      matchPackageNames: ['undici'],
+      allowedVersions: '<8.0.0',
+    },
+    {
+      // typescript-eslint とカスタムルールは TypeScript 6 の Compiler API を使う。
+      matchManagers: ['npm'],
+      matchFileNames: ['packages/eslint-config/package.json'],
+      matchPackageNames: ['typescript'],
+      allowedVersions: '<7.0.0',
     },
   ],
   vulnerabilityAlerts: {
