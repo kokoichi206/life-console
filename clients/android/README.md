@@ -70,7 +70,7 @@ ktlint 本体のバージョンは [version catalog](gradle/libs.versions.toml)�
 - `./gradlew :lint-rules:test`: カスタムルールの検出・非検出・抑制をテスト。
 - `./gradlew :app:lintDebug`: リソース、Manifest、Android API の使い方を検査。
 
-違反ファイルを削除しただけで増分検査に古い結果が残る場合は、`./gradlew ktlintCheck --rerun-tasks` で再検査します。[plugin の変更ファイル抽出](https://github.com/JLLeitschuh/ktlint-gradle/blob/v14.0.1/plugin/src/main/kotlin/org/jlleitschuh/gradle/ktlint/tasks/BaseKtLintCheckTask.kt) に基づく制約です。
+違反ファイルを削除しただけで増分検査に古い結果が残る場合は、`./gradlew ktlintCheck --rerun-tasks` で再検査します。[plugin の変更ファイル抽出](https://github.com/JLLeitschuh/ktlint-gradle/blob/v14.2.0/plugin/src/main/kotlin/org/jlleitschuh/gradle/ktlint/tasks/BaseKtLintCheckTask.kt) に基づく制約です。
 
 [ci-android](../../.github/workflows/ci-android.yml) は Android または同 workflow の変更を含む `develop` / `main` 向け PR・両ブランチへの push と手動実行で、lint、カスタムルールとアプリの単体テスト、Debug APK ビルドを実行します。レポートは 7 日間保存し、APK の公開・実機へのインストールは行いません。
 
