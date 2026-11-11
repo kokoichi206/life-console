@@ -18,9 +18,9 @@
     "@life-console/domain": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.0.0",
+    "@types/node": "^24.13.3",
     "drizzle-kit": "^0.31.10",
-    "typescript": "^7.0.0",
+    "typescript": "^6.0.3",
     "wrangler": "^4.127.1"
   }
 }

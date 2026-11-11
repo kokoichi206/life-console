@@ -30,12 +30,12 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260901.1",
     "@life-console/eslint-config": "workspace:*",
-    "@types/node": "^26.0.0",
+    "@types/node": "^24.13.3",
     "concurrently": "^10.0.5",
-    "eslint": "^10.0.0",
+    "eslint": "^9.39.5",
     "knip": "^6.35.0",
-    "typescript": "^7.0.0",
-    "vitest": "^5.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11",
     "yaml": "2.9.0"
   }
 }
