@@ -6,7 +6,7 @@ import { router } from "./router";
 
 const createTestRouter = (entry: string) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  return createRouter({ ...router.options, history: createMemoryHistory({ initialEntries: [entry] }), context: { queryClient } });
+  return createRouter({ ...router.options, isServer: false, origin: "http://localhost", history: createMemoryHistory({ initialEntries: [entry] }), context: { queryClient } });
 };
 
 afterEach(() => vi.unstubAllGlobals());
