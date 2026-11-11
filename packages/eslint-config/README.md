@@ -2,6 +2,8 @@
 
 共通 Flat Config と、このアプリの構成を守るカスタムルールです。ルートの `eslint.config.mjs` はこのパッケージだけを参照します。
 
+アプリの型検査は TypeScript 7 の CLI を使います。このパッケージの TypeScript 6 は、typescript-eslint とカスタムルールが使う JavaScript Compiler API のために維持します。TypeScript 7 の API とは互換性がないため、アプリのコンパイラーと一緒に更新しません。
+
 `console.info` は Pino の出力先である `packages/core/src/logger.ts` だけで許可します。アプリ側は共通 logger を使い、レベルと許可項目を揃えます。
 
 ```text
