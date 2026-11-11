@@ -29,24 +29,24 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260901.1",
-    "@storybook/addon-a11y": "10.6.0",
-    "@storybook/addon-docs": "10.6.0",
-    "@storybook/addon-vitest": "10.6.0",
-    "@storybook/react-vite": "10.6.0",
+    "@storybook/addon-a11y": "10.6.7",
+    "@storybook/addon-docs": "10.6.7",
+    "@storybook/addon-vitest": "10.6.7",
+    "@storybook/react-vite": "10.6.7",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.1.1",
-    "@vitest/browser-playwright": "4.1.11",
+    "@vitest/browser-playwright": "4.1.12",
     "msw": "^2.15.0",
     "msw-storybook-addon": "^3.0.0",
-    "playwright": "^1.63.0",
+    "playwright": "1.65.0",
     "shadcn": "^4.20.0",
-    "storybook": "10.6.0",
+    "storybook": "10.6.7",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vite": "^8.2.2",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   },
   "msw": {
     "workerDirectory": [
