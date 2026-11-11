@@ -17,7 +17,7 @@ export const RouteError = ({ error }: ErrorComponentProps) => {
     <Panel className="mx-auto mt-20 max-w-xl gap-4 px-5">
       <Eyebrow>REQUEST FAILED</Eyebrow>
       <h1 className="text-xl font-semibold">データを読み込めませんでした。</h1>
-      <p className="text-sm text-muted-foreground">{error.message}</p>
+      <p className="text-sm text-muted-foreground">{error instanceof Error ? error.message : String(error)}</p>
       <Button className="w-fit" type="button" onClick={() => void router.invalidate()}>再読み込み</Button>
     </Panel>
   );
