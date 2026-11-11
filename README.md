@@ -18,7 +18,7 @@ Mac の常駐 runner の更新方法は [運用上の注意](docs/operations.md#
 
 健康記録を他のリポジトリの AI agent から読む場合は、[読み取り skill の導入と更新](docs/agent-configuration.md#健康記録を読む-skill-の配布)を参照。
 
-依存パッケージの install script の実行可否は [pnpm-workspace.yaml](pnpm-workspace.yaml) の `allowBuilds` に指定する。esbuild・workerd は実行ファイルの準備に必要なため許可する。unrs-resolver は対象環境の optional dependency に含まれるバイナリを使い、postinstall の追加取得は実行しない。MSW の Service Worker は Git で管理するため、MSW の更新時に `pnpm --filter @life-console/web exec msw init .storybook/public` で生成して差分を確認する。
+依存パッケージの install script の実行可否は [pnpm-workspace.yaml](pnpm-workspace.yaml) の `allowBuilds` に指定する。esbuild・workerd は実行ファイルの準備に必要なため許可する。unrs-resolver は対象環境の optional dependency に含まれるバイナリを使い、postinstall の追加取得は実行しない。MSW の Service Worker は Git で管理するため、MSW の更新時に `pnpm --filter @life-console/web exec msw init .storybook/public --save` で生成して差分を確認する。
 
 ## ライセンス
 
