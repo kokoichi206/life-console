@@ -33,6 +33,8 @@ Oshi Launcher では『ホームに追加』→『ウィジェット』→『Lif
 
 JDK 17 と Android SDK Platform 36 が必要です。`ANDROID_HOME` または Git 管理対象外の `local.properties` に SDK の場所を設定します。
 
+Android アプリは AGP 9 の組み込み Kotlin を使うため、`org.jetbrains.kotlin.android` は適用しません。カスタム lint ルールの `lint-rules` は JVM モジュールなので、`org.jetbrains.kotlin.jvm` を適用します。アプリと lint ルールの JVM toolchain は 17 に揃えます。
+
 ```bash
 cd clients/android
 ./gradlew ktlintCheck :lint-rules:test :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
@@ -61,7 +63,7 @@ Kotlin と Android 標準の AppWidgetProvider / RemoteViews を使用します�
 
 ## Lint と CI
 
-ktlint 本体 `1.8.0` と Gradle plugin `14.0.1` を使用します。独自ルールの理由と制約は [lint-rules](lint-rules/README.md) を参照してください。
+ktlint 本体のバージョンは [version catalog](gradle/libs.versions.toml)、Gradle plugin のバージョンは [build.gradle.kts](build.gradle.kts) に指定します。独自ルールの理由と制約は [lint-rules](lint-rules/README.md) を参照してください。
 
 - `./gradlew ktlintCheck`: Kotlin と Gradle Kotlin DSL の標準ルール、カスタムルールを検査。
 - `./gradlew ktlintFormat`: 自動整形。カスタムルールの違反は自動修正しません。
