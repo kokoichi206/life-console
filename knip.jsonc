@@ -10,6 +10,10 @@
         // Terraform の check.sh が Worker の配信物としてコピーする。
         "infra/terraform/tests/fixtures/index.js"
       ],
+      "ignoreBinaries": [
+        // Python の skill テストは npm 依存ではなく、CI と開発環境で用意する uv を使う。
+        "uv"
+      ],
       "ignore": [
         // Gradle が生成するテストレポートは解析しない。
         "clients/android/**/build/**"

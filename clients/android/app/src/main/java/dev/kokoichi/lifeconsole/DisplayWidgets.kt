@@ -61,10 +61,27 @@ internal object DisplayWidgets {
         val manager = AppWidgetManager.getInstance(context)
         val store = WidgetStore(context)
         val now = Instant.now()
+        val openWidgetSettings = PendingIntent.getActivity(
+            context,
+            13,
+            Intent(
+                context,
+                if (store.requiresLogin) {
+                    WidgetLoginActivity::class.java
+                } else {
+                    MainActivity::class.java
+                },
+            ),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val openWeight = PendingIntent.getActivity(
             context,
             10,
-            WidgetLinks.weightIntent(),
+            if (store.error != null) {
+                Intent(context, MainActivity::class.java)
+            } else {
+                WidgetLinks.weightIntent()
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val status = store.error ?: if (store.syncedAt == null) "アプリアイコンからログイン・同期" else null
@@ -84,7 +101,11 @@ internal object DisplayWidgets {
                     context.packageName,
                     R.layout.weight_trend_widget,
                 ).apply {
-                    setOnClickPendingIntent(R.id.display_root, openWeight)
+                    setOnClickPendingIntent(
+                        R.id.display_root,
+                        if (store.requiresLogin) openWidgetSettings else openWeight,
+                    )
+                    setOnClickPendingIntent(R.id.display_status, openWidgetSettings)
                     setTextViewText(R.id.display_status, status)
                     setViewVisibility(R.id.display_status, statusVisibility)
                     setTextViewText(
@@ -150,13 +171,21 @@ internal object DisplayWidgets {
         val openFirstDate = PendingIntent.getActivity(
             context,
             11,
-            WidgetLinks.collectionIntent(firstDate, events),
+            if (store.error != null) {
+                Intent(context, MainActivity::class.java)
+            } else {
+                WidgetLinks.collectionIntent(firstDate, events)
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val openSecondDate = PendingIntent.getActivity(
             context,
             12,
-            WidgetLinks.collectionIntent(secondDate, events),
+            if (store.error != null) {
+                Intent(context, MainActivity::class.java)
+            } else {
+                WidgetLinks.collectionIntent(secondDate, events)
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val collection = RemoteViews(
@@ -165,9 +194,18 @@ internal object DisplayWidgets {
                 SizeF(250f, 110f) to R.layout.collection_widget_rows,
             ).mapValues { (_, layout) ->
                 RemoteViews(context.packageName, layout).apply {
-                    setOnClickPendingIntent(R.id.display_root, openFirstDate)
-                    setOnClickPendingIntent(R.id.collection_day, openFirstDate)
-                    setOnClickPendingIntent(R.id.collection_next_day, openSecondDate)
+                    val firstDateAction = if (store.requiresLogin) {
+                        openWidgetSettings
+                    } else {
+                        openFirstDate
+                    }
+                    setOnClickPendingIntent(R.id.display_root, firstDateAction)
+                    setOnClickPendingIntent(R.id.collection_day, firstDateAction)
+                    setOnClickPendingIntent(
+                        R.id.collection_next_day,
+                        if (store.requiresLogin) openWidgetSettings else openSecondDate,
+                    )
+                    setOnClickPendingIntent(R.id.display_status, openWidgetSettings)
                     setTextViewText(R.id.display_status, status)
                     setViewVisibility(R.id.display_status, statusVisibility)
                     setTextViewText(R.id.collection_date, firstDate.format(dateFormat))

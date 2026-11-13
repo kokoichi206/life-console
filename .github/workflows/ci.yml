@@ -17,20 +17,23 @@ jobs:
   check:
     name: Quality checks
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.0-noble@sha256:6e3fb709361521eb27161606e6da6d2674e5e89fa16516cb37d6fdd91372273d
+      options: --init --ipc=host
     timeout-minutes: 20
     env:
       WRANGLER_SEND_METRICS: "false"
     steps:
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -40,6 +43,14 @@ jobs:
 
       - name: Check AI harness
         run: pnpm harness:check
+
+      - name: Set up uv for skill tests
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.13"
+
+      - name: Test health read skill against database migrations
+        run: pnpm skills:test
 
       - name: Check migrations
         run: pnpm migrations:check
@@ -67,9 +78,6 @@ jobs:
 
       - name: Build Storybook
         run: pnpm storybook:build
-
-      - name: Install Chromium
-        run: pnpm --filter @life-console/web exec playwright install --with-deps chromium
 
       - name: Test Storybook in Chromium
         run: pnpm storybook:test

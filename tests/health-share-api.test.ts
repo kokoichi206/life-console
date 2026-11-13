@@ -43,7 +43,7 @@ describe("健康ページの共有 API", () => {
       expect((await app.request(`/api/v1/share/${encodeURIComponent(token)}/weights`, {}, environment)).status).toBe(404);
     }
     expect((await app.request(`/api/v1/share/${shareToken}/weights`, {}, { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker" })).status).toBe(404);
-    for (const [method, path] of [["POST", "weights"], ["PUT", "weight-goal"], ["POST", "strava/sync"], ["GET", "strava/callback"], ["GET", "tasks"], ["GET", "health-share"], ["GET", "runner/jobs"]] as const) {
+    for (const [method, path] of [["POST", "weights"], ["PUT", "weight-goal"], ["DELETE", "meals/meal"], ["POST", "meals/meal/restore"], ["POST", "strava/sync"], ["GET", "strava/callback"], ["GET", "tasks"], ["GET", "health-share"], ["GET", "runner/jobs"]] as const) {
       expect((await app.request(`/api/v1/share/${shareToken}/${path}`, { method }, environment)).status, `${method} ${path}`).toBe(404);
     }
     const link = await app.request("/api/v1/health-share", {}, environment);

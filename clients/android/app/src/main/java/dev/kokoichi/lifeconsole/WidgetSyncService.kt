@@ -57,7 +57,7 @@ class WidgetSyncService : JobService() {
                 .put("queriedThrough", today.plusDays(31).toString())
             store.save(weights, calendar)
         } catch (_: WidgetLoginRequired) {
-            store.saveError("アプリでログインしてください")
+            store.saveError("ウィジェットの再接続が必要です。タップして接続", requiresLogin = true)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
         } catch (_: IOException) {

@@ -21,12 +21,12 @@
     "@life-console/core": "workspace:*",
     "@life-console/env": "workspace:*",
     "csv-parse": "^7.0.2",
-    "drizzle-orm": "0.45.2",
+    "drizzle-orm": "0.45.4",
     "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
-    "tsup": "^8.5.1",
+    "tsup": "^9.0.0",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3"
   }

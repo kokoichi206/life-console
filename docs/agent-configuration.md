@@ -31,6 +31,30 @@ Codex の [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-
 
 モデル、承認モード、sandbox、個人アカウント、MCP、プラグインは各クライアントの利用者設定で管理する。共通化のために個人の設定を上書きしない。Claude 専用の `context: fork`、動的 shell 展開、特定 MCP や未導入スキルへの依存は共通スキルに入れない。
 
+## 健康記録を読む skill の配布
+
+[life-console-read](../.agents/skills/life-console-read/SKILL.md) は、このリポジトリの保存構造に合わせて体重・食事・栄養推定・食事写真を読み取る。正本と取得スクリプトは `.agents/skills/life-console-read/` に置き、schema や API repository の変更と同じリポジトリで保守する。
+
+利用先リポジトリのルートで、Vercel の skills CLI を使って project scope に導入する。公開しているのは手順とコードで、本人の記録・写真・資格情報は含めない。利用先が private repo であっても、この公開リポジトリから skill を導入できる。
+
+```sh
+npx --yes skills@1.8.1 add kokoichi206/life-console@develop --skill life-console-read --agent '*' -y
+```
+
+`-g` を付けないため導入先リポジトリ内に配置される。`--skill` でこの skill だけを選び、`--agent '*'` で CLI の全対応 agent を対象にする。共通の `.agents/skills/` と各 agent の探索先は CLI が配置し、`skills-lock.json` で導入元と内容を追跡する。未作成の agent 固有ディレクトリは skip される場合があるため、導入時の出力で確認する。
+
+更新も利用先で実行する。Git の変更だけでは導入済みの skill は自動更新されない。
+
+```sh
+npx --yes skills@1.8.1 update life-console-read -p
+```
+
+`@develop` は導入元のブランチ。特定の PR を確認する場合はそのブランチや commit を指定し、取り込み後は `@develop` から再導入する。各 agent で新しい内容の読込を確認する。画像取得後の読込には、利用先の agent が画像入力を扱える必要がある。
+
+接続先と専用の読み取り資格情報は、利用環境の shell または secret store から渡す。[接続設定](../.agents/skills/life-console-read/references/authentication.md) を参照する。手順が読めることと、本人の D1／R2 にアクセスできることは別である。
+
+`pnpm skills:test` は全 migration を適用した独立した SQLite とローカル HTTP を使って、期間・削除済み除外・最新推定・複数写真・失敗の伝達を確認する。R2 は SDK の stub を使い、実データには接続しない。`pnpm check` と PR の CI にも含める。実行には Python 3.11 以降と uv が必要。
+
 ## Claude 固有の settings と hook
 
 [settings.json](../.claude/settings.json) はプロジェクトで共有する。日本語、`@` ファイル候補での gitignore の尊重、Bash の既定 timeout 5 分・上限 20 分を設定する。利用者だけの上書きは Git 管理外の `.claude/settings.local.json` に置く。

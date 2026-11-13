@@ -73,6 +73,8 @@ pnpm storybook:test
 
 開発画面は <http://localhost:6006>。初回のブラウザテストには `pnpm --filter @life-console/web exec playwright install chromium` が必要です。
 
+CI はブラウザと OS 依存を含む [Playwright 公式コンテナ](https://playwright.dev/docs/docker)で同じ Chromium テストを実行し、ジョブ内で apt による追加インストールは行いません。[CI のイメージ](../../.github/workflows/ci.yml)は digest に固定し、npm の Playwright と同じバージョンに揃えます。[Renovate](../../.github/renovate.json5)では、このイメージと npm パッケージを同じ更新 PR に含めます。Node.js と pnpm はコンテナ内でもリポジトリの指定バージョンを使います。
+
 共通 UI、健康、仕事の受信箱、実行状況の stories を部品やページの隣に置いています。テーマの toolbar で light / dark を切り替えられます。空の状態、取得失敗、結果不明も確認できます。
 
 Storybook では MSW が架空の応答を返します。未定義の API 操作は 501 とし、アプリ用の API proxy は無効にしています。会話、メール、体重などの実データや外部サービスの認証は使いません。生成された Service Worker は `.storybook/public` に置き、アプリの配信物には含めません。
