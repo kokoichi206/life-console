@@ -1,13 +1,20 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
-    "lib": ["ES2023"],
+    "lib": [
+      "ES2023"
+    ],
     "paths": {
-      "@runner/*": ["src/*"]
+      "@runner/*": [
+        "./src/*"
+      ]
     },
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src", "tsup.config.ts"]
+  "include": [
+    "src",
+    "tsup.config.ts"
+  ]
 }

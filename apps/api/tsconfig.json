@@ -1,13 +1,21 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
-    "lib": ["ES2023", "WebWorker"],
+    "lib": [
+      "ES2023",
+      "WebWorker"
+    ],
     "paths": {
-      "@api/*": ["src/*"]
+      "@api/*": [
+        "./src/*"
+      ]
     },
-    "types": ["@cloudflare/workers-types"]
+    "types": [
+      "@cloudflare/workers-types"
+    ]
   },
-  "include": ["src", "worker-configuration.d.ts"]
+  "include": [
+    "src",
+    "worker-configuration.d.ts"
+  ]
 }
