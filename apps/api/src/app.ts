@@ -466,6 +466,8 @@ const _routes = app
     }
     return respond(context, await handlers.createMeal(input));
   })
+  .delete("/api/v1/meals/:id", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createHandlers(context.get("environment")).deleteMeal(context.req.valid("param").id)))
+  .post("/api/v1/meals/:id/restore", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createHandlers(context.get("environment")).restoreMeal(context.req.valid("param").id)))
   .put("/api/v1/weight-goal", zValidator("json", weightGoalSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveWeightGoal(context.req.valid("json"))))
   .put("/api/v1/calorie-baseline", zValidator("json", calorieBaselineSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveCalorieBaseline(context.req.valid("json"))))
   .post("/api/v1/weights", zValidator("json", createWeightSchema), async (context) => {

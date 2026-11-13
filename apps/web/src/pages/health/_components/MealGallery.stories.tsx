@@ -1,8 +1,11 @@
 import type { MealNutrition, Meal } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { http, HttpResponse } from "msw";
+import { useQuery } from "@tanstack/react-query";
+import { delay, http, HttpResponse } from "msw";
 import { useState } from "react";
 import { expect, fn, spyOn, waitFor, within } from "storybook/test";
+
+import { mealsQuery } from "../queries";
 
 import { MealGallery } from "./MealGallery";
 
@@ -278,5 +281,119 @@ export const MultiplePhotos: Story = {
     await expect(detail.getAllByRole("img")).toHaveLength(4);
     await expect(detail.getByRole("img", { name: "食事の写真 4" })).toHaveAttribute("src", "/api/v1/meal-photos/photo-fourth/content");
     await expect(detail.getByText(/4 枚 · 横にスワイプ/)).toBeVisible();
+  },
+};
+
+const deletedMealIds = new Set<string>();
+const deletedMealRequest = fn();
+const restoredMealRequest = fn();
+const deletionHandlers = (failure?: "delete" | "restore") => [photoHandler,
+  http.get("*/api/v1/meals", () => HttpResponse.json({ data: meals.filter((meal) => !deletedMealIds.has(meal.id)) })),
+  http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: nutrition.filter((meal) => !deletedMealIds.has(meal.mealId)) })),
+  http.delete("*/api/v1/meals/:id", async ({ params }) => {
+    deletedMealRequest(params.id);
+    await delay(200);
+    if (failure === "delete") return HttpResponse.json({ error: { message: "食事を削除できませんでした。" } }, { status: 503 });
+    deletedMealIds.add(String(params.id));
+    return HttpResponse.json({ data: null });
+  }),
+  http.post("*/api/v1/meals/:id/restore", ({ params }) => {
+    restoredMealRequest(params.id);
+    if (failure === "restore") return HttpResponse.json({ error: { message: "食事を元に戻せませんでした。" } }, { status: 503 });
+    deletedMealIds.delete(String(params.id));
+    return HttpResponse.json({ data: null });
+  }),
+];
+const resetDeletionStory = () => {
+  deletedMealIds.clear();
+  deletedMealRequest.mockReset();
+  restoredMealRequest.mockReset();
+};
+const DeletionGallery = () => {
+  const records = useQuery(mealsQuery);
+  const [selectedMealId, setSelectedMealId] = useState<string>();
+  return <MealGallery meals={records.data ?? []} selectedMealId={selectedMealId} onSelectMeal={setSelectedMealId} />;
+};
+
+export const DeleteAndRestore: Story = {
+  name: "対象を確認して 1 件削除し、元に戻す",
+  render: () => <DeletionGallery />,
+  beforeEach: resetDeletionStory,
+  parameters: { msw: { handlers: deletionHandlers() } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "2026/9/9 18:00 の食事を開く" }));
+    const detail = within(await screen.findByRole("dialog", { name: "食事の記録" }));
+    await userEvent.click(detail.getByRole("button", { name: "この食事を削除" }));
+    let confirmation = within(await screen.findByRole("alertdialog"));
+    await expect(confirmation.getByText("食事日時：2026/9/9 18:00")).toBeVisible();
+    await expect(confirmation.getByText("登録日時：2026/9/9 18:00:00")).toBeVisible();
+    await expect(confirmation.getByRole("img", { name: "削除対象の食事の代表写真" })).toBeVisible();
+    await expect(confirmation.getByText(/ごはんと焼き魚/)).toHaveTextContent("味噌汁");
+    await expect(confirmation.getByRole("button", { name: "キャンセル" })).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await expect(deletedMealRequest).not.toHaveBeenCalled();
+    await userEvent.click(detail.getByRole("button", { name: "この食事を削除" }));
+    await screen.findByRole("alertdialog");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await expect(screen.getByRole("dialog", { name: "食事の記録" })).toBeVisible();
+    await expect(deletedMealRequest).not.toHaveBeenCalled();
+    await userEvent.click(detail.getByRole("button", { name: "この食事を削除" }));
+    confirmation = within(await screen.findByRole("alertdialog"));
+    await userEvent.click(confirmation.getByRole("button", { name: "確認した食事を削除" }));
+    await expect(await confirmation.findByRole("button", { name: "削除しています…" })).toBeDisabled();
+    await expect(await canvas.findByText("2026/9/9 18:00 の食事を削除しました。")).toBeVisible();
+    await waitFor(() => expect(canvas.getAllByRole("button", { name: /の食事を開く$/ })).toHaveLength(8));
+    await expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await expect(deletedMealRequest).toHaveBeenCalledTimes(1);
+    await expect(deletedMealRequest).toHaveBeenCalledWith("meal-0");
+    await expect(within(await canvas.findByRole("table")).queryByText("2026-09-09")).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "元に戻す" }));
+    await waitFor(() => expect(canvas.getAllByRole("button", { name: /の食事を開く$/ })).toHaveLength(9));
+    await expect(await canvas.findByText("650 kcal", { selector: "td" })).toBeVisible();
+    await expect(restoredMealRequest).toHaveBeenCalledTimes(1);
+    await expect(restoredMealRequest).toHaveBeenCalledWith("meal-0");
+    await expect(canvas.queryByRole("button", { name: "元に戻す" })).not.toBeInTheDocument();
+  },
+};
+
+export const DeleteFailure: Story = {
+  name: "削除失敗でも対象と確認画面を保持",
+  render: () => <DeletionGallery />,
+  beforeEach: resetDeletionStory,
+  parameters: { msw: { handlers: deletionHandlers("delete") } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "2026/9/8 18:00 の食事を開く" }));
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "この食事を削除" }));
+    const confirmation = within(await screen.findByRole("alertdialog"));
+    await expect(confirmation.getByText("おにぎりとお茶")).toBeVisible();
+    await expect(confirmation.queryByRole("img")).not.toBeInTheDocument();
+    await userEvent.click(confirmation.getByRole("button", { name: "確認した食事を削除" }));
+    await expect(await confirmation.findByRole("alert")).toHaveTextContent("食事を削除できませんでした。");
+    await expect(confirmation.getByRole("button", { name: "確認した食事を削除" })).toBeEnabled();
+    await userEvent.click(confirmation.getByRole("button", { name: "キャンセル" }));
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "食事の詳細を閉じる" }));
+    await expect(canvas.getAllByRole("button", { name: /の食事を開く$/ })).toHaveLength(9);
+    await expect(canvas.queryByRole("button", { name: "元に戻す" })).not.toBeInTheDocument();
+  },
+};
+
+export const RestoreFailure: Story = {
+  name: "取り消し失敗でも元に戻す操作を残す",
+  render: () => <DeletionGallery />,
+  beforeEach: resetDeletionStory,
+  parameters: { msw: { handlers: deletionHandlers("restore") } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "2026/9/9 18:00 の食事を開く" }));
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "この食事を削除" }));
+    await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "確認した食事を削除" }));
+    await userEvent.click(await canvas.findByRole("button", { name: "元に戻す" }));
+    await expect(await canvas.findByRole("alert")).toHaveTextContent("食事を元に戻せませんでした。");
+    await expect(canvas.getByRole("button", { name: "元に戻す" })).toBeEnabled();
+    await expect(deletedMealIds.has("meal-0")).toBe(true);
   },
 };

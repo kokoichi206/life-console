@@ -1,8 +1,9 @@
+import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog } from "@base-ui/react/dialog";
 import { weightCalendarDate, type Meal, type MealNutrition } from "@life-console/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Utensils, X } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import { api } from "../../../api";
 import { Field, FormError, EmptyState, Eyebrow, Panel } from "../../../components/DesignSystem";
@@ -16,6 +17,10 @@ import { PfcNutrients } from "./PfcNutrients";
 const mealDateTime = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
 }).format(new Date(occurredAt));
+
+const mealRecordedDateTime = (recordedAt: string): string => new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
+}).format(new Date(recordedAt));
 
 const MealPhoto = ({ photoId, alt, className }: { readonly photoId: string; readonly alt: string; readonly className: string }) => {
   const { read } = useHealthQueries();
@@ -67,6 +72,55 @@ const MealCaloriesForm = ({ nutrition }: { readonly nutrition: MealNutrition }) 
   );
 };
 
+const MealDeleteConfirmation = ({ meal, onDeleted }: {
+  readonly meal: Meal;
+  readonly onDeleted: (meal: Meal) => Promise<void>;
+}) => {
+  const [open, setOpen] = useState(false);
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const remove = useMutation({
+    mutationFn: () => api.deleteMeal(meal.id),
+    onSuccess: async () => {
+      setOpen(false);
+      await onDeleted(meal);
+    },
+  });
+  return (
+    <AlertDialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (remove.isPending) return;
+        setOpen(nextOpen);
+        remove.reset();
+      }}
+    >
+      <div className="border-t pt-4">
+        <AlertDialog.Trigger render={<Button variant="destructive" />}>この食事を削除</AlertDialog.Trigger>
+      </div>
+      <AlertDialog.Portal>
+        <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+        <AlertDialog.Popup initialFocus={cancelButton} className="fixed top-1/2 left-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-card p-5 text-foreground shadow-2xl outline-none">
+          <AlertDialog.Title className="text-lg font-semibold">この食事を削除しますか？</AlertDialog.Title>
+          <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">削除する 1 件を確認してください。一覧とカロリー・PFC の集計から除外します。</AlertDialog.Description>
+          <div className="my-4 space-y-3 rounded-xl border p-3">
+            <p className="text-sm font-medium">{`食事日時：${mealDateTime(meal.occurredAt)}`}</p>
+            <p className="text-xs text-muted-foreground">{`登録日時：${mealRecordedDateTime(meal.recordedAt)}`}</p>
+            {meal.photoId !== null && <MealPhoto photoId={meal.photoId} alt="削除対象の食事の代表写真" className="max-h-40 w-full rounded-lg object-contain" />}
+            {meal.additionalPhotoIds.length > 0 && <p className="text-xs text-muted-foreground">{`写真 ${meal.additionalPhotoIds.length + 1} 枚の食事記録`}</p>}
+            <p className="text-sm break-words whitespace-pre-wrap">{meal.memo === "" ? "メモなし" : meal.memo}</p>
+          </div>
+          <p className="mb-4 text-xs text-muted-foreground">ページを再読み込み・移動するまでは、直前に削除した 1 件を「元に戻す」ことができます。</p>
+          {remove.error !== null && <FormError>{remove.error.message}</FormError>}
+          <div className="mt-4 flex justify-end gap-3">
+            <AlertDialog.Close render={<Button ref={cancelButton} variant="outline" disabled={remove.isPending} />}>キャンセル</AlertDialog.Close>
+            <Button variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? "削除しています…" : "確認した食事を削除"}</Button>
+          </div>
+        </AlertDialog.Popup>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
+  );
+};
+
 export const MealGallery = ({ meals, selectedMealId, onSelectMeal, selectedDay, onShowAll, hasMore = false, loadingMore = false, onLoadMore, periodLabel = "新しい順・直近 7 日間" }: {
   readonly periodLabel?: string;
   readonly meals: ReadonlyArray<Meal>;
@@ -80,6 +134,17 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, selectedDay, 
 }) => {
   const { nutritionQuery, nutritionQueryKey, readOnly } = useHealthQueries();
   const queryClient = useQueryClient();
+  const [deletedMeal, setDeletedMeal] = useState<Meal>();
+  const refreshMeals = async () => {
+    await Promise.all(["meals", "meal-gallery", "meal-day-counts", "nutrition", "dashboard"].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+  };
+  const restore = useMutation({
+    mutationFn: api.restoreMeal,
+    onSuccess: async (_result, id) => {
+      await refreshMeals();
+      setDeletedMeal((current) => current?.id === id ? undefined : current);
+    },
+  });
   const today = weightCalendarDate(new Date().toISOString());
   const mealDates = meals.map((meal) => weightCalendarDate(meal.occurredAt)).sort();
   const nutrition = useQuery({
@@ -107,6 +172,13 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, selectedDay, 
         </div>
       </header>
       <div className="sm:px-5">
+        {!readOnly && deletedMeal !== undefined && (
+          <div className="mb-4 space-y-3 rounded-xl border p-3" aria-label="食事の削除取り消し">
+            <p role="status" className="text-sm">{`${mealDateTime(deletedMeal.occurredAt)} の食事を削除しました。`}</p>
+            <Button variant="outline" disabled={restore.isPending} onClick={() => restore.mutate(deletedMeal.id)}>{restore.isPending ? "元に戻しています…" : "元に戻す"}</Button>
+            {restore.error !== null && <FormError>{restore.error.message}</FormError>}
+          </div>
+        )}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">{selectedDay === undefined ? periodLabel : "選択日の記録・新しい順"}</p>
           {selectedDay !== undefined && <Button variant="outline" size="sm" onClick={onShowAll}>全日を見る</Button>}
@@ -218,6 +290,18 @@ export const MealGallery = ({ meals, selectedMealId, onSelectMeal, selectedDay, 
                 {nutrition.error !== null && <FormError>{nutrition.error.message}</FormError>}
                 {selectedNutrition?.analysisStatus === "failed" && <FormError>{selectedNutrition.analysisSummary ?? "解析に失敗しました。再解析できます。"}</FormError>}
                 {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}
+                {!readOnly && (
+                  <MealDeleteConfirmation
+                    key={`delete:${selectedMeal.id}`}
+                    meal={selectedMeal}
+                    onDeleted={async (meal) => {
+                      restore.reset();
+                      setDeletedMeal(meal);
+                      onSelectMeal(undefined);
+                      await refreshMeals();
+                    }}
+                  />
+                )}
               </div>
             )}
           </Dialog.Popup>

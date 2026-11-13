@@ -290,6 +290,18 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     return ok({ ...selected.value, tags: JSON.parse(selected.value.tagsJson) as ReadonlyArray<string> });
   }
 
+  async deleteMeal(id: string, now: string): Promise<Result<void, AppError>> {
+    const result = await safeTry(() => this.#database.update(meals).set({ deletedAt: now }).where(and(eq(meals.id, id), isNull(meals.deletedAt))).run());
+    if (!result.ok) return err(appError.storage(result.error));
+    return result.value.meta.changes > 0 ? ok(undefined) : err(appError.notFound("削除できる食事記録が見つかりません。"));
+  }
+
+  async restoreMeal(id: string): Promise<Result<void, AppError>> {
+    const result = await safeTry(() => this.#database.update(meals).set({ deletedAt: null }).where(and(eq(meals.id, id), isNotNull(meals.deletedAt))).run());
+    if (!result.ok) return err(appError.storage(result.error));
+    return result.value.meta.changes > 0 ? ok(undefined) : err(appError.notFound("元に戻せる食事記録が見つかりません。"));
+  }
+
   async createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>> {
     const result = await safeTry(() => this.#database.insert(mealPhotos).values({ id: input.id, clientId: input.clientId, objectKey: input.objectKey,
       contentType: input.contentType, uploadTokenHash: input.tokenHash, uploadExpiresAt: input.expiresAt, uploadedAt: null, createdAt: input.now,
