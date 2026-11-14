@@ -1,6 +1,6 @@
 import type { PushMessage, PushSubscriptionInput } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
-import webPush from "web-push";
+import * as webPush from "web-push";
 
 import { appError, type AppError } from "../shared/app-error";
 

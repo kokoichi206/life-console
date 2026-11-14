@@ -78,6 +78,23 @@ export const LoadOlderMeals: Story = {
     await expect(canvas.queryByRole("button", { name: "もっと見る" })).not.toBeInTheDocument();
   },
 };
+export const MealLayoutUrl: Story = {
+  name: "食事一覧の URL の表示形式を復元し、詳細の開閉後も保つ",
+  parameters: { initialUrl: "/health?mealLayout=wrapped", msw: { handlers: [
+    http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [galleryMeal("layout-meal", "2026-09-07T09:00:00+09:00")], nextTo: null } })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await expect(await canvas.findByRole("button", { name: "2 列折り返し" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(canvas.getByRole("button", { name: "2026/9/7 09:00 の食事を開く" }));
+    const screen = within(canvasElement.ownerDocument.body);
+    const dialog = within(await screen.findByRole("dialog", { name: "食事の記録" }));
+    await userEvent.click(dialog.getByRole("button", { name: "食事の詳細を閉じる" }));
+    await expect(canvas.getByRole("button", { name: "2 列折り返し" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(canvas.getByRole("button", { name: "横スクロール" }));
+    await expect(canvas.getByRole("button", { name: "横スクロール" })).toHaveAttribute("aria-pressed", "true");
+  },
+};
 export const Dark: Story = { globals: { theme: "dark" } };
 export const ChartTooltipMobile: Story = {
   name: "狭い画面でも体重の詳細が切れない",

@@ -164,7 +164,7 @@ R2 の state lock と GHA の環境別 concurrency を使う。plan と apply �
 
 ## ローカルと CI の検証
 
-Terraform は [.tool-versions](.tool-versions) の `1.13.5` を使う。Cloudflare provider の厳密なバージョン `5.24.0` と lock file は 3 つの root で管理する。子 module の `versions.tf` は `cloudflare/cloudflare` と最低対応版だけを宣言し、root の provider 設定を継承する。provider の更新ごとに子 module の最低対応版を上げる必要はない。
+Terraform は [.tool-versions](.tool-versions) に指定したバージョンを使う。Cloudflare provider の厳密なバージョンは各 root の `provider.tf`、解決結果は 3 つの root の lock file で管理する。子 module の `versions.tf` は `cloudflare/cloudflare` と最低対応版だけを宣言し、root の provider 設定を継承する。provider の更新ごとに子 module の最低対応版を上げる必要はない。
 
 `required_providers` の source は子 module にも必要。これを省くと Terraform は `hashicorp/cloudflare` と解釈する。`provider "cloudflare" {}` の設定ブロックは root にだけ置く。
 
@@ -181,17 +181,17 @@ plan の変更資源・操作・検証コミット・実行ログへのリンク
 
 PR では apply・SQL migration を実行しない。apply は許可ブランチの `deploy.yml` が毎回作り直した plan を使う。R2 の lock を解放するため、PR の plan job は後続 push で自動キャンセルしない。
 
-workflow の規約とセキュリティ上の設定は、`kokoichi206/gh-actions/.github/workflows/workflow-ci.yml@main` の `workflow lint` と `zizmor` で検査する。配置前の削除・置き換え拒否は `deploy.yml` 内の `jq` で行い、専用のスクリプトやテストは持たない。
+workflow の規約とセキュリティ上の設定は、[ci-github-workflows.yml](../../.github/workflows/ci-github-workflows.yml) に SHA で固定した reusable workflow の `workflow lint` と `zizmor` で検査する。配置前の削除・置き換え拒否は `deploy.yml` 内の `jq` で行い、専用のスクリプトやテストは持たない。
 
 ## 公式資料
 
-- [D1 schema と import](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.24.0/docs/resources/d1_database.md)
-- [R2 schema と import](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.24.0/docs/resources/r2_bucket.md)
-- [Access アプリケーション](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.24.0/docs/resources/zero_trust_access_application.md)
-- [Access ポリシー](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.24.0/docs/resources/zero_trust_access_policy.md)
+- [D1 schema と import](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.28.1/docs/resources/d1_database.md)
+- [R2 schema と import](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.28.1/docs/resources/r2_bucket.md)
+- [Access アプリケーション](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.28.1/docs/resources/zero_trust_access_application.md)
+- [Access ポリシー](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.28.1/docs/resources/zero_trust_access_policy.md)
 - [Terraform S3 backend と lockfile](https://developer.hashicorp.com/terraform/language/backend/s3)
 - [R2 の認証と bucket 単位の権限](https://developers.cloudflare.com/r2/api/tokens/)
-- [Worker 本体と import](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.24.0/docs/resources/worker.md)
+- [Worker 本体と import](https://github.com/cloudflare/terraform-provider-cloudflare/blob/v5.28.1/docs/resources/worker.md)
 - [Terraform と Wrangler の分担](https://developers.cloudflare.com/workers/platform/infrastructure-as-code/)
 - [version と deployment](https://developers.cloudflare.com/workers/versions-and-deployments/)
 - [子 module の provider 宣言と継承](https://developer.hashicorp.com/terraform/language/modules/develop/providers)
