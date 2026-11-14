@@ -338,7 +338,7 @@ export const DeleteAndRestore: Story = {
     await expect(confirmation.getByText("登録日時：2026/9/9 18:00:00")).toBeVisible();
     await expect(confirmation.getByRole("img", { name: "削除対象の食事の代表写真" })).toBeVisible();
     await expect(confirmation.getByText(/ごはんと焼き魚/)).toHaveTextContent("味噌汁");
-    await expect(confirmation.getByRole("button", { name: "キャンセル" })).toHaveFocus();
+    await waitFor(() => expect(confirmation.getByRole("button", { name: "キャンセル" })).toHaveFocus());
     await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     await expect(deletedMealRequest).not.toHaveBeenCalled();
@@ -354,7 +354,7 @@ export const DeleteAndRestore: Story = {
     await expect(await confirmation.findByRole("button", { name: "削除しています…" })).toBeDisabled();
     await expect(await canvas.findByText("2026/9/9 18:00 の食事を削除しました。")).toBeVisible();
     await waitFor(() => expect(canvas.getAllByRole("button", { name: /の食事を開く$/ })).toHaveLength(8));
-    await expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await expect(deletedMealRequest).toHaveBeenCalledTimes(1);
     await expect(deletedMealRequest).toHaveBeenCalledWith("meal-0");
     await expect(canvas.queryByRole("region", { name: "2026-09-09 の食事" })).not.toBeInTheDocument();
