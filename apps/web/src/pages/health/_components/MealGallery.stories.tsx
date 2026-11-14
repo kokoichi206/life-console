@@ -104,6 +104,7 @@ export const AnalysisPending: Story = {
   play: async ({ canvasElement }) => {
     const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "食事の記録" }));
     await expect(await detail.findByRole("button", { name: "解析待ち・解析中" })).toBeDisabled();
+    await expect(detail.getByRole("button", { name: "食事を編集" })).toBeEnabled();
   },
 };
 export const AnalysisFailure: Story = {
@@ -480,5 +481,86 @@ export const BackgroundBlur: Story = {
     await expect(dialog.getByText("2 枚 · 横にスワイプで写真を切り替え")).toBeVisible();
     await userEvent.click(dialog.getByRole("button", { name: "食事の詳細を閉じる" }));
     await expect(toggle).toBeChecked();
+  },
+};
+
+let editedMeal = meals[0]!;
+const editedMealRequest = fn();
+const editedMealAnalysis = fn();
+const editingHandlers = (fail = false) => [photoHandler, nutritionHandler,
+  http.get("*/api/v1/meals", () => HttpResponse.json({ data: [editedMeal] })),
+  http.put("*/api/v1/meals/:id", async ({ request }) => {
+    const input = await request.json() as Pick<Meal, "memo" | "occurredAt" | "photoId" | "additionalPhotoIds" | "tags">;
+    editedMealRequest(input);
+    if (fail) return HttpResponse.json({ error: { message: "食事を更新できませんでした。" } }, { status: 409 });
+    editedMeal = { ...editedMeal, ...input };
+    return HttpResponse.json({ data: null });
+  }),
+  http.post("*/api/v1/meal-photos/upload", () => HttpResponse.json({ data: { photoId: "replacement", uploadUrl: "/test-meal-edit-upload", requiredHeaders: { "Content-Type": "image/jpeg" } } })),
+  http.put("*/test-meal-edit-upload", () => new HttpResponse(null)),
+  http.post("*/api/v1/nutrition/analyze", async ({ request }) => {
+    editedMealAnalysis(await request.json());
+    return HttpResponse.json({ data: null });
+  }),
+];
+const resetEditingStory = () => {
+  editedMeal = { ...meals[0]!, additionalPhotoIds: ["second-photo"], tags: ["夕食"] };
+  editedMealRequest.mockReset();
+  editedMealAnalysis.mockReset();
+};
+
+export const EditMeal: Story = {
+  name: "保存済みの写真と日本語メモを編集して再解析",
+  render: () => <DeletionGallery />,
+  beforeEach: resetEditingStory,
+  parameters: { msw: { handlers: editingHandlers() } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: /の食事を開く/ }));
+    let detail = within(await screen.findByRole("dialog"));
+    await userEvent.click(await detail.findByRole("button", { name: "食事を編集" }));
+    await userEvent.clear(detail.getByLabelText("メモ"));
+    await userEvent.type(detail.getByLabelText("メモ"), "鮭の塩焼き、ご飯 150 g、味噌汁");
+    await userEvent.click(detail.getByRole("button", { name: "保存済みの写真 1 を外す" }));
+    const image = document.createElement("canvas");
+    image.width = 8;
+    image.height = 8;
+    image.getContext("2d")!.fillRect(0, 0, 8, 8);
+    const blob = await new Promise<Blob>((resolve) => image.toBlob((value) => resolve(value!)));
+    await userEvent.upload(detail.getByLabelText("保存済みの写真"), new File([blob], "replacement.png", { type: "image/png" }));
+    const save = detail.getByRole("button", { name: "変更を保存" });
+    await waitFor(() => expect(save).toBeEnabled());
+    await userEvent.click(save);
+    await detail.findByRole("button", { name: "食事を編集" });
+    await expect(detail.getByText("鮭の塩焼き、ご飯 150 g、味噌汁")).toBeVisible();
+    await expect(editedMealRequest).toHaveBeenCalledWith({ photoId: "second-photo", additionalPhotoIds: ["replacement"], memo: "鮭の塩焼き、ご飯 150 g、味噌汁", occurredAt: meals[0]!.occurredAt, tags: ["夕食"] });
+    await expect(editedMealAnalysis).not.toHaveBeenCalled();
+    await userEvent.click(detail.getByRole("button", { name: "栄養を再解析" }));
+    await waitFor(() => expect(editedMealAnalysis).toHaveBeenCalledWith({ mealId: meals[0]!.id }));
+    await userEvent.click(detail.getByRole("button", { name: "食事の詳細を閉じる" }));
+    await userEvent.click(await canvas.findByRole("button", { name: /の食事を開く/ }));
+    detail = within(await screen.findByRole("dialog"));
+    await expect(detail.getByText("鮭の塩焼き、ご飯 150 g、味噌汁")).toBeVisible();
+    await expect(detail.getByRole("img", { name: "食事の写真 1" })).toHaveAttribute("src", "/api/v1/meal-photos/second-photo/content");
+    await expect(detail.getByRole("img", { name: "食事の写真 2" })).toHaveAttribute("src", "/api/v1/meal-photos/replacement/content");
+  },
+};
+
+export const EditMealFailure: Story = {
+  name: "編集の保存失敗でも入力を保持",
+  render: () => <DeletionGallery />,
+  beforeEach: resetEditingStory,
+  parameters: { msw: { handlers: editingHandlers(true) } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /の食事を開く/ }));
+    const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
+    await userEvent.click(await detail.findByRole("button", { name: "食事を編集" }));
+    await userEvent.clear(detail.getByLabelText("メモ"));
+    await userEvent.type(detail.getByLabelText("メモ"), "追記した料理名");
+    await userEvent.click(detail.getByRole("button", { name: "変更を保存" }));
+    await expect(await detail.findByRole("alert")).toHaveTextContent("食事を更新できませんでした。");
+    await expect(detail.getByLabelText("メモ")).toHaveValue("追記した料理名");
+    await expect(detail.getByRole("button", { name: "変更を保存" })).toBeEnabled();
+    await expect(editedMealAnalysis).not.toHaveBeenCalled();
   },
 };

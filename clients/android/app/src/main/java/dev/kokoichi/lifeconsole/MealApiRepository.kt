@@ -19,6 +19,7 @@ internal data class MealRecord(
     val memo: String,
     val occurredAt: String,
     val blurredPhotoIds: List<String>,
+    val tags: List<String>,
 )
 
 internal data class MealGalleryPage(val meals: List<MealRecord>, val nextTo: String?)
@@ -43,6 +44,9 @@ internal fun parseMealRecord(json: JSONObject): MealRecord {
         json.getString("occurredAt"),
         json.getJSONArray("blurredPhotoIds").let { ids ->
             (0 until ids.length()).map { ids.getString(it) }
+        },
+        json.getJSONArray("tags").let { tags ->
+            (0 until tags.length()).map { tags.getString(it) }
         },
     )
 }
@@ -97,6 +101,16 @@ internal class MealApiRepository(
             headers.keys().asSequence().associateWith { headers.getString(it) },
             data.getString("expiresAt"),
         )
+    }
+
+    fun downloadOriginalPhoto(photoId: String, file: File) {
+        val request = connection("/api/v1/meal-photos/$photoId/content", "GET")
+        try {
+            requireSuccess(request)
+            request.inputStream.use { input -> file.outputStream().use { input.copyTo(it) } }
+        } finally {
+            request.disconnect()
+        }
     }
 
     fun reserveBlurPhoto(photoId: String): MealPhotoUpload? {
@@ -165,6 +179,34 @@ internal class MealApiRepository(
         return parseMealRecord(json("/api/v1/meals", request).getJSONObject("data"))
     }
 
+    fun updateMeal(meal: MealRecord, photoIds: List<String>, memo: String, occurredAt: String) {
+        json(
+            "/api/v1/meals/${meal.id}",
+            JSONObject().put("memo", memo).put("occurredAt", occurredAt)
+                .put("tags", JSONArray(meal.tags))
+                .put("photoId", photoIds.firstOrNull() ?: JSONObject.NULL)
+                .put("additionalPhotoIds", JSONArray(photoIds.drop(1))),
+            "PUT",
+        )
+    }
+
+    fun analyzeMeal(mealId: String) {
+        json("/api/v1/nutrition/analyze", JSONObject().put("mealId", mealId))
+    }
+
+    fun analysisStatus(meal: MealRecord): String? {
+        val day = java.time.Instant.parse(meal.occurredAt).atZone(japanZone).toLocalDate()
+        val records = json("/api/v1/nutrition?from=$day&to=$day").getJSONArray("data")
+        for (index in 0 until records.length()) {
+            val record = records.getJSONObject(index)
+            if (record.getString("mealId") == meal.id) {
+                if (record.isNull("analysisStatus")) return null
+                return record.getString("analysisStatus")
+            }
+        }
+        throw IOException("食事記録が見つかりません。一覧を更新してください。")
+    }
+
     private fun authorize(connection: HttpURLConnection) {
         if (BuildConfig.MEAL_API_USES_OAUTH) {
             connection.setRequestProperty(
@@ -185,8 +227,8 @@ internal class MealApiRepository(
             authorize(this)
         }
 
-    private fun json(path: String, body: JSONObject? = null): JSONObject {
-        val request = connection(path, if (body == null) "GET" else "POST")
+    private fun json(path: String, body: JSONObject? = null, method: String = "POST"): JSONObject {
+        val request = connection(path, if (body == null) "GET" else method)
         try {
             if (body != null) {
                 request.doOutput = true
