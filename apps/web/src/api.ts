@@ -76,7 +76,7 @@ export const createHealthReadApi = (baseUrl: string) => {
     weightGoal: async () => unwrap<WeightGoal | null>(await readClient["weight-goal"].$get()),
     calorieBaseline: async () => unwrap<CalorieBaseline | null>(await readClient["calorie-baseline"].$get()),
     weights: async () => unwrap<ReadonlyArray<WeightPoint>>(await readClient.weights.$get()),
-    mealPhotoUrl: (photoId: string) => `${baseUrl}/meal-photos/${encodeURIComponent(photoId)}/content`,
+    mealPhotoUrl: (photoId: string, backgroundBlur = false) => `${baseUrl}/meal-photos/${encodeURIComponent(photoId)}/content${backgroundBlur ? "?variant=blurred" : ""}`,
   };
 };
 

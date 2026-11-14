@@ -11,7 +11,7 @@ import { mealsQuery } from "../queries";
 import { MealGallery } from "./MealGallery";
 
 const meals: Meal[] = Array.from({ length: 9 }, (_, index) => ({
-  id: `meal-${index}`, photoId: index === 1 ? null : `photo-${index}`, additionalPhotoIds: [], memo: index === 0 ? "ごはんと焼き魚\n味噌汁" : index === 1 ? "おにぎりとお茶" : "",
+  id: `meal-${index}`, photoId: index === 1 ? null : `photo-${index}`, blurredPhotoIds: [], additionalPhotoIds: [], memo: index === 0 ? "ごはんと焼き魚\n味噌汁" : index === 1 ? "おにぎりとお茶" : "",
   occurredAt: `2026-09-0${9 - index}T09:00:00Z`, recordedAt: "2026-09-09T09:00:00Z", tags: [],
 }));
 const nutrition: MealNutrition[] = meals.map((meal, index) => ({ mealId: meal.id, photoId: meal.photoId, occurredAt: meal.occurredAt,
@@ -278,7 +278,7 @@ export const RefreshAnalysisResult: Story = {
 };
 
 export const MultiplePhotos: Story = {
-  args: { meals: [{ ...meals[0]!, additionalPhotoIds: ["photo-second", "photo-third", "photo-fourth"] }] },
+  args: { meals: [{ ...meals[0]!, blurredPhotoIds: [], additionalPhotoIds: ["photo-second", "photo-third", "photo-fourth"] }] },
   play: async ({ canvas, canvasElement, userEvent }) => {
     await expect(canvas.getByText("4 枚")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: /の食事を開く/ }));
@@ -338,7 +338,7 @@ export const DeleteAndRestore: Story = {
     await expect(confirmation.getByText("登録日時：2026/9/9 18:00:00")).toBeVisible();
     await expect(confirmation.getByRole("img", { name: "削除対象の食事の代表写真" })).toBeVisible();
     await expect(confirmation.getByText(/ごはんと焼き魚/)).toHaveTextContent("味噌汁");
-    await expect(confirmation.getByRole("button", { name: "キャンセル" })).toHaveFocus();
+    await waitFor(() => expect(confirmation.getByRole("button", { name: "キャンセル" })).toHaveFocus());
     await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     await expect(deletedMealRequest).not.toHaveBeenCalled();
@@ -354,7 +354,7 @@ export const DeleteAndRestore: Story = {
     await expect(await confirmation.findByRole("button", { name: "削除しています…" })).toBeDisabled();
     await expect(await canvas.findByText("2026/9/9 18:00 の食事を削除しました。")).toBeVisible();
     await waitFor(() => expect(canvas.getAllByRole("button", { name: /の食事を開く$/ })).toHaveLength(8));
-    await expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await expect(deletedMealRequest).toHaveBeenCalledTimes(1);
     await expect(deletedMealRequest).toHaveBeenCalledWith("meal-0");
     await expect(canvas.queryByRole("region", { name: "2026-09-09 の食事" })).not.toBeInTheDocument();
@@ -409,7 +409,7 @@ export const RestoreFailure: Story = {
 
 const groupedMeals: Meal[] = Array.from({ length: 7 }, (_, index) => ({
   ...meals[0]!, id: `grouped-${index}`, photoId: index === 4 ? null : `grouped-photo-${index}`,
-  additionalPhotoIds: index === 2 ? ["grouped-extra"] : [], memo: index === 4 ? "写真なしの食事" : "比較用の食事",
+  blurredPhotoIds: [], additionalPhotoIds: index === 2 ? ["grouped-extra"] : [], memo: index === 4 ? "写真なしの食事" : "比較用の食事",
   occurredAt: new Date(Date.parse("2026-11-12T21:00:00+09:00") - index * 3_600_000).toISOString(),
 }));
 const groupedNutrition: MealNutrition[] = groupedMeals.map((meal, index) => ({
@@ -431,6 +431,10 @@ export const DailyLayouts: Story = {
     await expect(row.scrollWidth).toBeGreaterThan(row.clientWidth);
     await expect(day.queryByRole("button", { name: /の(前|次)の食事へ/ })).not.toBeInTheDocument();
     await expect(day.queryByText("横にスワイプで食事を見る")).not.toBeInTheDocument();
+    const fineScrollEnd = new Promise<void>((resolve) => row.addEventListener("scrollend", () => resolve(), { once: true }));
+    row.scrollTo({ left: 110, behavior: "instant" });
+    await fineScrollEnd;
+    await expect(row.scrollLeft).toBe(110);
     row.scrollTo({ left: row.clientWidth, behavior: "instant" });
     await waitFor(() => expect(row.scrollLeft).toBeGreaterThan(150));
     await userEvent.click(canvas.getByRole("button", { name: "2 列折り返し" }));
@@ -455,5 +459,26 @@ export const JapanDateBoundary: Story = {
   play: async ({ canvas }) => {
     await expect(within(canvas.getByRole("region", { name: "2026-11-13 の食事" })).getByRole("button", { name: "2026/11/13 00:00 の食事を開く" })).toBeVisible();
     await expect(within(canvas.getByRole("region", { name: "2026-11-12 の食事" })).getByRole("button", { name: "2026/11/12 23:59 の食事を開く" })).toBeVisible();
+  },
+};
+
+export const BackgroundBlur: Story = {
+  name: "元画像とぼかし画像を同じ写真として切り替える",
+  args: { meals: [{ ...meals[0]!, blurredPhotoIds: ["photo-0"], additionalPhotoIds: ["photo-second"] }] },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const toggle = canvas.getByRole("switch", { name: /背景ぼかし/ });
+    await expect(toggle).toBeChecked();
+    await expect(canvas.getByRole("img", { name: "食事の写真" })).toHaveAttribute("src", "/api/v1/meal-photos/photo-0/content?variant=blurred");
+    await userEvent.click(toggle);
+    await expect(canvas.getByRole("img", { name: "食事の写真" })).toHaveAttribute("src", "/api/v1/meal-photos/photo-0/content");
+    await userEvent.click(canvas.getByRole("button", { name: /の食事を開く/ }));
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "食事の記録" }));
+    await expect(dialog.getByRole("img", { name: "食事の写真 1" })).toHaveAttribute("src", "/api/v1/meal-photos/photo-0/content");
+    await userEvent.click(dialog.getByRole("switch", { name: "背景ぼかし" }));
+    await expect(dialog.getByRole("img", { name: "食事の写真 1" })).toHaveAttribute("src", "/api/v1/meal-photos/photo-0/content?variant=blurred");
+    await expect(dialog.getByRole("img", { name: "食事の写真 2" })).toHaveAttribute("src", "/api/v1/meal-photos/photo-second/content");
+    await expect(dialog.getByText("2 枚 · 横にスワイプで写真を切り替え")).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: "食事の詳細を閉じる" }));
+    await expect(toggle).toBeChecked();
   },
 };

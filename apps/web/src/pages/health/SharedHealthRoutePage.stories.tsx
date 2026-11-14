@@ -9,7 +9,7 @@ import { SharedHealthRoutePage } from "./SharedHealthRoutePage";
 
 const token = "ab".repeat(32);
 const prefix = `*/api/v1/share/${token}`;
-const meal = { id: "shared-meal", photoId: "shared-photo", additionalPhotoIds: ["shared-photo-2"], memo: "架空の食事", occurredAt: "2026-09-01T00:00:00Z", recordedAt: "2026-09-01T00:00:00Z", tags: [] };
+const meal = { id: "shared-meal", photoId: "shared-photo", blurredPhotoIds: [], additionalPhotoIds: ["shared-photo-2"], memo: "架空の食事", occurredAt: "2026-09-01T00:00:00Z", recordedAt: "2026-09-01T00:00:00Z", tags: [] };
 const meta = {
   title: "Pages/健康の共有",
   component: SharedHealthRoutePage,
@@ -71,3 +71,19 @@ export const ReadOnly: Story = {
 };
 export const Dark: Story = { globals: { theme: "dark" } };
 export const Narrow: Story = { decorators: [(Story) => <div className="max-w-[375px]"><Story /></div>] };
+
+export const BackgroundBlur: Story = {
+  name: "共有画面でも表示だけを切り替える",
+  parameters: { msw: { handlers: [
+    http.get(`${prefix}/meal-gallery`, () => HttpResponse.json({ data: { meals: [{ ...meal, blurredPhotoIds: [meal.photoId] }], nextTo: null } })),
+    ...meta.parameters.msw.handlers,
+  ] } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /の食事を開く/ }));
+    const dialog = within(await within(canvasElement.ownerDocument.body).findByRole("dialog", { name: "食事の記録" }));
+    await expect(dialog.getByRole("img", { name: "食事の写真 1" })).toHaveAttribute("src", `/api/v1/share/${token}/meal-photos/shared-photo/content?variant=blurred`);
+    await userEvent.click(dialog.getByRole("switch", { name: "背景ぼかし" }));
+    await expect(dialog.getByRole("img", { name: "食事の写真 1" })).toHaveAttribute("src", `/api/v1/share/${token}/meal-photos/shared-photo/content`);
+    await expect(dialog.getByRole("button", { name: "カロリーを保存" })).toBeDisabled();
+  },
+};
