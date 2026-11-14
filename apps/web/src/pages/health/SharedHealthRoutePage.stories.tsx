@@ -55,14 +55,18 @@ export const ReadOnly: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "表で見る" }));
     await expect(canvas.getByRole("table", { name: "体重の推移" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "全期間" }));
+    await userEvent.click(canvas.getByRole("button", { name: "2 列折り返し" }));
+    await expect(canvas.getByRole("button", { name: "2 列折り返し" })).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(await canvas.findByRole("button", { name: /の食事を開く/ }));
     const screen = within(canvasElement.ownerDocument.body);
     const dialog = within(await screen.findByRole("dialog", { name: "食事の記録" }));
     await expect(dialog.getByRole("button", { name: "カロリーを保存" })).toBeDisabled();
     await expect(dialog.getByRole("button", { name: "栄養を解析" })).toBeDisabled();
+    await expect(dialog.queryByRole("button", { name: "この食事を削除" })).not.toBeInTheDocument();
     await expect(dialog.getByRole("img", { name: "食事の写真 1" })).toHaveAttribute("src", `/api/v1/share/${token}/meal-photos/shared-photo/content`);
     await expect(dialog.getByRole("img", { name: "食事の写真 2" })).toHaveAttribute("src", `/api/v1/share/${token}/meal-photos/shared-photo-2/content`);
     await userEvent.click(dialog.getByRole("button", { name: "食事の詳細を閉じる" }));
+    await expect(canvas.getByRole("button", { name: "2 列折り返し" })).toHaveAttribute("aria-pressed", "true");
   },
 };
 export const Dark: Story = { globals: { theme: "dark" } };
