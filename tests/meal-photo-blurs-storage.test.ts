@@ -5,6 +5,7 @@ import { URL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { app } from "../apps/api/src/app";
+import { D1LifeConsoleRepository } from "../apps/api/src/repositories/d1-life-console-repository";
 import { createNutritionRepository } from "../apps/api/src/repositories/nutrition-repository";
 
 import { createJobStorage } from "./support/d1-storage";
@@ -42,7 +43,9 @@ describe("食事写真のぼかしバージョン", () => {
       expect(await (await request(`/api/v1/meal-photos/${original.photoId}/blur/upload`, json({ contentType: "image/jpeg" }))).json()).toEqual({ data: null });
       expect((await request(blur.uploadUrl, { method: "PUT", headers: blur.requiredHeaders, body: "overwrite" })).status).toBe(403);
       expect(await (await request(`/api/v1/meal-photos/${original.photoId}/content`)).text()).toBe("original pixels");
-      expect(await (await request(`/api/v1/meal-photos/${original.photoId}/content?variant=blurred`)).text()).toBe("blurred pixels");
+      const blurredRead = await request(`/api/v1/meal-photos/${original.photoId}/content?variant=blurred`);
+      expect(await blurredRead.text()).toBe("blurred pixels");
+      expect(blurredRead.headers.get("ETag")).toMatch(/^".+"$/u);
       const shared = await request(`/api/v1/share/${environment.HEALTH_SHARE_TOKEN}/meal-photos/${original.photoId}/content?variant=blurred`);
       expect(await shared.text()).toBe("blurred pixels");
       expect(shared.headers.get("Cache-Control")).toBe("no-store");
@@ -82,6 +85,31 @@ describe("食事写真のぼかしバージョン", () => {
       expect((await app.request("/api/v1/meal-photos/photo/blur/complete", json({}), environment)).status).toBe(200);
       expect(await repository.listMeals()).toMatchObject({ ok: true, value: [{ blurredPhotoIds: ["photo"] }] });
       expect(await (await request()).json()).toEqual({ data: null });
+    } finally { database.close(); }
+  });
+
+  it("写真が 100 枚を超えても D1 のパラメーター上限を超えず、対象写真の完了済みぼかしだけを返す", async () => {
+    const { database, binding, repository } = createJobStorage();
+    const ids = Array.from({ length: 150 }, (_, index) => `photo-${index}`);
+    const prepare = binding.prepare.bind(binding);
+    binding.prepare = (query: string) => {
+      const statement = prepare(query);
+      const bind = statement.bind.bind(statement);
+      statement.bind = (...values: unknown[]) => {
+        expect(values.length).toBeLessThanOrEqual(100);
+        return bind(...values);
+      };
+      return statement;
+    };
+    const limitedRepository = new D1LifeConsoleRepository(binding);
+    try {
+      for (const id of [...ids, "outside"]) await repository.createMealPhoto({ id, clientId: id, contentType: "image/jpeg", objectKey: id, tokenHash: "hash", expiresAt: now, now });
+      for (const id of [ids[3]!, ids[100]!, ids[149]!, "outside"]) {
+        await repository.reserveMealPhotoBlur({ photoId: id, contentType: "image/jpeg", objectKey: `${id}.blur`, tokenHash: "hash", expiresAt: now, now });
+        if (id !== ids[100]) await repository.markMealPhotoBlurUploaded(id, now);
+      }
+      await repository.createMealAndQueueNutrition("many", { clientId: "many", photoId: ids[0]!, additionalPhotoIds: ids.slice(1), memo: "", manualCaloriesKcal: 1, occurredAt: now, tags: [] }, now);
+      expect(await limitedRepository.listMealGallery("2026-11-14")).toMatchObject({ ok: true, value: { meals: [{ blurredPhotoIds: [ids[3], ids[149]] }] } });
     } finally { database.close(); }
   });
 

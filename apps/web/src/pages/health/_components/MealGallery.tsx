@@ -233,8 +233,8 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
           {selectedDay !== undefined && <Button variant="outline" size="sm" onClick={onShowAll}>全日を見る</Button>}
         </div>
         {meals.some((meal) => meal.blurredPhotoIds.length > 0) && (
-          <label className="mb-4 flex items-center gap-2 text-sm">
-            <input type="checkbox" role="switch" checked={backgroundBlur} onChange={(event) => setBackgroundBlur(event.target.checked)} />
+          <label className="mb-4 flex min-h-11 items-center gap-2 text-sm">
+            <input className="size-4 accent-primary" type="checkbox" role="switch" checked={backgroundBlur} onChange={(event) => setBackgroundBlur(event.target.checked)} />
             背景ぼかし（対応する写真に適用）
           </label>
         )}
@@ -329,8 +329,8 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
             {selectedMeal !== undefined && (
               <div className="grid gap-4">
                 {selectedMeal.blurredPhotoIds.length > 0 && (
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" role="switch" checked={backgroundBlur} onChange={(event) => setBackgroundBlur(event.target.checked)} />
+                  <label className="flex min-h-11 items-center gap-2 text-sm">
+                    <input className="size-4 accent-primary" type="checkbox" role="switch" checked={backgroundBlur} onChange={(event) => setBackgroundBlur(event.target.checked)} />
                     背景ぼかし
                   </label>
                 )}

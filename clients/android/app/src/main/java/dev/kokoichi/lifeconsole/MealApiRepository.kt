@@ -60,13 +60,22 @@ internal class MealApiRepository(
         )
     }
 
-    fun readPhoto(photoId: String, backgroundBlur: Boolean = false): Bitmap {
+    fun readPhoto(photoId: String, backgroundBlur: Boolean = false, maxEdge: Int = 1600): Bitmap {
         val variant = if (backgroundBlur) "?variant=blurred" else ""
         val connection = connection("/api/v1/meal-photos/$photoId/content$variant", "GET")
         try {
             requireSuccess(connection)
             val bytes = connection.inputStream.use { it.readBytes() }
-            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            val options = BitmapFactory.Options()
+            while (maxOf(bounds.outWidth, bounds.outHeight) /
+                (options.inSampleSize.coerceAtLeast(1) * 2) >=
+                maxEdge
+            ) {
+                options.inSampleSize = options.inSampleSize.coerceAtLeast(1) * 2
+            }
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
                 ?: throw IOException("食事の写真を読み込めませんでした。")
         } finally {
             connection.disconnect()

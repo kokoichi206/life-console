@@ -297,8 +297,9 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
   async #withPhotoBlurs(records: ReadonlyArray<Omit<Meal, "blurredPhotoIds">>): Promise<Result<ReadonlyArray<Meal>, AppError>> {
     const ids = records.flatMap((meal) => meal.photoId === null ? [] : [meal.photoId, ...meal.additionalPhotoIds]);
     if (ids.length === 0) return ok(records.map((meal) => ({ ...meal, blurredPhotoIds: [] })));
+    // 写真の枚数によらず、D1 のバインドパラメーター上限を超えないよう 1 個の JSON として渡す。
     const result = await safeTry(() => this.#database.select({ photoId: mealPhotoBlurs.photoId }).from(mealPhotoBlurs)
-      .where(and(inArray(mealPhotoBlurs.photoId, ids), isNotNull(mealPhotoBlurs.uploadedAt))).all());
+      .where(and(sql`${mealPhotoBlurs.photoId} in (select value from json_each(${JSON.stringify(ids)}))`, isNotNull(mealPhotoBlurs.uploadedAt))).all());
     if (!result.ok) return err(appError.storage(result.error));
     const available = new Set(result.value.map((photo) => photo.photoId));
     return ok(records.map((meal) => ({ ...meal, blurredPhotoIds: (meal.photoId === null ? [] : [meal.photoId, ...meal.additionalPhotoIds]).filter((id) => available.has(id)) })));

@@ -288,7 +288,19 @@ class MealActivity : Activity() {
         val image = photoView(description, height)
         parent.addView(image)
         fun display(enabled: Boolean) {
-            loadImage(image, "$photoId:$enabled") { api.readPhoto(photoId, enabled) }
+            loadImage(image, "$photoId:$enabled") {
+                api.readPhoto(
+                    photoId,
+                    enabled,
+                    if (height <=
+                        200
+                    ) {
+                        600
+                    } else {
+                        1600
+                    },
+                )
+            }
         }
         val enabled = hasBlur && savedPhotoBlur.getOrPut(photoId) { true }
         display(enabled)

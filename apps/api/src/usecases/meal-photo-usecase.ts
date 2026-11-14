@@ -120,7 +120,7 @@ export const createMealPhotoUsecase = (
       const fetched = await safeTry(() => bucket.get(photo.value.objectKey));
       if (!fetched.ok) return err(appError.storage(fetched.error));
       if (fetched.value === null) return err(appError.notFound("写真が見つかりません。"));
-      return ok({ body: fetched.value.body, contentType: photo.value.contentType, etag: fetched.value.etag });
+      return ok({ body: fetched.value.body, contentType: photo.value.contentType, etag: fetched.value.httpEtag });
     },
   };
 };

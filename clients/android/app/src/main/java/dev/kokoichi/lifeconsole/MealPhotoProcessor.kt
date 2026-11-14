@@ -69,6 +69,7 @@ internal class MealPhotoProcessor(private val context: Context) {
             ).also { decoded.recycle() }
         }
         try {
+            // Bitmap 出力を必ず有効にする segmenter なので、結果を必須として扱う。
             val foreground = Tasks.await(
                 segmenter.process(InputImage.fromBitmap(source, 0)),
             ).foregroundBitmap!!
