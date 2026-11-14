@@ -10,6 +10,20 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+        <activity android:name=".MealActivity" android:exported="true" android:launchMode="singleTask"
+            android:enableOnBackInvokedCallback="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="dev.kokoichi.lifeconsole" android:host="meals" />
+            </intent-filter>
+        </activity>
+        <provider android:name=".MealPhotoFileProvider" android:authorities="${applicationId}.mealphotos"
+            android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/meal_photo_paths" />
+        </provider>
         <activity android:name="net.openid.appauth.RedirectUriReceiverActivity" tools:node="remove" />
         <activity android:name=".WidgetLoginActivity" android:exported="true" android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode">

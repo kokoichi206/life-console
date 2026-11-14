@@ -146,6 +146,7 @@ export type Meal = {
   readonly id: string;
   readonly photoId: string | null;
   readonly additionalPhotoIds: ReadonlyArray<string>;
+  readonly blurredPhotoIds: ReadonlyArray<string>;
   readonly memo: string;
   readonly occurredAt: string;
   readonly recordedAt: string;

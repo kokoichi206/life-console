@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="meal_list">食事の記録</string>
+    <string name="meal_detail">食事の詳細</string>
+    <string name="meal_local_environment">ローカルの検証データを表示しています。本番の記録とは別です。</string>
+    <string name="meal_loading">食事を読み込んでいます…</string>
+    <string name="meal_reload">一覧を更新</string>
+    <string name="meal_count">%1$d 件の食事</string>
+    <string name="meal_empty">食事の記録はまだありません。</string>
+    <string name="meal_more">前の 7 日間を見る</string>
+    <string name="meal_open_photo">食事の写真と詳細を開く</string>
+    <string name="meal_photo_count">写真 %1$d 枚</string>
+    <string name="meal_photo_number">写真 %1$s</string>
+    <string name="meal_photo_blur_label">写真 %1$s の背景ぼかし</string>
+    <string name="meal_back_to_list">食事一覧に戻る</string>
+    <string name="meal_saved_photo_notice">対応する写真は、保存後も背景ぼかしを切り替えられます。</string>
+    <string name="meal_blur_preparing">背景ぼかしを準備しています。初回は認識モデルをダウンロードします。</string>
+    <string name="meal_blur_ready">撮影・写真選択後に自動で背景をぼかします。写真ごとにオフへ戻せます。</string>
+    <string name="meal_blur_download_failed">背景ぼかしを準備できませんでした。画面を開き直してください。メモだけの記録は保存できます。</string>
+    <string name="meal_pick_photos">写真を選ぶ</string>
+    <string name="meal_take_photo">カメラで撮る</string>
+    <string name="meal_background_blur">背景ぼかし</string>
+    <string name="meal_rotate_photo">左に 90° 回転</string>
+    <string name="meal_remove_photo">この写真を外す</string>
+    <string name="meal_date">食事の日時</string>
+    <string name="meal_memo">メモ</string>
+    <string name="meal_calories">カロリー（kcal・任意）</string>
+    <string name="meal_analysis_notice">カロリーを入力した場合は自動解析しません。空欄なら、保存した写真とメモを設定した AI サービスへ送って推定します。</string>
+    <string name="meal_save">食事を保存</string>
+    <string name="meal_retry_save">保存を再試行</string>
+    <string name="meal_blur_save_notice">元画像とぼかし画像の両方を保存します。保存後もアプリ・Web で表示を切り替えられます。</string>
+    <string name="meal_photo_failed">食事の写真を読み込めませんでした。</string>
+    <string name="meal_processing">写真を準備しています…</string>
+    <string name="meal_saving">食事を保存しています…</string>
+    <string name="meal_saved">食事を保存しました。</string>
+    <string name="meal_invalid_calories">カロリーは 0 以上の整数を入力してください。</string>
+    <string name="meal_operation_failed">操作を完了できませんでした：%1$s</string>
+    <string name="meal_login">ログイン・再接続</string>
+    <string name="meal_login_required">食事を読み込み・保存するにはログインしてください。</string>
+    <string name="meal_discard_title">食事一覧に戻りますか？</string>
+    <string name="meal_discard_message">入力中の食事と写真を破棄します。</string>
+    <string name="meal_discard_attempted">保存結果が未確認です。一覧へ戻って記録の有無を確認できます。入力中の内容は破棄します。</string>
+    <string name="meal_keep_editing">入力を続ける</string>
+</resources>
