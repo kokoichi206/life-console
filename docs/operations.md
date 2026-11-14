@@ -22,9 +22,11 @@ migration 後に配置が失敗すると、適用済みの migration は残り�
 
 ## 依存関係の更新
 
-[Renovate の設定](../.github/renovate.json5)で、更新 PR の向き先を `develop` に固定する。通常の更新ブランチは日本時間の月曜 0:00〜4:00 に作成し、脆弱性アラートに基づく更新は通常のスケジュールを待たない。npm の workspace 依存、GitHub Actions、Terraform、Android の依存は、それぞれグループ化する。GitHub Actions はリリースタグに対応する SHA に固定する。
+[Renovate の設定](../.github/renovate.json5)で、更新 PR の向き先を `develop` に固定する。通常の更新ブランチは日本時間の月曜 0:00〜4:00 に作成し、脆弱性アラートに基づく更新は通常のスケジュールを待たない。npm の workspace 依存は minor・patch 更新をまとめ、major 更新は個別に検証する。推奨 preset に含まれる、互換性上同時に更新するパッケージのグループは維持する。GitHub Actions、Terraform、Android の依存は、それぞれグループ化する。GitHub Actions はリリースタグに対応する SHA に固定し、JDK など action の入力に指定する実行環境の更新とは分ける。
 
 自動マージと自動 rebase は無効。更新 PR は CI と差分を確認して手動でマージする。ベースブランチの変更を取り込む必要があるときは、Renovate の PR または Dependency Dashboard から rebase を要求する。Node.js を更新する場合は、次節の常駐 runner の切り替えも確認する。
+
+Miniflare が要求する Undici 7 系は、`pnpm-workspace.yaml` の override で 8 系へ置き換えない。`packages/eslint-config` の TypeScript は typescript-eslint とカスタムルールが使う Compiler API の対応範囲に合わせ、6 系を維持する。これらの制限は親パッケージや利用 API の対応を確認してから見直す。
 
 利用開始には [Renovate GitHub App](https://github.com/apps/renovate) の対象リポジトリに `kokoichi206/life-console` を含め、この設定を `develop` に取り込む。[導入手順](https://docs.renovatebot.com/getting-started/installing-onboarding/)に従い、Dependency Dashboard と更新 PR で稼働を確認する。
 

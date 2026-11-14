@@ -1,4 +1,4 @@
-import { taskAreas, taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
+import { taskAreas, taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoVariants, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
 import { z } from "zod";
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
@@ -111,6 +111,9 @@ export type EditReplyDraftInput = z.infer<typeof editReplyDraftSchema>;
 export const createConversationReplySchema = z.object({
   body: z.string().trim().min(1).max(5_000),
 });
+
+export const mealPhotoVariantQuerySchema = z.object({ variant: z.enum(mealPhotoVariants).default("original") });
+export const createMealBlurUploadSchema = z.object({ contentType: z.enum(mealPhotoContentTypes) });
 
 export const createMealUploadSchema = z.object({
   clientId: z.uuid(),

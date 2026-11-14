@@ -20,7 +20,7 @@
     "aws4fetch": "^1.0.20",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.5",
-    "web-push": "^3.6.7",
+    "web-push": "^4.0.0",
     "zod": "^4.5.4",
     "@life-console/domain": "workspace:*"
   },

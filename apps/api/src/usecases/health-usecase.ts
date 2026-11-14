@@ -11,6 +11,8 @@ export interface HealthUsecase {
   listMealGallery(to: string): Promise<Result<MealGalleryPage, AppError>>;
   listMealDayCounts(period: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<MealDayCount>, AppError>>;
   createMeal(input: CreateMealInput): Promise<Result<Meal, AppError>>;
+  deleteMeal(id: string): Promise<Result<void, AppError>>;
+  restoreMeal(id: string): Promise<Result<void, AppError>>;
   getWeightGoal(): Promise<Result<WeightGoal | null, AppError>>;
   saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>>;
   getCalorieBaseline(): Promise<Result<CalorieBaseline | null, AppError>>;
@@ -30,6 +32,8 @@ export const createHealthUsecase = (
   listMealGallery: (to) => repository.listMealGallery(to),
   listMealDayCounts: (period) => repository.listMealDayCounts(period),
   createMeal: (input) => repository.createMealAndQueueNutrition(idGenerator.create(), input, clock.now().toISOString()),
+  deleteMeal: (id) => repository.deleteMeal(id, clock.now().toISOString()),
+  restoreMeal: (id) => repository.restoreMeal(id),
   getWeightGoal: () => repository.getWeightGoal(),
   saveWeightGoal: (input) => repository.saveWeightGoal(input),
   getCalorieBaseline: () => repository.getCalorieBaseline(),

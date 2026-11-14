@@ -3,6 +3,8 @@ ktlint = "1.8.0"
 junit = "4.13.2"
 json = "20260814"
 appauth = "0.11.1"
+subject-segmentation = "16.0.0-beta1"
+androidx-core = "1.9.0"
 
 [libraries]
 ktlint-rule-engine-core = { module = "com.pinterest.ktlint:ktlint-rule-engine-core", version.ref = "ktlint" }
@@ -11,3 +13,5 @@ ktlint-test = { module = "com.pinterest.ktlint:ktlint-test", version.ref = "ktli
 junit = { module = "junit:junit", version.ref = "junit" }
 json = { module = "org.json:json", version.ref = "json" }
 appauth = { module = "net.openid:appauth", version.ref = "appauth" }
+subject-segmentation = { module = "com.google.android.gms:play-services-mlkit-subject-segmentation", version.ref = "subject-segmentation" }
+androidx-core = { module = "androidx.core:core", version.ref = "androidx-core" }
