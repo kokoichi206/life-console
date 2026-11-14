@@ -269,13 +269,13 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
                           role="region"
                           aria-label={`${date} の食事の一覧`}
                           tabIndex={layout === "horizontal" ? 0 : undefined}
-                          className={cn("-m-1 gap-3 p-1 focus-visible:rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none", layout === "horizontal" ? "flex snap-x snap-proximity overflow-x-auto" : "grid grid-cols-2")}
+                          className={cn("-m-1 gap-3 p-1 focus-visible:rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none", layout === "horizontal" ? "flex overflow-x-auto" : "grid grid-cols-2")}
                           onScroll={(event) => { if (layout === "horizontal") horizontalPositions.current.set(date, event.currentTarget.scrollLeft); }}
                         >
                           {dayMeals.map((meal) => {
                             const mealNutrition = nutritionByMeal.get(meal.id);
                             return (
-                              <button key={meal.id} type="button" className={cn("flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none", layout === "horizontal" && "w-[43%] max-w-52 min-w-36 shrink-0 snap-start")} onClick={() => onSelectMeal(meal.id)} aria-label={`${mealDateTime(meal.occurredAt)} の食事を開く`}>
+                              <button key={meal.id} type="button" className={cn("flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none", layout === "horizontal" && "w-[43%] max-w-52 min-w-36 shrink-0")} onClick={() => onSelectMeal(meal.id)} aria-label={`${mealDateTime(meal.occurredAt)} の食事を開く`}>
                                 <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted">
                                   {meal.photoId === null
                                     ? (

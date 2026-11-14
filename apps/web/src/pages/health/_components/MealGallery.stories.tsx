@@ -431,6 +431,10 @@ export const DailyLayouts: Story = {
     await expect(row.scrollWidth).toBeGreaterThan(row.clientWidth);
     await expect(day.queryByRole("button", { name: /の(前|次)の食事へ/ })).not.toBeInTheDocument();
     await expect(day.queryByText("横にスワイプで食事を見る")).not.toBeInTheDocument();
+    const fineScrollEnd = new Promise<void>((resolve) => row.addEventListener("scrollend", () => resolve(), { once: true }));
+    row.scrollTo({ left: 110, behavior: "instant" });
+    await fineScrollEnd;
+    await expect(row.scrollLeft).toBe(110);
     row.scrollTo({ left: row.clientWidth, behavior: "instant" });
     await waitFor(() => expect(row.scrollLeft).toBeGreaterThan(150));
     await userEvent.click(canvas.getByRole("button", { name: "2 列折り返し" }));
