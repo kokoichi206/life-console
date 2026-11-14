@@ -21,7 +21,7 @@ import { calorieBalanceRows, calorieBalanceRanges, RECENT_BALANCE_DAYS, recentBa
 import { exerciseCaloriesByDay } from "./exercise-calories";
 import { exerciseChartWeeks } from "./exercise-chart-weeks";
 import { exerciseWeeks } from "./exercise-weeks";
-import type { HealthSearch } from "./health-search";
+import type { HealthSearch, MealGalleryLayout } from "./health-search";
 import { useHealthQueries } from "./queries";
 import { useStravaActivities } from "./use-strava-activities";
 import { WEIGHT_DAY_MS, type WeightWindow } from "./weight-window";
@@ -37,11 +37,12 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
 
 const currentJapanDate = (): string => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
 
-export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayChange, calorieDays, onCalorieDaysChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayChange, onMealLayoutChange, calorieDays, onCalorieDaysChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
   readonly search: HealthSearch;
   readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
   readonly onOverlayChange: (overlay: HealthSearch["overlay"]) => void;
   readonly onPfcDayChange: (date: string | undefined) => void;
+  readonly onMealLayoutChange: (layout: MealGalleryLayout) => void;
   readonly calorieDays: number;
   readonly onCalorieDaysChange: (days: number) => void;
   readonly goalEntryOpen: boolean;
@@ -300,7 +301,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayCha
       {mealDayCounts.error !== null && <FormError>{mealDayCounts.error.message}</FormError>}
       {mealGallery.isPending && <p role="status">食事を読み込んでいます。</p>}
       {mealGallery.error !== null && <FormError>{mealGallery.error.message}</FormError>}
-      {mealGallery.data !== undefined && <MealGallery meals={galleryMeals} selectedDay={search.pfcDay} onShowAll={() => onPfcDayChange(undefined)} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} hasMore={mealGallery.hasNextPage} loadingMore={mealGallery.isFetchingNextPage} onLoadMore={() => { void mealGallery.fetchNextPage(); }} periodLabel="新しい順・直近 7 日間" />}
+      {mealGallery.data !== undefined && <MealGallery meals={galleryMeals} layout={search.mealLayout ?? "horizontal"} onLayoutChange={onMealLayoutChange} selectedDay={search.pfcDay} onShowAll={() => onPfcDayChange(undefined)} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} hasMore={mealGallery.hasNextPage} loadingMore={mealGallery.isFetchingNextPage} onLoadMore={() => { void mealGallery.fetchNextPage(); }} periodLabel="新しい順・直近 7 日間" />}
     </>
   );
 };
