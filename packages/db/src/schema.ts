@@ -127,6 +127,16 @@ export const mealPhotos = sqliteTable("meal_photos", {
   createdAt: text("created_at").notNull(),
 }, (table) => [uniqueIndex("meal_photos_client_uidx").on(table.clientId)]);
 
+export const mealPhotoBlurs = sqliteTable("meal_photo_blurs", {
+  photoId: text("photo_id").primaryKey().references(() => mealPhotos.id),
+  objectKey: text("object_key").notNull(),
+  contentType: text("content_type", { enum: mealPhotoContentTypes }).notNull(),
+  uploadTokenHash: text("upload_token_hash").notNull(),
+  uploadExpiresAt: text("upload_expires_at").notNull(),
+  uploadedAt: text("uploaded_at"),
+  createdAt: text("created_at").notNull(),
+});
+
 export const meals = sqliteTable("meals", {
   id: text("id").primaryKey(),
   clientId: text("client_id").notNull(),

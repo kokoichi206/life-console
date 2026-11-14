@@ -24,12 +24,13 @@ const mealRecordedDateTime = (recordedAt: string): string => new Intl.DateTimeFo
   timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
 }).format(new Date(recordedAt));
 
-const MealPhoto = ({ photoId, alt, className }: { readonly photoId: string; readonly alt: string; readonly className: string }) => {
+const MealPhoto = ({ photoId, backgroundBlur, alt, className }: { readonly photoId: string; readonly backgroundBlur: boolean; readonly alt: string; readonly className: string }) => {
   const { read } = useHealthQueries();
-  const [failed, setFailed] = useState(false);
-  return failed
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const url = read.mealPhotoUrl(photoId, backgroundBlur);
+  return failedUrl === url
     ? <p className="grid h-full min-h-32 place-items-center px-3 text-center text-xs text-destructive">写真を読み込めませんでした。</p>
-    : <img src={read.mealPhotoUrl(photoId)} alt={alt} loading="lazy" className={className} onError={() => setFailed(true)} />;
+    : <img src={url} alt={alt} loading="lazy" className={className} onError={() => setFailedUrl(url)} />;
 };
 
 const mealCaloriesLabel = (nutrition: MealNutrition | undefined): string => {
@@ -74,7 +75,8 @@ const MealCaloriesForm = ({ nutrition }: { readonly nutrition: MealNutrition }) 
   );
 };
 
-const MealDeleteConfirmation = ({ meal, onDeleted }: {
+const MealDeleteConfirmation = ({ meal, backgroundBlur, onDeleted }: {
+  readonly backgroundBlur: boolean;
   readonly meal: Meal;
   readonly onDeleted: (meal: Meal) => Promise<void>;
 }) => {
@@ -107,7 +109,7 @@ const MealDeleteConfirmation = ({ meal, onDeleted }: {
           <div className="my-4 space-y-3 rounded-xl border p-3">
             <p className="text-sm font-medium">{`食事日時：${mealDateTime(meal.occurredAt)}`}</p>
             <p className="text-xs text-muted-foreground">{`登録日時：${mealRecordedDateTime(meal.recordedAt)}`}</p>
-            {meal.photoId !== null && <MealPhoto photoId={meal.photoId} alt="削除対象の食事の代表写真" className="max-h-40 w-full rounded-lg object-contain" />}
+            {meal.photoId !== null && <MealPhoto photoId={meal.photoId} backgroundBlur={backgroundBlur && meal.blurredPhotoIds.includes(meal.photoId)} alt="削除対象の食事の代表写真" className="max-h-40 w-full rounded-lg object-contain" />}
             {meal.additionalPhotoIds.length > 0 && <p className="text-xs text-muted-foreground">{`写真 ${meal.additionalPhotoIds.length + 1} 枚の食事記録`}</p>}
             <p className="text-sm break-words whitespace-pre-wrap">{meal.memo === "" ? "メモなし" : meal.memo}</p>
           </div>
@@ -171,6 +173,7 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
     onLayoutChange(next);
   };
   const { nutritionQuery, nutritionQueryKey, readOnly } = useHealthQueries();
+  const [backgroundBlur, setBackgroundBlur] = useState(true);
   const queryClient = useQueryClient();
   const [deletedMeal, setDeletedMeal] = useState<Meal>();
   const refreshMeals = async () => {
@@ -229,6 +232,12 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
           <p className="text-xs text-muted-foreground">{selectedDay === undefined ? periodLabel : "選択日の記録・新しい順"}</p>
           {selectedDay !== undefined && <Button variant="outline" size="sm" onClick={onShowAll}>全日を見る</Button>}
         </div>
+        {meals.some((meal) => meal.blurredPhotoIds.length > 0) && (
+          <label className="mb-4 flex items-center gap-2 text-sm">
+            <input type="checkbox" role="switch" checked={backgroundBlur} onChange={(event) => setBackgroundBlur(event.target.checked)} />
+            背景ぼかし（対応する写真に適用）
+          </label>
+        )}
         <div className="mb-4 space-y-3">
           <p className="text-xs text-muted-foreground">{readOnly ? "保存済みの食事と栄養の推定値を表示しています。" : "カロリーが未入力の食事は、写真またはメモから保存後に自動で解析します。写真とメモは設定した AI サービスへ送られ、Mac の runner が起動している間に概算します。"}</p>
           <Button variant="outline" size="sm" disabled={readOnly || analyze.isPending || nutrition.data === undefined || nutrition.data.some((entry) => nutritionIsPending(entry.analysisStatus)) || !nutrition.data.some((entry) => entry.manualCaloriesKcal === null && entry.estimate === null)} onClick={() => analyze.mutate({})}>未解析の食事をまとめて解析</Button>
@@ -284,7 +293,7 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
                                           <span className="text-xs">メモのみ</span>
                                         </div>
                                       )
-                                    : <MealPhoto photoId={meal.photoId} alt="食事の写真" className="size-full object-cover" />}
+                                    : <MealPhoto photoId={meal.photoId} backgroundBlur={backgroundBlur && meal.blurredPhotoIds.includes(meal.photoId)} alt="食事の写真" className="size-full object-cover" />}
                                   {meal.additionalPhotoIds.length > 0 && <span className="absolute right-2 bottom-2 rounded-md bg-card/95 px-2 py-1 text-xs text-foreground">{`${1 + meal.additionalPhotoIds.length} 枚`}</span>}
                                 </div>
                                 <div className="grid w-full gap-2 p-3">
@@ -319,11 +328,17 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
             <Dialog.Description className="mb-4 text-sm text-muted-foreground">{selectedMeal === undefined ? "この食事記録は一覧にありません。" : mealDateTime(selectedMeal.occurredAt)}</Dialog.Description>
             {selectedMeal !== undefined && (
               <div className="grid gap-4">
+                {selectedMeal.blurredPhotoIds.length > 0 && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" role="switch" checked={backgroundBlur} onChange={(event) => setBackgroundBlur(event.target.checked)} />
+                    背景ぼかし
+                  </label>
+                )}
                 {selectedMeal.photoId !== null && (
                   <div className="space-y-2">
                     <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto rounded-xl" role="region" aria-label="食事の写真" tabIndex={0}>
                       {[selectedMeal.photoId, ...selectedMeal.additionalPhotoIds].map((photoId, index) => (
-                        <div key={photoId} className={`w-full shrink-0 snap-center overflow-hidden rounded-xl bg-muted ${selectedMeal.additionalPhotoIds.length > 0 ? "aspect-[4/3]" : ""}`}><MealPhoto photoId={photoId} alt={`食事の写真 ${index + 1}`} className={selectedMeal.additionalPhotoIds.length > 0 ? "size-full object-contain" : "max-h-[60dvh] w-full object-contain"} /></div>
+                        <div key={photoId} className={`w-full shrink-0 snap-center overflow-hidden rounded-xl bg-muted ${selectedMeal.additionalPhotoIds.length > 0 ? "aspect-[4/3]" : ""}`}><MealPhoto photoId={photoId} backgroundBlur={backgroundBlur && selectedMeal.blurredPhotoIds.includes(photoId)} alt={`食事の写真 ${index + 1}`} className={selectedMeal.additionalPhotoIds.length > 0 ? "size-full object-contain" : "max-h-[60dvh] w-full object-contain"} /></div>
                       ))}
                     </div>
                     {selectedMeal.additionalPhotoIds.length > 0 && <p className="text-xs text-muted-foreground">{`${1 + selectedMeal.additionalPhotoIds.length} 枚 · 横にスワイプで写真を切り替え`}</p>}
@@ -351,6 +366,7 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
                   <MealDeleteConfirmation
                     key={`delete:${selectedMeal.id}`}
                     meal={selectedMeal}
+                    backgroundBlur={backgroundBlur}
                     onDeleted={async (meal) => {
                       restore.reset();
                       setDeletedMeal(meal);

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { FormError, Panel } from "../../components/DesignSystem";
 import { PageHeader } from "../../components/PageHeader";
-import { Button } from "../../components/ui/Button";
+import { Button, buttonVariants } from "../../components/ui/Button";
 
 import { CalorieBaselineDialog } from "./_components/CalorieBaselineDialog";
 import { DailyCalorieBalanceList, type ExerciseTrackingState } from "./_components/DailyCalorieBalanceList";
@@ -182,6 +182,12 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayCha
         <Button disabled={readOnly} variant="outline" className="h-11 min-w-0 rounded-xl px-1 text-xs whitespace-normal sm:px-5 sm:text-sm" onClick={() => onMealEntryOpenChange(true)}>食事</Button>
         <Button disabled={readOnly} className="h-11 min-w-0 rounded-xl px-1 text-xs whitespace-normal sm:px-5 sm:text-sm" onClick={() => onWeightEntryOpenChange(true)}>体重</Button>
       </div>
+      {!readOnly && navigator.userAgent.includes("Android") && (
+        <div id="android-meal-app" className="mb-4 grid justify-items-start gap-1">
+          <a className={buttonVariants({ variant: "outline" })} href="intent://meals#Intent;scheme=dev.kokoichi.lifeconsole;package=dev.kokoichi.lifeconsole;end">Android アプリで食事を開く</a>
+          <p className="text-xs text-muted-foreground">Android 版をインストールした端末で、食事一覧・撮影・保存をアプリ内で使えます。</p>
+        </div>
+      )}
       {!readOnly && <MealEntryDialog open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />}
       {!readOnly && <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />}
       {!readOnly && <WeightGoalDialog open={goalEntryOpen} onOpenChange={onGoalEntryOpenChange} goal={weightGoal} initialWeight={weightTrend[0]?.weightKg} />}
