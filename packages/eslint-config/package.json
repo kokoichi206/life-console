@@ -27,6 +27,6 @@
     "yaml-eslint-parser": "^2.1.0"
   },
   "devDependencies": {
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   }
 }
