@@ -65,7 +65,8 @@ describe("migration completeness check", () => {
     expect(generated.status, generated.stderr).toBe(0);
     const result = runMigrationCheck(workspace);
     expect(result.status, result.stderr).toBe(0);
-  });
+    // 検査 2 回と生成 1 回を通すため、migration が増えるほど遅くなる。既定の 5 秒では足りない。
+  }, 30_000);
 
   it.each(["sql", "snapshot"])("rejects a missing %s even when the journal was committed", (missingFile) => {
     const workspace = createMigrationWorkspace();

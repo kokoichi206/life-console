@@ -37,12 +37,21 @@ src/
 
 `router.tsx` は URL、遷移時の loader、共通レイアウトを担当します。各ページの queryKey は配置変更前と同じで、フィルター切り替えでもアプリ全体を再作成しません。
 
+## モバイルのセクション
+
+モバイルではページ見出しの右側から表示テーマ（ライト・ダーク・端末に合わせる）を選べます。共有健康画面では PC でも同じボタンを表示します。選択は閲覧者のブラウザに保存し、共有 URL には含めません。通常の PC 画面ではサイドバーの切り替えを使います。
+
+一覧・グラフ・常設フォームの外枠には `Panel mobileLayout="section"` を使います。640 px 未満ではカードを見出しと区切り線に置き換え、`SectionHeading` も余白と文字サイズを合わせます。本文側の左右余白は `sm:px-5` のように広い画面だけに付けます。個別項目の編集、送信確認、ダイアログは枠を残します。スクロール領域内ではフォーカス枠が切れない余白を確保します。
+
 ## ルーティング
 
 - 各 `createRoute` は定数にしてから `addChildren` に渡します。配列内で直接生成すると型が `any` に広がる場合があり、`Register` の登録があっても不正な遷移先を検出できなくなります。
 - 内部遷移は `Link` / `useNavigate` を使います。ページ内で search を引き継ぐ `Link` は `from` を指定し、コールバックの型はルーターから推論させます。
 - `validateSearch` は URL の入力を検証し、`search.strict: true` で検証結果にない項目を URL と画面の状態から除去します。パーサーの戻り値から省くだけでは、元の不正な値が保持されます。パラメーターを消す操作には `undefined` を使うため、任意項目の型も明示的な `undefined` を許可します。常設フォームへのリンクは hash を使います。
+- 健康ページの `calories` は数値または数値文字列の、7 より大きい 7 の倍数を受け付けます。URL から復元した JSON の配列・オブジェクトなどは除外し、他の表示条件を保持します。本人画面と共有画面で同じ検証を使います。
+- 食事一覧の `mealLayout` は `horizontal` / `wrapped` を受け付けます。未指定は日別の横スクロール、`wrapped` は日別の 2 列折り返しです。切り替えは他の表示条件を保持して URL を置き換え、詳細の開閉や再読み込みでも表示形式を保ちます。本人画面と共有画面で同じ検証を使います。
 - ページは `lazyRouteComponent` で分割し、リンクの事前読み込みでコードも取得します。Query を使う loader では `ensureQueryData` を呼び、`defaultPreloadStaleTime: 0` でキャッシュの制御を Query に任せます。
+- ページ切り替えでコードやデータを待つ場合は、遷移先の見出しとスケルトンをすぐ表示します。`defaultPendingMs` と `defaultPendingMinMs` は `0` とし、読み込み表示のために本文の表示を遅らせません。本人画面では取得済みの Query データをそのまま使い、再取得では本文を隠しません。ホームの禁欲記録は概要と並列に取得し、読み込み・失敗・再試行をその欄で表示します。
 - 未定義の URL はホームへ戻れる 404 画面にします。取得エラーは Query のエラー状態をリセットし、`router.invalidate()` で再試行します。
 
 Web の `build` は型チェック後に Vite を実行します。`router.test-d.tsx` は型チェック専用で、存在しない path・不正な search・hook の対象ルートを `@ts-expect-error` で検証します。型の制約が抜けると、期待したエラーが消えたこと自体で失敗します。
@@ -65,10 +74,14 @@ pnpm storybook:test
 
 開発画面は <http://localhost:6006>。初回のブラウザテストには `pnpm --filter @life-console/web exec playwright install chromium` が必要です。
 
+CI はブラウザと OS 依存を含む [Playwright 公式コンテナ](https://playwright.dev/docs/docker)で同じ Chromium テストを実行し、ジョブ内で apt による追加インストールは行いません。[CI のイメージ](../../.github/workflows/ci.yml)は digest に固定し、npm の Playwright と同じバージョンに揃えます。[Renovate](../../.github/renovate.json5)では、このイメージと npm パッケージを同じ更新 PR に含めます。Node.js と pnpm はコンテナ内でもリポジトリの指定バージョンを使います。
+
 共通 UI、健康、仕事の受信箱、実行状況の stories を部品やページの隣に置いています。テーマの toolbar で light / dark を切り替えられます。空の状態、取得失敗、結果不明も確認できます。
 
 Storybook では MSW が架空の応答を返します。未定義の API 操作は 501 とし、アプリ用の API proxy は無効にしています。会話、メール、体重などの実データや外部サービスの認証は使いません。生成された Service Worker は `.storybook/public` に置き、アプリの配信物には含めません。
 
-Vitest Browser Mode で stories を実際に描画し、play の操作とアクセシビリティ検査を行います。`pnpm check` に静的ビルドとブラウザテストも含めています。共通 UI を追加して story を忘れた場合は ESLint が失敗します。
+Vitest Browser Mode で stories を実際に描画し、play の操作とアクセシビリティ検査を行います。非同期の表示・操作準備は `findBy` / `waitFor` で待ち、待機期限は `.storybook/preview.tsx` の `asyncUtilTimeout`（10 秒）で共有します。API の呼び出し件数だけでは描画やボタンの有効化は保証されないため、操作前に画面の状態も確認します。`pnpm check` に静的ビルドとブラウザテストも含めています。共通 UI を追加して story を忘れた場合は ESLint が失敗します。
+
+Vitest と `@vitest/browser-playwright` は同じバージョンに揃え、Storybook addon と MSW の peer dependency の対応範囲も確認します。MSW 3 の未処理通信は `onUnhandledFrame: "error"` で検出します。MSW の更新時は `pnpm --filter @life-console/web exec msw init .storybook/public --save` で Service Worker を更新し、ソースと一緒にコミットします。
 
 `src/styles.css` は Tailwind の読込、テーマの CSS 変数、ベーススタイルを持ちます。ページごとのスタイルをまとめる場所ではありません。

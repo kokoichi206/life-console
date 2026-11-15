@@ -1,5 +1,8 @@
+import { workConfirmationKinds, workConfirmationCompletedBy, workConfirmationNotificationStatuses } from "@life-console/domain";
+import { calendarEventSources, calendarEventStatuses, calendarReminderSlots, calendarReminderStatuses, tokushimaCollectionDistricts } from "@life-console/domain";
+import { taskAreas, agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, stravaCaloriesStatuses, taskStatuses, weightSources } from "@life-console/domain";
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamps = {
   createdAt: text("created_at").notNull(),
@@ -10,7 +13,10 @@ export const tasks = sqliteTable("tasks", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description").notNull(),
-  status: text("status").notNull(),
+  status: text("status", { enum: taskStatuses }).notNull(),
+  area: text("area", { enum: taskAreas }).notNull().default("work"),
+  scheduledAt: text("scheduled_at"),
+  sourceUrl: text("source_url"),
   dueAt: text("due_at"),
   completedAt: text("completed_at"),
   conversationId: text("conversation_id"),
@@ -22,20 +28,20 @@ export const tasks = sqliteTable("tasks", {
 
 export const conversations = sqliteTable("conversations", {
   id: text("id").primaryKey(),
-  connector: text("connector").notNull(),
+  connector: text("connector", { enum: connectorKinds }).notNull(),
   sourceId: text("source_id").notNull(),
   externalMessageId: text("external_message_id").notNull(),
   authorLabel: text("author_label").notNull(),
   excerpt: text("excerpt").notNull(),
   sourceUrl: text("source_url"),
-  classification: text("classification").notNull(),
+  classification: text("classification", { enum: conversationClassifications }).notNull(),
   occurredAt: text("occurred_at").notNull(),
   recordedAt: text("recorded_at").notNull(),
 }, (table) => [uniqueIndex("conversations_external_uidx").on(table.connector, table.sourceId, table.externalMessageId)]);
 
 export const replyDrafts = sqliteTable("reply_drafts", {
   conversationId: text("conversation_id").primaryKey().references(() => conversations.id),
-  status: text("status").notNull(),
+  status: text("status", { enum: replyDraftStatuses }).notNull(),
   body: text("body").notNull(),
   reason: text("reason").notNull(),
   replyEvidenceId: text("reply_evidence_id"),
@@ -44,8 +50,38 @@ export const replyDrafts = sqliteTable("reply_drafts", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const collectionSettings = sqliteTable("collection_settings", {
+  id: integer("id").primaryKey(), district: text("district", { enum: tokushimaCollectionDistricts }).notNull(),
+  previousDayTime: text("previous_day_time"), sameDayTime: text("same_day_time"),
+  notificationsEnabled: integer("notifications_enabled", { mode: "boolean" }).notNull(), updatedAt: text("updated_at").notNull(),
+});
+export const calendarEvents = sqliteTable("calendar_events", {
+  id: text("id").primaryKey(), source: text("source", { enum: calendarEventSources }).notNull(),
+  calendarKey: text("calendar_key").notNull(), sourceKey: text("source_key").notNull(), title: text("title").notNull(),
+  date: text("date").notNull(), notes: text("notes").notNull(), sourceUrl: text("source_url").notNull(),
+  status: text("status", { enum: calendarEventStatuses }).notNull(), ...timestamps,
+}, (table) => [uniqueIndex("calendar_source_uidx").on(table.source, table.sourceKey), index("calendar_dates_idx").on(table.calendarKey, table.date)]);
+export const calendarPreparations = sqliteTable("calendar_preparations", {
+  eventId: text("event_id").primaryKey().references(() => calendarEvents.id),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }), appliedDueAt: text("applied_due_at").notNull(),
+}, (table) => [uniqueIndex("calendar_preparation_task_uidx").on(table.taskId)]);
+export const calendarReminders = sqliteTable("calendar_reminders", {
+  id: text("id").primaryKey(), eventId: text("event_id").notNull().references(() => calendarEvents.id),
+  slot: text("slot", { enum: calendarReminderSlots }).notNull(), dueAt: text("due_at").notNull(), expiresAt: text("expires_at").notNull(),
+  status: text("status", { enum: calendarReminderStatuses }).notNull(),
+}, (table) => [
+  uniqueIndex("calendar_reminder_slot_uidx").on(table.eventId, table.slot, table.dueAt),
+  index("calendar_reminder_due_idx").on(table.status, table.dueAt),
+  index("calendar_reminder_expiry_idx").on(table.status, table.expiresAt),
+]);
+export const calendarDeliveries = sqliteTable("calendar_deliveries", {
+  id: text("id").primaryKey(), reminderId: text("reminder_id").notNull().references(() => calendarReminders.id), endpoint: text("endpoint").notNull(),
+  status: text("status", { enum: workConfirmationNotificationStatuses }).notNull(), attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at").notNull(), leaseToken: text("lease_token"), leaseExpiresAt: text("lease_expires_at"),
+}, (table) => [uniqueIndex("calendar_delivery_endpoint_uidx").on(table.reminderId, table.endpoint), index("calendar_delivery_due_idx").on(table.status, table.nextAttemptAt)]);
+
 export const connectorStates = sqliteTable("connector_states", {
-  connector: text("connector").notNull(),
+  connector: text("connector", { enum: connectorKinds }).notNull(),
   sourceId: text("source_id").notNull(),
   sourceLabel: text("source_label"),
   watermark: text("watermark"),
@@ -66,16 +102,16 @@ export const repositories = sqliteTable("repositories", {
 export const taskRepositories = sqliteTable("task_repositories", {
   taskId: text("task_id").notNull(),
   repositoryId: text("repository_id").notNull(),
-  role: text("role").notNull(),
+  role: text("role", { enum: repositoryRoles }).notNull(),
   createdAt: text("created_at").notNull(),
 }, (table) => [primaryKey({ columns: [table.taskId, table.repositoryId, table.role] })]);
 
 export const sourceRepositoryMappings = sqliteTable("source_repository_mappings", {
-  connector: text("connector").notNull(),
-  sourceScope: text("source_scope").notNull(),
+  connector: text("connector", { enum: sourceMappingConnectors }).notNull(),
+  sourceScope: text("source_scope", { enum: sourceScopes }).notNull(),
   sourceId: text("source_id").notNull(),
   repositoryId: text("repository_id").notNull(),
-  role: text("role").notNull(),
+  role: text("role", { enum: repositoryRoles }).notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [primaryKey({ columns: [table.connector, table.sourceScope, table.sourceId, table.repositoryId, table.role] })]);
@@ -84,19 +120,30 @@ export const mealPhotos = sqliteTable("meal_photos", {
   id: text("id").primaryKey(),
   clientId: text("client_id").notNull(),
   objectKey: text("object_key").notNull(),
-  contentType: text("content_type").notNull(),
+  contentType: text("content_type", { enum: mealPhotoContentTypes }).notNull(),
   uploadTokenHash: text("upload_token_hash").notNull(),
   uploadExpiresAt: text("upload_expires_at").notNull(),
   uploadedAt: text("uploaded_at"),
   createdAt: text("created_at").notNull(),
 }, (table) => [uniqueIndex("meal_photos_client_uidx").on(table.clientId)]);
 
+export const mealPhotoBlurs = sqliteTable("meal_photo_blurs", {
+  photoId: text("photo_id").primaryKey().references(() => mealPhotos.id),
+  objectKey: text("object_key").notNull(),
+  contentType: text("content_type", { enum: mealPhotoContentTypes }).notNull(),
+  uploadTokenHash: text("upload_token_hash").notNull(),
+  uploadExpiresAt: text("upload_expires_at").notNull(),
+  uploadedAt: text("uploaded_at"),
+  createdAt: text("created_at").notNull(),
+});
+
 export const meals = sqliteTable("meals", {
   id: text("id").primaryKey(),
   clientId: text("client_id").notNull(),
   photoId: text("photo_id"),
+  additionalPhotoIds: text("additional_photo_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+  manualCaloriesKcal: integer("manual_calories_kcal"),
   memo: text("memo").notNull(),
-  mealKind: text("meal_kind").notNull(),
   occurredAt: text("occurred_at").notNull(),
   recordedAt: text("recorded_at").notNull(),
   tagsJson: text("tags_json").notNull(),
@@ -115,13 +162,14 @@ export const nutritionEstimates = sqliteTable("nutrition_estimates", {
   fatGrams: integer("fat_grams").notNull(),
   carbohydrateGrams: integer("carbohydrate_grams").notNull(),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [index("nutrition_estimates_meal_time_idx").on(table.mealId, table.analyzedAt)]);
 
 export const weights = sqliteTable("weights", {
   id: text("id").primaryKey(),
-  source: text("source").notNull(),
+  source: text("source", { enum: weightSources }).notNull(),
   sourceKey: text("source_key").notNull(),
   weightGrams: integer("weight_grams").notNull(),
+  bodyFatPercent: real("body_fat_percent"),
   occurredAt: text("occurred_at").notNull(),
   recordedAt: text("recorded_at").notNull(),
   sourceJobId: text("source_job_id"),
@@ -132,7 +180,7 @@ export const financeTransactions = sqliteTable("finance_transactions", {
   id: text("id").primaryKey(),
   source: text("source").notNull(),
   sourceTransactionId: text("source_transaction_id").notNull(),
-  kind: text("kind").notNull(),
+  kind: text("kind", { enum: financeEntryKinds }).notNull(),
   amountYen: integer("amount_yen").notNull(),
   category: text("category").notNull(),
   paymentMethod: text("payment_method").notNull(),
@@ -154,7 +202,7 @@ export const financeAdjustments = sqliteTable("finance_adjustments", {
 export const assetBalances = sqliteTable("asset_balances", {
   id: text("id").primaryKey(),
   accountName: text("account_name").notNull(),
-  assetKind: text("asset_kind").notNull(),
+  assetKind: text("asset_kind", { enum: assetKinds }).notNull(),
   amountYen: integer("amount_yen").notNull(),
   occurredAt: text("occurred_at").notNull(),
   recordedAt: text("recorded_at").notNull(),
@@ -172,7 +220,7 @@ export const runners = sqliteTable("runners", {
   name: text("name").notNull(),
   lastHeartbeatAt: text("last_heartbeat_at").notNull(),
   tokenExpiresAt: text("token_expires_at"),
-  orcaStatus: text("orca_status").notNull(),
+  orcaStatus: text("orca_status", { enum: orcaStatuses }).notNull(),
   lastErrorCode: text("last_error_code"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
@@ -181,12 +229,12 @@ export const runners = sqliteTable("runners", {
 export const schedules = sqliteTable("schedules", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  jobKind: text("job_kind").notNull(),
+  jobKind: text("job_kind", { enum: jobKinds }).notNull(),
   payloadJson: text("payload_json").notNull().default("{}"),
-  interval: text("interval").notNull(),
+  interval: text("interval", { enum: scheduleIntervals }).notNull(),
   timezone: text("timezone").notNull(),
   nextRunAt: text("next_run_at").notNull(),
-  coalescing: text("coalescing").notNull(),
+  coalescing: text("coalescing", { enum: scheduleCoalescingModes }).notNull(),
   deadlineSeconds: integer("deadline_seconds").notNull(),
   enabled: integer("enabled", { mode: "boolean" }).notNull(),
   createdAt: text("created_at").notNull(),
@@ -198,8 +246,8 @@ export const jobs = sqliteTable("jobs", {
   scheduleId: text("schedule_id"),
   taskId: text("task_id"),
   repositoryId: text("repository_id"),
-  kind: text("kind").notNull(),
-  status: text("status").notNull(),
+  kind: text("kind", { enum: jobKinds }).notNull(),
+  status: text("status", { enum: jobStatuses }).notNull(),
   idempotencyKey: text("idempotency_key").notNull(),
   payloadJson: text("payload_json").notNull(),
   runnerId: text("runner_id"),
@@ -210,7 +258,7 @@ export const jobs = sqliteTable("jobs", {
   cancelRequestedAt: text("cancel_requested_at"),
   deadlineAt: text("deadline_at"),
   attempt: integer("attempt").notNull(),
-  provider: text("provider"),
+  provider: text("provider", { enum: agentProviders }),
   summary: text("summary"),
   errorCode: text("error_code"),
   startedAt: text("started_at"),
@@ -220,12 +268,15 @@ export const jobs = sqliteTable("jobs", {
 }, (table) => [
   uniqueIndex("jobs_idempotency_uidx").on(table.idempotencyKey),
   index("jobs_claim_idx").on(table.status, table.createdAt),
+  index("jobs_kind_created_idx").on(table.kind, table.createdAt),
+  // meals.id と同じ TEXT affinity にし、相関検索でも式索引を使えるようにする。
+  index("jobs_kind_meal_created_idx").on(table.kind, sql`cast(json_extract(${table.payloadJson}, '$.mealId') as text)`, table.createdAt),
 ]);
 
 export const promotions = sqliteTable("promotions", {
   id: text("id").primaryKey(),
   taskId: text("task_id").notNull(),
-  target: text("target").notNull(),
+  target: text("target", { enum: promotionTargets }).notNull(),
   externalUrl: text("external_url"),
   externalId: text("external_id"),
   sourceJobId: text("source_job_id").notNull(),
@@ -248,28 +299,40 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
 });
 
 export const monitorTargets = sqliteTable("monitor_targets", {
-  id: text("id").primaryKey(), runnerId: text("runner_id").notNull(), service: text("service").notNull(), account: text("account").notNull(),
-  registeredAt: text("registered_at").notNull(), receivedAt: text("received_at"), outcome: text("outcome"),
+  id: text("id").primaryKey(), runnerId: text("runner_id").notNull(), service: text("service", { enum: monitorServices }).notNull(), account: text("account").notNull(),
+  registeredAt: text("registered_at").notNull(), receivedAt: text("received_at"), outcome: text("outcome", { enum: monitorOutcomes }),
   failures: integer("failures").notNull().default(0), revision: integer("revision").notNull().default(0),
 });
 export const monitorObservations = sqliteTable("monitor_observations", {
   sequence: integer("sequence").primaryKey({ autoIncrement: true }), id: text("id").notNull(), targetId: text("target_id").notNull(),
-  observedAt: text("observed_at").notNull(), receivedAt: text("received_at").notNull(), outcome: text("outcome").notNull(), historical: integer("historical").notNull(),
+  observedAt: text("observed_at").notNull(), receivedAt: text("received_at").notNull(), outcome: text("outcome", { enum: monitorOutcomes }).notNull(), historical: integer("historical").notNull(),
 }, (table) => [uniqueIndex("monitor_event_uidx").on(table.id), index("monitor_history_idx").on(table.targetId, table.sequence)]);
 export const monitorIncidents = sqliteTable("monitor_incidents", {
   id: text("id").primaryKey(), targetId: text("target_id").notNull(), openedAt: text("opened_at").notNull(), resolvedAt: text("resolved_at"),
   reason: text("reason").notNull(),
-}, (table) => [uniqueIndex("monitor_open_incident_uidx").on(table.targetId).where(sql`resolved_at IS NULL`)]);
+  recoveryReservationPending: integer("recovery_reservation_pending", { mode: "boolean" }).notNull().default(false),
+}, (table) => [
+  uniqueIndex("monitor_open_incident_uidx").on(table.targetId).where(sql`resolved_at IS NULL`),
+  index("monitor_incidents_target_resolved_idx").on(table.targetId, table.resolvedAt),
+  index("monitor_incident_recovery_pending_idx").on(table.targetId)
+    .where(sql`${table.recoveryReservationPending} = 1`),
+]);
 export const monitorNotifications = sqliteTable("monitor_notifications", {
   id: text("id").primaryKey(), incidentId: text("incident_id").notNull(), endpoint: text("endpoint").notNull(),
-  kind: text("kind").notNull(), slot: integer("slot").notNull(), body: text("body").notNull(),
-  status: text("status").notNull(), attempts: integer("attempts").notNull().default(0),
+  kind: text("kind", { enum: monitorNotificationKinds }).notNull(), slot: integer("slot").notNull(), body: text("body").notNull(),
+  status: text("status", { enum: monitorNotificationStatuses }).notNull(), attempts: integer("attempts").notNull().default(0),
   nextAttemptAt: text("next_attempt_at").notNull(), leaseToken: text("lease_token"), leaseExpiresAt: text("lease_expires_at"),
   acceptedAt: text("accepted_at"), createdAt: text("created_at").notNull(),
-}, (table) => [uniqueIndex("monitor_delivery_uidx").on(table.incidentId, table.kind, table.slot, table.endpoint), index("monitor_delivery_due_idx").on(table.status, table.nextAttemptAt)]);
+  recoveryReservedAt: text("recovery_reserved_at"),
+}, (table) => [
+  uniqueIndex("monitor_delivery_uidx").on(table.incidentId, table.kind, table.slot, table.endpoint),
+  index("monitor_delivery_due_idx").on(table.status, table.nextAttemptAt),
+  index("monitor_recovery_pending_idx").on(table.incidentId, table.endpoint)
+    .where(sql`${table.kind} = 'alert' AND ${table.acceptedAt} IS NOT NULL AND ${table.recoveryReservedAt} IS NULL`),
+]);
 export const monitorDeliveryAttempts = sqliteTable("monitor_delivery_attempts", {
   id: text("id").primaryKey(), notificationId: text("notification_id").notNull(), startedAt: text("started_at").notNull(),
-  finishedAt: text("finished_at"), outcome: text("outcome"),
+  finishedAt: text("finished_at"), outcome: text("outcome", { enum: monitorDeliveryOutcomes }),
 });
 export const jobHeartbeatObservations = sqliteTable("job_heartbeat_observations", {
   id: integer("id").primaryKey({ autoIncrement: true }), jobId: text("job_id").notNull(), runnerId: text("runner_id").notNull(),
@@ -277,8 +340,148 @@ export const jobHeartbeatObservations = sqliteTable("job_heartbeat_observations"
 });
 
 export const weightGoal = sqliteTable("weight_goal", {
+  startDate: text("start_date"),
   id: integer("id").primaryKey(),
   startWeightGrams: integer("start_weight_grams").notNull(),
   targetWeightGrams: integer("target_weight_grams").notNull(),
   targetDate: text("target_date"),
 });
+
+export const abstinenceGoal = sqliteTable("abstinence_goal", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull(),
+  startedAt: text("started_at").notNull(),
+  targetDays: integer("target_days").notNull(),
+  targetDate: text("target_date"),
+});
+
+export const abstinenceEvents = sqliteTable("abstinence_events", {
+  id: text("id").primaryKey(),
+  occurredAt: text("occurred_at").notNull(),
+  durationMinutes: integer("duration_minutes"),
+  memo: text("memo").notNull(),
+  recordedAt: text("recorded_at").notNull(),
+}, (table) => [index("abstinence_events_occurred_idx").on(table.occurredAt)]);
+
+export const stravaConnection = sqliteTable("strava_connection", {
+  id: integer("id").primaryKey(),
+  credentials: text("credentials"),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: integer("lease_expires_at"),
+});
+
+export const calorieBaseline = sqliteTable("calorie_baseline", {
+  id: integer("id").primaryKey(),
+  dailyExpenditureKcal: integer("daily_expenditure_kcal").notNull(),
+});
+
+export const stravaActivityCalories = sqliteTable("strava_activity_calories", {
+  activityId: text("activity_id").primaryKey(),
+  occurredAt: text("occurred_at").notNull(),
+  status: text("status", { enum: stravaCaloriesStatuses }).notNull(),
+  caloriesKcal: integer("calories_kcal"),
+  registeredAt: text("registered_at").notNull(),
+  seenAt: text("seen_at").notNull(),
+  fetchedAt: text("fetched_at"),
+}, (table) => [
+  index("strava_activity_calories_pending_idx").on(table.status, table.occurredAt),
+  index("strava_activity_calories_occurred_idx").on(table.occurredAt),
+]);
+
+export const stravaActivities = sqliteTable("strava_activities", {
+  id: text("id").primaryKey().references(() => stravaActivityCalories.activityId, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sportType: text("sport_type").notNull(),
+  occurredAt: text("occurred_at").notNull(),
+  distanceMeters: real("distance_meters").notNull(),
+  movingSeconds: integer("moving_seconds").notNull(),
+  elapsedSeconds: integer("elapsed_seconds").notNull(),
+  averageHeartrate: real("average_heartrate"),
+}, (table) => [index("strava_activities_occurred_idx").on(table.occurredAt, table.id)]);
+
+export const stravaCaloriesBackfill = sqliteTable("strava_calories_backfill", {
+  id: integer("id").primaryKey(),
+  includesActivities: integer("includes_activities", { mode: "boolean" }).notNull().default(false),
+  cursorTo: text("cursor_to").notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const shoppingPlaces = sqliteTable("shopping_places", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  ...timestamps,
+});
+
+export const shoppingItems = sqliteTable("shopping_items", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  purchasedAt: text("purchased_at"),
+  ...timestamps,
+});
+
+export const shoppingItemPlaces = sqliteTable("shopping_item_places", {
+  itemId: text("item_id").notNull().references(() => shoppingItems.id, { onDelete: "cascade" }),
+  placeId: text("place_id").notNull().references(() => shoppingPlaces.id, { onDelete: "cascade" }),
+}, (table) => [
+  primaryKey({ columns: [table.itemId, table.placeId] }),
+  index("shopping_item_places_place_idx").on(table.placeId),
+]);
+
+export const agentQuestions = sqliteTable("agent_questions", {
+  id: text("id").primaryKey(),
+  jobId: text("job_id").notNull().references(() => jobs.id),
+  leaseToken: text("lease_token").notNull(),
+  question: text("question").notNull(),
+  answer: text("answer"),
+  createdAt: text("created_at").notNull(),
+  answeredAt: text("answered_at"),
+}, (table) => [
+  uniqueIndex("agent_questions_pending_uidx").on(table.jobId, table.leaseToken).where(sql`${table.answer} IS NULL`),
+]);
+
+export const workConfirmationSources = sqliteTable("work_confirmation_sources", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  lastSuccessAt: text("last_success_at").notNull(),
+});
+
+export const workConfirmations = sqliteTable("work_confirmations", {
+  id: text("id").primaryKey(),
+  sourceId: text("source_id").notNull().references(() => workConfirmationSources.id),
+  externalId: text("external_id").notNull(),
+  repositoryName: text("repository_name").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  kind: text("kind", { enum: workConfirmationKinds }).notNull(),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  environment: text("environment").notNull(),
+  question: text("question").notNull(),
+  reason: text("reason").notNull(),
+  recommendation: text("recommendation").notNull(),
+  evidenceJson: text("evidence_json").notNull(),
+  requestedAt: text("requested_at").notNull(),
+  checkedAt: text("checked_at").notNull(),
+  completedAt: text("completed_at"),
+  completedBy: text("completed_by", { enum: workConfirmationCompletedBy }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("work_confirmations_external_uidx").on(table.sourceId, table.externalId),
+  index("work_confirmations_pending_idx").on(table.completedAt, table.requestedAt),
+]);
+
+export const workConfirmationNotifications = sqliteTable("work_confirmation_notifications", {
+  id: text("id").primaryKey(),
+  confirmationId: text("confirmation_id").notNull().references(() => workConfirmations.id),
+  endpoint: text("endpoint").notNull(),
+  status: text("status", { enum: workConfirmationNotificationStatuses }).notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at").notNull(),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: text("lease_expires_at"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("work_confirmation_delivery_uidx").on(table.confirmationId, table.endpoint),
+  index("work_confirmation_delivery_due_idx").on(table.status, table.nextAttemptAt),
+]);

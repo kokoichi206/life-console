@@ -1,21 +1,29 @@
 import { calculate7DayMovingAverage, weightCalendarDate, weightCalendarDayTimestamp } from "@life-console/contracts";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useInfiniteQuery, useQueries, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
-import { api } from "../../api";
-import { Eyebrow, Field, FormError, Panel } from "../../components/DesignSystem";
+import { FormError, Panel } from "../../components/DesignSystem";
 import { PageHeader } from "../../components/PageHeader";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/input";
+import { Button, buttonVariants } from "../../components/ui/Button";
 
+import { CalorieBaselineDialog } from "./_components/CalorieBaselineDialog";
+import { DailyCalorieBalanceList, type ExerciseTrackingState } from "./_components/DailyCalorieBalanceList";
+import { DailyPfcPanel } from "./_components/DailyPfcPanel";
+import { HealthShareButton } from "./_components/HealthShareButton";
 import { MealEntryDialog } from "./_components/MealEntryDialog";
 import { MealGallery } from "./_components/MealGallery";
+import { StravaActivities } from "./_components/StravaActivities";
 import { WeightEntryDialog } from "./_components/WeightEntryDialog";
 import { WeightGoalDialog } from "./_components/WeightGoalDialog";
 import { WeightGoalProgress } from "./_components/WeightGoalProgress";
 import { WeightTrendChart } from "./_components/WeightTrendChart";
-import type { HealthSearch } from "./health-search";
-import { mealsQuery, weightsQuery, weightGoalQuery } from "./queries";
+import { calorieBalanceRows, calorieBalanceRanges, RECENT_BALANCE_DAYS, recentBalanceWindow, type ExerciseInput } from "./calorie-balance";
+import { exerciseCaloriesByDay } from "./exercise-calories";
+import { exerciseChartWeeks } from "./exercise-chart-weeks";
+import { exerciseWeeks } from "./exercise-weeks";
+import type { HealthSearch, MealGalleryLayout } from "./health-search";
+import { useHealthQueries } from "./queries";
+import { useStravaActivities } from "./use-strava-activities";
 import { WEIGHT_DAY_MS, type WeightWindow } from "./weight-window";
 
 const ONE_DAY_MILLISECONDS = WEIGHT_DAY_MS;
@@ -27,11 +35,20 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
   day: "numeric",
 }).format(new Date(occurredAt));
 
-export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+const currentJapanDate = (): string => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
+
+export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayChange, onMealLayoutChange, calorieDays, onCalorieDaysChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
   readonly search: HealthSearch;
   readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
+  readonly onOverlayChange: (overlay: HealthSearch["overlay"]) => void;
+  readonly onPfcDayChange: (date: string | undefined) => void;
+  readonly onMealLayoutChange: (layout: MealGalleryLayout) => void;
+  readonly calorieDays: number;
+  readonly onCalorieDaysChange: (days: number) => void;
   readonly goalEntryOpen: boolean;
   readonly onGoalEntryOpenChange: (open: boolean) => void;
+  readonly baselineEntryOpen: boolean;
+  readonly onBaselineEntryOpenChange: (open: boolean) => void;
   readonly selectedMealId: string | undefined;
   readonly onSelectMeal: (id: string | undefined) => void;
   readonly mealEntryOpen: boolean;
@@ -39,27 +56,108 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
   readonly weightEntryOpen: boolean;
   readonly onWeightEntryOpenChange: (open: boolean) => void;
 }) => {
-  const queryClient = useQueryClient();
+  const { read, readOnly, calorieBaselineQuery, mealDayCountsQuery, mealGalleryQueryKey, nutritionQuery, stravaCaloriesQuery, stravaCaloriesSyncStatusQuery, weightsQuery, weightGoalQuery } = useHealthQueries();
   const { data: weights } = useSuspenseQuery(weightsQuery);
-  const { data: meals } = useSuspenseQuery(mealsQuery);
   const { data: weightGoal } = useSuspenseQuery(weightGoalQuery);
+  const { data: calorieBaseline } = useSuspenseQuery(calorieBaselineQuery);
   const weightRange = search.from === undefined ? search.range ?? "d90" : "custom";
   const [showWeightTable, setShowWeightTable] = useState(false);
   const weightTrend = useMemo(() => calculate7DayMovingAverage(weights), [weights]);
   const latestWeight = weightTrend.at(-1);
   const availableYears = useMemo(() => [...new Set(weightTrend.map((point) => weightCalendarDate(point.occurredAt).slice(0, 4)))].reverse(), [weightTrend]);
-  const latestDay = latestWeight === undefined ? weightCalendarDayTimestamp(new Date().toISOString()) : weightCalendarDayTimestamp(latestWeight.occurredAt);
+  const today = weightCalendarDayTimestamp(new Date().toISOString());
+  const latestDay = today;
   const earliestDay = weightTrend[0] === undefined ? latestDay : weightCalendarDayTimestamp(weightTrend[0].occurredAt);
-  const visibleWindow: WeightWindow = (() => {
+  const requestedWindow: WeightWindow = (() => {
     if (search.from !== undefined && search.to !== undefined) return { start: Date.parse(search.from), end: Date.parse(search.to) };
     if (weightRange === "all") return { start: Math.min(earliestDay, latestDay - WEIGHT_DAY_MS), end: latestDay };
     if (weightRange.startsWith("year-")) return { start: Date.parse(`${weightRange.slice(5)}-01-01`), end: Date.parse(`${weightRange.slice(5)}-12-31`) };
     return { start: latestDay - (weightRange === "d30" ? 29 : 89) * WEIGHT_DAY_MS, end: latestDay };
   })();
   const windowBounds = {
-    start: Math.min(Date.parse(`${new Date(earliestDay).getUTCFullYear()}-01-01`), latestDay - 89 * WEIGHT_DAY_MS, visibleWindow.start),
-    end: Math.max(Date.parse(`${new Date(latestDay).getUTCFullYear()}-12-31`), visibleWindow.end),
+    start: Math.min(Date.parse(`${new Date(earliestDay).getUTCFullYear()}-01-01`), latestDay - 89 * WEIGHT_DAY_MS, requestedWindow.start),
+    end: latestDay,
   };
+  const visibleWindow: WeightWindow = requestedWindow.start < latestDay
+    ? { start: requestedWindow.start, end: Math.min(requestedWindow.end, latestDay) }
+    : { start: latestDay - WEIGHT_DAY_MS, end: latestDay };
+  const periodFrom = new Date(visibleWindow.start).toISOString().slice(0, 10);
+  const periodTo = new Date(visibleWindow.end).toISOString().slice(0, 10);
+  const mealDayCounts = useQuery(mealDayCountsQuery(periodFrom, periodTo));
+  const mealGallery = useInfiniteQuery({
+    queryKey: search.pfcDay === undefined ? mealGalleryQueryKey : [...mealGalleryQueryKey, search.pfcDay],
+    initialPageParam: search.pfcDay ?? currentJapanDate(),
+    queryFn: ({ pageParam }) => read.mealGallery(pageParam),
+    getNextPageParam: (page) => page.nextTo ?? undefined,
+  });
+  const galleryMeals = mealGallery.data?.pages.flatMap((page) => page.meals) ?? [];
+  const balanceWindow = recentBalanceWindow(periodFrom, periodTo, calorieDays);
+  const balanceRanges = calorieBalanceRanges(periodFrom, periodTo, calorieDays);
+  const nutritionPages = useQueries({ queries: balanceRanges.map((range) => nutritionQuery(range.from, range.to)) });
+  const nutrition = {
+    isPending: nutritionPages.some((page) => page.isPending),
+    error: nutritionPages.find((page) => page.error !== null)?.error ?? null,
+  };
+  const selectedPfcOutsideWindow = search.pfcDay !== undefined && (search.pfcDay < balanceWindow.from || search.pfcDay > periodTo);
+  const selectedPfcNutrition = useQuery({
+    ...nutritionQuery(search.pfcDay ?? periodTo, search.pfcDay ?? periodTo),
+    enabled: selectedPfcOutsideWindow,
+  });
+  const pfcPending = nutrition.isPending || (selectedPfcOutsideWindow && selectedPfcNutrition.isPending);
+  const pfcError = nutrition.error ?? (selectedPfcOutsideWindow ? selectedPfcNutrition.error : null);
+  const pfcNutrition = nutritionPages.every((page) => page.data !== undefined && !page.isError)
+    && (!selectedPfcOutsideWindow || (selectedPfcNutrition.data !== undefined && !selectedPfcNutrition.isError))
+    ? [...nutritionPages.flatMap((page) => page.data!), ...(selectedPfcOutsideWindow ? selectedPfcNutrition.data! : [])]
+    : undefined;
+  const strava = useStravaActivities(periodFrom, periodTo);
+  const caloriesEnabled = strava.connected && !strava.disconnect.isPending;
+  const caloriePages = useQueries({ queries: balanceRanges.map((range) => stravaCaloriesQuery(range.from, range.to, caloriesEnabled)) });
+  const stravaCalories = {
+    data: caloriePages.every((page) => page.data !== undefined) ? caloriePages.flatMap((page) => page.data!) : undefined,
+    isError: caloriePages.some((page) => page.isError),
+  };
+  const chartCalories = useQuery(stravaCaloriesQuery(periodFrom, periodTo, caloriesEnabled && search.overlay === "exercise-calories"));
+  const syncStatus = useQuery(stravaCaloriesSyncStatusQuery(strava.connected));
+  const noCompletedSync = syncStatus.data?.lastJob?.status !== "succeeded" && syncStatus.data?.backfill === null;
+  const awaitingFirstSync = stravaCalories.data?.length === 0 && noCompletedSync;
+  const exerciseByDay = useMemo(() => {
+    if (!strava.connected || strava.disconnect.isPending || stravaCalories.isError || stravaCalories.data === undefined || awaitingFirstSync || (stravaCalories.data.length === 0 && syncStatus.data === undefined)) return undefined;
+    return exerciseCaloriesByDay(stravaCalories.data.map((entry) => ({ id: entry.activityId, occurredAt: entry.occurredAt })), stravaCalories.data);
+  }, [strava.connected, strava.disconnect.isPending, stravaCalories.data, stravaCalories.isError, awaitingFirstSync, syncStatus.data]);
+  const exerciseTracking: ExerciseTrackingState = strava.status.isError
+    ? "failed"
+    : strava.status.isPending || strava.disconnect.isPending
+      ? "loading"
+      : !strava.connected
+          ? "untracked"
+          : stravaCalories.isError || (stravaCalories.data?.length === 0 && syncStatus.isError)
+            ? "failed"
+            : awaitingFirstSync
+              ? "unsynced"
+              : exerciseByDay !== undefined ? "stored" : "loading";
+  const untracked = exerciseTracking === "untracked";
+  const balanceRows = balanceRanges.flatMap((range, index) => {
+    const meals = nutritionPages[index]!;
+    if (meals.data === undefined || meals.isError) return [];
+    const calories = caloriePages[index]!;
+    const exercise: ExerciseInput | undefined = untracked
+      ? { mode: "untracked" }
+      : calories.data === undefined || calories.isError || (calories.data.length === 0 && (noCompletedSync || syncStatus.data === undefined || syncStatus.isError))
+        ? undefined
+        : { mode: "tracked", byDay: exerciseCaloriesByDay(calories.data.map((entry) => ({ id: entry.activityId, occurredAt: entry.occurredAt })), calories.data) };
+    return calorieBalanceRows(range.from, range.to, meals.data, exercise, calorieBaseline?.dailyExpenditureKcal ?? null);
+  });
+  // 取得待ちは API から読み込んだ表示範囲で数える。
+  const pendingActivities = caloriePages.reduce((total, page) => total + (page.data?.filter((entry) => entry.status === "pending").length ?? 0), 0);
+  const showRunning = search.overlay === "running";
+  const showExerciseCalories = search.overlay === "exercise-calories";
+  const chartExerciseCalories = showExerciseCalories && strava.complete && chartCalories.data !== undefined && !chartCalories.isError
+    && (chartCalories.data.length > 0 || (syncStatus.data !== undefined && !syncStatus.isError && !awaitingFirstSync))
+    ? exerciseCaloriesByDay(strava.records, chartCalories.data)
+    : undefined;
+  const chartWeeks = strava.complete && (showRunning || chartExerciseCalories !== undefined)
+    ? exerciseChartWeeks(exerciseWeeks(periodFrom, periodTo, strava.records, [], []), chartExerciseCalories === undefined ? { kind: "running" } : { kind: "calories", byDay: chartExerciseCalories }, currentJapanDate())
+    : undefined;
   const changeWindow = (window: WeightWindow) => onRangeChange({ from: new Date(window.start).toISOString().slice(0, 10), to: new Date(window.end).toISOString().slice(0, 10) });
   const visibleWeightTrend = weightTrend.filter((point) => {
     const day = weightCalendarDayTimestamp(point.occurredAt);
@@ -73,54 +171,60 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
     ? 0
     : Math.round((weightCalendarDayTimestamp(lastVisibleWeight.occurredAt) - weightCalendarDayTimestamp(firstVisibleWeight.occurredAt)) / ONE_DAY_MILLISECONDS) + 1;
   const periodChange = firstVisibleWeight === undefined || lastVisibleWeight === undefined ? undefined : lastVisibleWeight.weightKg - firstVisibleWeight.weightKg;
-  const importCsv = useMutation({
-    mutationFn: async (file: File) => api.importWeightCsv(await file.text()),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["weights"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-  });
-  const selectWeightCsv = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file !== undefined) importCsv.mutate(file);
-  };
 
   return (
     <>
-      <PageHeader title="体重と食事" />
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:ml-auto sm:max-w-sm">
-        <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => onMealEntryOpenChange(true)}>食事を記録</Button>
-        <Button className="h-11 rounded-xl px-5" onClick={() => onWeightEntryOpenChange(true)}>体重を記録</Button>
+      <PageHeader title="体重・運動・食事" shared={readOnly} />
+      {readOnly && <p className="mb-4 rounded-xl border bg-muted/40 px-4 py-3 text-sm">読み取り専用です。期間や表示条件は変更できます。記録・編集・同期はできません。</p>}
+      {search.strava === "error" && <FormError>Strava に接続できませんでした。読み取り権限を確認して、もう一度接続してください。</FormError>}
+      <div className={`mb-4 grid gap-2 sm:ml-auto ${readOnly ? "grid-cols-2 sm:max-w-sm" : "grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(0,1fr))] sm:max-w-xl"}`}>
+        {!readOnly && <HealthShareButton search={search} />}
+        <Button disabled={readOnly} variant="outline" className="h-11 min-w-0 rounded-xl px-1 text-xs whitespace-normal sm:px-5 sm:text-sm" onClick={() => onMealEntryOpenChange(true)}>食事</Button>
+        <Button disabled={readOnly} className="h-11 min-w-0 rounded-xl px-1 text-xs whitespace-normal sm:px-5 sm:text-sm" onClick={() => onWeightEntryOpenChange(true)}>体重</Button>
       </div>
-      <MealEntryDialog open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />
-      <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />
-      <WeightGoalDialog open={goalEntryOpen} onOpenChange={onGoalEntryOpenChange} goal={weightGoal} initialWeight={weightTrend[0]?.weightKg} />
-      <WeightGoalProgress goal={weightGoal} latestWeight={latestWeight?.weightKg} onEdit={() => onGoalEntryOpenChange(true)} />
+      {!readOnly && navigator.userAgent.includes("Android") && (
+        <div id="android-meal-app" className="mb-4 grid justify-items-start gap-1">
+          <a className={buttonVariants({ variant: "outline" })} href="intent://meals#Intent;scheme=dev.kokoichi.lifeconsole;package=dev.kokoichi.lifeconsole;end">Android アプリで食事を開く</a>
+          <p className="text-xs text-muted-foreground">Android 版をインストールした端末で、食事一覧・撮影・保存をアプリ内で使えます。</p>
+        </div>
+      )}
+      {!readOnly && <MealEntryDialog open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />}
+      {!readOnly && <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />}
+      {!readOnly && <WeightGoalDialog open={goalEntryOpen} onOpenChange={onGoalEntryOpenChange} goal={weightGoal} initialWeight={weightTrend[0]?.weightKg} />}
+      <WeightGoalProgress goal={weightGoal} latestWeight={latestWeight?.weightKg} readOnly={readOnly} onEdit={() => onGoalEntryOpenChange(true)} />
       <section className="mb-6">
-        <header className="mb-4 flex items-end justify-between gap-3 max-md:flex-col max-md:items-start">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">体重の推移</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              実測
-              {" "}
-              {weightTrend.length}
-              {" "}
-              件
-              {weightTrend.length > 0 && ` ・ ${shortDate(weightTrend[0]?.occurredAt ?? "")}〜${shortDate(latestWeight?.occurredAt ?? "")}`}
-            </p>
-          </div>
-          <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border bg-card p-1" role="group" aria-label="表示期間">
-            <Button type="button" size="sm" aria-pressed={weightRange === "d30"} variant={weightRange === "d30" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d30" })}>30 日</Button>
-            <Button type="button" size="sm" aria-pressed={weightRange === "d90"} variant={weightRange === "d90" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d90" })}>直近 90 日</Button>
-            {availableYears.map((year) => (
-              <Button key={year} type="button" size="sm" aria-pressed={weightRange === `year-${year}`} variant={weightRange === `year-${year}` ? "default" : "ghost"} onClick={() => onRangeChange({ range: `year-${year}` })}>{year}</Button>
-            ))}
-            <Button type="button" size="sm" aria-pressed={weightRange === "all"} variant={weightRange === "all" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "all" })}>全期間</Button>
+        <header className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <h2 className="text-xl font-semibold tracking-tight">{search.overlay === "body-fat" ? "体重と体脂肪率の推移" : showExerciseCalories && strava.connected ? "体重と消費カロリーの推移" : showRunning && strava.connected ? "体重と走行距離の推移" : "体重の推移"}</h2>
+          <div className="ml-auto flex max-w-full flex-wrap items-center gap-2 max-sm:w-full">
+            <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border bg-card p-1" role="group" aria-label="表示期間">
+              <Button type="button" size="sm" aria-pressed={weightRange === "d30"} variant={weightRange === "d30" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d30" })}>30 日</Button>
+              <Button type="button" size="sm" aria-pressed={weightRange === "d90"} variant={weightRange === "d90" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "d90" })}>直近 90 日</Button>
+              {availableYears.map((year) => (
+                <Button key={year} type="button" size="sm" aria-pressed={weightRange === `year-${year}`} variant={weightRange === `year-${year}` ? "default" : "ghost"} onClick={() => onRangeChange({ range: `year-${year}` })}>{year}</Button>
+              ))}
+              <Button type="button" size="sm" aria-pressed={weightRange === "all"} variant={weightRange === "all" ? "default" : "ghost"} onClick={() => onRangeChange({ range: "all" })}>全期間</Button>
+            </div>
+            <div className="ml-auto flex shrink-0 gap-1" role="group" aria-label="追加表示">
+              {([
+                { value: "exercise-calories", label: "消費カロリー" },
+                { value: "running", label: "走行距離" },
+                { value: "body-fat", label: "体脂肪率" },
+              ] as const).map(({ value, label }) => (
+                <Button key={label} type="button" size="sm" variant={search.overlay === value ? "default" : "outline"} aria-pressed={search.overlay === value} disabled={value !== "body-fat" && !strava.connected} onClick={() => onOverlayChange(search.overlay === value ? undefined : value)}>{label}</Button>
+              ))}
+            </div>
           </div>
         </header>
-        <Panel className="overflow-hidden rounded-3xl py-0">
-          <WeightTrendChart points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
-          <dl className="mx-4 my-3 grid grid-cols-2 gap-x-4 gap-y-4 rounded-2xl bg-muted/50 p-4 sm:grid-cols-4">
+        <Panel mobileLayout="section" className="overflow-hidden rounded-3xl py-0 max-sm:border-t-0">
+          {showExerciseCalories && strava.connected && chartWeeks === undefined && (
+            <p role="status" className="px-1 pt-3 text-sm text-muted-foreground sm:px-4">
+              {chartCalories.isError || exerciseTracking === "failed" || strava.activities.isError
+                ? "消費カロリーを取得できませんでした。週の合計は表示していません。"
+                : exerciseTracking === "unsynced" ? "運動はまだ同期されていません。週の合計は同期後に表示します。" : "週の消費カロリーを読み込んでいます。"}
+            </p>
+          )}
+          <WeightTrendChart showExerciseCalories={showExerciseCalories} showBodyFat={search.overlay === "body-fat"} chartWeeks={chartWeeks} onSelectWeek={onRangeChange} latestDay={latestDay} points={weightTrend} window={visibleWindow} bounds={windowBounds} onWindowChange={changeWindow} goal={weightGoal} />
+          <dl className="my-3 grid grid-cols-2 gap-x-4 gap-y-4 border-t py-4 sm:mx-4 sm:grid-cols-4 sm:rounded-2xl sm:border-0 sm:bg-muted/50 sm:p-4">
             {[
               { label: "最新", value: lastVisibleWeight?.weightKg.toFixed(1) ?? "—", unit: "kg", detail: lastVisibleWeight === undefined ? "記録なし" : shortDate(lastVisibleWeight.occurredAt) },
               { label: "期間内の変化", value: periodChange === undefined ? "—" : `${periodChange > 0 ? "+" : ""}${periodChange.toFixed(1)}`, unit: "kg", detail: "期間の最初との比較" },
@@ -137,17 +241,17 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
               </div>
             ))}
           </dl>
-          <div className="flex justify-end px-5 pb-3">
+          <div className="flex justify-end pb-3 sm:px-5">
             <Button type="button" variant="outline" size="sm" aria-expanded={showWeightTable} onClick={() => setShowWeightTable((current) => !current)}>
               {showWeightTable ? "表を閉じる" : "表で見る"}
             </Button>
           </div>
           {showWeightTable && (
-            <div className="mx-5 mb-4 max-h-96 overflow-auto rounded-lg border">
-              <table className="w-full border-collapse text-xs tabular-nums">
+            <div role="region" aria-label="体重の推移の表" tabIndex={0} className="mb-4 max-h-96 overflow-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:mx-5">
+              <table aria-label="体重の推移" className="w-full border-collapse text-xs tabular-nums">
                 <thead>
                   <tr className="bg-muted/60">
-                    {["日付", "体重", "種類", "7 日平均", "窓内件数"].map((heading) => <th key={heading} className="border-b px-3 py-2.5 text-right font-semibold whitespace-nowrap">{heading}</th>)}
+                    {["日付", "体重", "体脂肪率", "7 日平均"].map((heading) => <th key={heading} className="border-b px-3 py-2.5 text-right font-semibold whitespace-nowrap">{heading}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -159,16 +263,11 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
                         {" "}
                         kg
                       </td>
-                      <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">実測</td>
+                      <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">{point.bodyFatPercent === null ? "—" : `${point.bodyFatPercent.toFixed(1)} %`}</td>
                       <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">
                         {point.movingAverage7DaysKg.toFixed(2)}
                         {" "}
                         kg
-                      </td>
-                      <td className="border-b px-3 py-2.5 text-right whitespace-nowrap">
-                        {point.movingAverageWindowSamples}
-                        {" "}
-                        件
                       </td>
                     </tr>
                   ))}
@@ -176,20 +275,39 @@ export const HealthPage = ({ search, onRangeChange, goalEntryOpen, onGoalEntryOp
               </table>
             </div>
           )}
-          <p className="rounded-b-xl border-t bg-muted/30 px-5 py-3 text-[0.7rem] leading-5 text-muted-foreground">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
+          <p className="py-3 text-[0.7rem] leading-5 text-muted-foreground sm:rounded-b-xl sm:border-t sm:bg-muted/30 sm:px-5">7 日移動平均は当日を含む直近 7 暦日の実測値から算出します。記録のない日は補間しません。</p>
         </Panel>
       </section>
-      <MealGallery meals={meals} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} />
-      <div>
-        <Panel className="gap-4 px-5">
-          <div className="space-y-1.5">
-            <Eyebrow>WEIGHT IMPORT</Eyebrow>
-            <h2 className="text-base font-semibold">体重の CSV 取り込み</h2>
-          </div>
-          <Field label="CSV を取り込む"><Input type="file" accept=".csv,text/csv" onChange={selectWeightCsv} /></Field>
-          {importCsv.error !== null && <FormError>{importCsv.error.message}</FormError>}
-        </Panel>
-      </div>
+      {!readOnly && <CalorieBaselineDialog open={baselineEntryOpen} onOpenChange={onBaselineEntryOpenChange} baseline={calorieBaseline} />}
+      <DailyCalorieBalanceList
+        readOnly={readOnly}
+        rows={balanceRows}
+        baselineKcal={calorieBaseline?.dailyExpenditureKcal ?? null}
+        exerciseState={exerciseTracking}
+        pendingActivities={pendingActivities}
+        nutritionPending={nutrition.isPending}
+        nutritionErrorMessage={nutrition.error?.message ?? null}
+        onEditBaseline={() => onBaselineEntryOpenChange(true)}
+        expanded={calorieDays > RECENT_BALANCE_DAYS}
+        hiddenDays={balanceWindow.hiddenDays}
+        onLoadMore={() => onCalorieDaysChange(calorieDays + RECENT_BALANCE_DAYS)}
+        onCollapse={() => onCalorieDaysChange(RECENT_BALANCE_DAYS)}
+        syncStatus={syncStatus.data}
+      />
+      <DailyPfcPanel
+        nutrition={pfcNutrition}
+        from={balanceWindow.from}
+        to={periodTo}
+        selectedDay={search.pfcDay}
+        onSelectDay={onPfcDayChange}
+        pending={pfcPending}
+        errorMessage={pfcError?.message ?? null}
+      />
+      <StravaActivities strava={strava} from={periodFrom} to={periodTo} weights={weights} mealDayCounts={mealDayCounts.data} onSelectWeek={onRangeChange} />
+      {mealDayCounts.error !== null && <FormError>{mealDayCounts.error.message}</FormError>}
+      {mealGallery.isPending && <p role="status">食事を読み込んでいます。</p>}
+      {mealGallery.error !== null && <FormError>{mealGallery.error.message}</FormError>}
+      {mealGallery.data !== undefined && <MealGallery meals={galleryMeals} layout={search.mealLayout ?? "horizontal"} onLayoutChange={onMealLayoutChange} selectedDay={search.pfcDay} onShowAll={() => onPfcDayChange(undefined)} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} hasMore={mealGallery.hasNextPage} loadingMore={mealGallery.isFetchingNextPage} onLoadMore={() => { void mealGallery.fetchNextPage(); }} periodLabel="新しい順・直近 7 日間" />}
     </>
   );
 };

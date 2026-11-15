@@ -28,6 +28,30 @@ describe("ジョブの時刻と実行権限", () => {
     database.close();
   });
 
+  it("2 時間ごとの定期実行は次回時刻を 2 時間後にし、未完了があれば重ねない", async () => {
+    const { database, repository } = createApiStorage();
+    try {
+      expect(await repository.createSchedule("calories", { name: "Strava の消費カロリー同期", jobKind: "strava_calories_sync", interval: "every_2_hours",
+        timezone: "Asia/Tokyo", nextRunAt: "2026-09-07T12:00:00.000Z", coalescing: "skip_if_pending", deadlineSeconds: 7200 }, now)).toMatchObject({ ok: true });
+      expect(await repository.enqueueDueSchedules(now)).toEqual({ ok: true, value: 1 });
+      expect(database.prepare("SELECT next_run_at FROM schedules WHERE id = 'calories'").get()?.next_run_at).toBe("2026-09-07T14:00:00.000Z");
+      expect(await repository.enqueueDueSchedules("2026-09-07T14:30:00.000Z")).toEqual({ ok: true, value: 0 });
+      expect(database.prepare("SELECT count(*) AS count FROM jobs WHERE schedule_id = 'calories'").get()?.count).toBe(1);
+    } finally { database.close(); }
+  });
+
+  it("別の定期ジョブが実行待ちでも skip_if_pending の対象を予約する", async () => {
+    const { database, repository } = createApiStorage();
+    try {
+      expect(await repository.createSchedule("due", { name: "検証用同期", jobKind: "slack_sync", interval: "hourly",
+        timezone: "Asia/Tokyo", nextRunAt: "2026-09-07T12:00:00.000Z", coalescing: "skip_if_pending", deadlineSeconds: 7200 }, now)).toMatchObject({ ok: true });
+      expect(await repository.createJob({ id: "other", kind: "backup", scheduleId: "other-schedule", idempotencyKey: "other", payloadJson: "{}", now })).toMatchObject({ ok: true });
+      expect(await repository.enqueueDueSchedules(now)).toEqual({ ok: true, value: 1 });
+      expect(await repository.enqueueDueSchedules("2026-09-07T13:30:00.000Z")).toEqual({ ok: true, value: 0 });
+      expect(database.prepare("SELECT count(*) AS count FROM jobs WHERE schedule_id = 'due'").get()?.count).toBe(1);
+    } finally { database.close(); }
+  });
+
   it("定期実行は到来分だけを作り、同日中の次回時刻と deadline を正しく扱う", async () => {
     const { database, repository } = createApiStorage();
     await repository.createSchedule("s1", { name: "同期", jobKind: "slack_sync", interval: "hourly",

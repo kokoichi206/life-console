@@ -1,3 +1,3 @@
 import { defineConfig } from "vitest/config";
 
-export default defineConfig({ test: { include: ["rules/**/test.js"], exclude: ["**/fixtures/**"] } });
+export default defineConfig({ test: { include: ["rules/**/test.js", "*.test.js"], exclude: ["**/fixtures/**"] } });

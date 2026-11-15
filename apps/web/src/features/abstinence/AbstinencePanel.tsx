@@ -1,0 +1,217 @@
+import { Dialog } from "@base-ui/react/dialog";
+import type { AbstinenceGoalInput } from "@life-console/contracts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { X } from "lucide-react";
+import { useRef, useState, type FormEvent, type RefObject } from "react";
+
+import { api } from "../../api";
+import { Field, FormError, Panel } from "../../components/DesignSystem";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/input";
+import { Textarea } from "../../components/ui/textarea";
+
+import { AbstinenceElapsedTime } from "./AbstinenceElapsedTime";
+import { AbstinenceHistory } from "./AbstinenceHistory";
+import { abstinenceQuery } from "./queries";
+
+const localDateTimeValue = (value: string): string => {
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 19);
+};
+
+const formatDuration = (minutes: number): string => minutes < 60 ? String(minutes) + " 分" : String(Math.floor(minutes / 60)) + " 時間 " + String(minutes % 60) + " 分";
+
+const GoalDialogContent = ({ onOpenChange, goal }: { readonly onOpenChange: (open: boolean) => void; readonly goal: AbstinenceGoalInput | null }) => {
+  const client = useQueryClient();
+  const [name, setName] = useState(goal?.name ?? "");
+  const [startedAt, setStartedAt] = useState(localDateTimeValue(goal?.startedAt ?? new Date().toISOString()));
+  const [targetDays, setTargetDays] = useState(String(goal?.targetDays ?? 30));
+  const [targetDate, setTargetDate] = useState(goal?.targetDate ?? "");
+  const save = useMutation({
+    mutationFn: api.saveAbstinenceGoal,
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: abstinenceQuery.queryKey });
+      onOpenChange(false);
+    },
+  });
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    save.mutate({ name, startedAt: new Date(startedAt).toISOString(), targetDays: Number(targetDays), targetDate: targetDate === "" ? null : targetDate });
+  };
+  return (
+    <>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <Dialog.Title className="text-xl font-semibold">禁欲目標を設定</Dialog.Title>
+          <Dialog.Description className="mt-2 text-xs text-muted-foreground">避けたい行動と、我慢を始めた日時を記録します。</Dialog.Description>
+        </div>
+        <Dialog.Close render={<Button variant="ghost" size="icon" aria-label="禁欲目標の設定を閉じる" />}><X /></Dialog.Close>
+      </header>
+      <form onSubmit={submit} className="mt-6 grid gap-5">
+        <fieldset disabled={save.isPending} className="grid gap-5">
+          <Field label="禁欲対象"><Input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} placeholder="例: 夜更かし" /></Field>
+          <Field label="開始日時"><Input required type="datetime-local" step="1" value={startedAt} onChange={(event) => setStartedAt(event.target.value)} /></Field>
+          <Field label="目標日数"><Input required type="number" min="1" max="100000" step="1" inputMode="numeric" value={targetDays} onChange={(event) => setTargetDays(event.target.value)} /></Field>
+          <Field label="目標日（任意）"><Input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} /></Field>
+          <Button type="submit" className="h-11 rounded-xl">{save.isPending ? "保存しています…" : "目標を保存"}</Button>
+          {goal !== null && <Button type="button" variant="ghost" onClick={() => save.mutate(null)}>目標を解除</Button>}
+        </fieldset>
+      </form>
+      {save.error !== null && <div className="mt-3"><FormError>{save.error.message}</FormError></div>}
+    </>
+  );
+};
+
+const GoalDialog = ({ open, onOpenChange, goal, triggerRef }: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void; readonly goal: AbstinenceGoalInput | null; readonly triggerRef: RefObject<HTMLButtonElement | null> }) => (
+  <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Portal>
+      <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm" />
+      <Dialog.Popup finalFocus={triggerRef} className="fixed inset-x-0 bottom-0 z-50 max-h-[95dvh] overflow-y-auto rounded-t-3xl bg-card p-6 pb-[max(24px,env(safe-area-inset-bottom))] text-foreground shadow-2xl outline-none sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl">
+        <GoalDialogContent onOpenChange={onOpenChange} goal={goal} />
+      </Dialog.Popup>
+    </Dialog.Portal>
+  </Dialog.Root>
+);
+
+const EventDialogContent = ({ onOpenChange }: { readonly onOpenChange: (open: boolean) => void }) => {
+  const client = useQueryClient();
+  const [occurredAt, setOccurredAt] = useState(localDateTimeValue(new Date().toISOString()));
+  const [durationMinutes, setDurationMinutes] = useState("");
+  const [memo, setMemo] = useState("");
+  const save = useMutation({
+    mutationFn: api.createAbstinenceEvent,
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: abstinenceQuery.queryKey });
+      onOpenChange(false);
+    },
+  });
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    save.mutate({ occurredAt: new Date(occurredAt).toISOString(), durationMinutes: durationMinutes === "" ? null : Number(durationMinutes), memo });
+  };
+  return (
+    <>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <Dialog.Title className="text-xl font-semibold">中断イベントを記録</Dialog.Title>
+          <Dialog.Description className="mt-2 text-xs text-muted-foreground">発生日時と、振り返りに必要な内容だけを残します。</Dialog.Description>
+        </div>
+        <Dialog.Close render={<Button variant="ghost" size="icon" aria-label="中断イベントの記録を閉じる" />}><X /></Dialog.Close>
+      </header>
+      <form onSubmit={submit} className="mt-6 grid gap-5">
+        <fieldset disabled={save.isPending} className="grid gap-5">
+          <Field label="発生日時"><Input autoFocus required type="datetime-local" step="1" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></Field>
+          <Field label="経過時間（分・任意）"><Input type="number" min="0" max="100000" step="1" inputMode="numeric" value={durationMinutes} onChange={(event) => setDurationMinutes(event.target.value)} /></Field>
+          <Field label="メモ（任意）"><Textarea maxLength={2000} value={memo} onChange={(event) => setMemo(event.target.value)} placeholder="状況や次回に向けたメモ" /></Field>
+          <Button type="submit" variant="destructive" className="h-11 rounded-xl">{save.isPending ? "保存しています…" : "イベントを記録"}</Button>
+        </fieldset>
+      </form>
+      {save.error !== null && <div className="mt-3"><FormError>{save.error.message}</FormError></div>}
+    </>
+  );
+};
+
+const EventDialog = ({ open, onOpenChange, triggerRef }: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void; readonly triggerRef: RefObject<HTMLButtonElement | null> }) => (
+  <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Portal>
+      <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm" />
+      <Dialog.Popup finalFocus={triggerRef} className="fixed inset-x-0 bottom-0 z-50 max-h-[95dvh] overflow-y-auto rounded-t-3xl bg-card p-6 pb-[max(24px,env(safe-area-inset-bottom))] text-foreground shadow-2xl outline-none sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl">
+        <EventDialogContent onOpenChange={onOpenChange} />
+      </Dialog.Popup>
+    </Dialog.Portal>
+  </Dialog.Root>
+);
+
+export const AbstinencePanel = () => {
+  const query = useQuery(abstinenceQuery);
+  const goalTriggerRef = useRef<HTMLButtonElement>(null);
+  const eventTriggerRef = useRef<HTMLButtonElement>(null);
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [eventOpen, setEventOpen] = useState(false);
+  if (query.data === undefined) {
+    return (
+      <Panel mobileLayout="section" className="mb-6 gap-3 rounded-3xl px-5">
+        <h2 className="text-xl font-semibold sm:text-sm">禁欲の継続</h2>
+        {query.isPending
+          ? (
+              <>
+                <p role="status" className="text-sm text-muted-foreground">禁欲記録を読み込んでいます。</p>
+                <div aria-hidden="true" className="h-24 rounded-xl bg-muted motion-safe:animate-pulse" />
+              </>
+            )
+          : (
+              <>
+                <FormError>{query.error.message}</FormError>
+                <Button variant="outline" className="w-fit" onClick={() => { void query.refetch(); }}>禁欲記録を再読み込み</Button>
+              </>
+            )}
+      </Panel>
+    );
+  }
+  const data = query.data;
+  const goal = data.goal;
+  return (
+    <>
+      <Panel mobileLayout="section" className="mb-6 rounded-3xl px-5">
+        {query.error !== null && <FormError>{query.error.message}</FormError>}
+        {goal === null
+          ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold sm:text-sm">禁欲の継続</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">避けたい行動と目標を設定して、継続期間を記録します。</p>
+                </div>
+                <Button ref={goalTriggerRef} variant="outline" className="h-11 rounded-xl" onClick={() => setGoalOpen(true)}>禁欲目標を設定</Button>
+              </div>
+            )
+          : (
+              <>
+                <header className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground">{goal.name}</p>
+                    <AbstinenceElapsedTime goal={goal} events={data.events} />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button ref={goalTriggerRef} variant="outline" className="h-10 rounded-xl" onClick={() => setGoalOpen(true)}>禁欲目標を編集</Button>
+                    <Button ref={eventTriggerRef} variant="destructive" className="h-10 rounded-xl" onClick={() => setEventOpen(true)}>イベントを記録</Button>
+                  </div>
+                </header>
+                <dl className="mt-5 grid grid-cols-2 gap-3 rounded-2xl bg-muted/50 p-4 text-center sm:grid-cols-4">
+                  <div>
+                    <dt className="text-xs text-muted-foreground">目標</dt>
+                    <dd className="mt-1 text-xl font-semibold tabular-nums">
+                      {goal.targetDays}
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">日</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">最長</dt>
+                    <dd className="mt-1 text-xl font-semibold tabular-nums">
+                      {data.longestStreakDays}
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">日</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">中断</dt>
+                    <dd className="mt-1 text-xl font-semibold tabular-nums">
+                      {data.events.length}
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">回</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">累計時間</dt>
+                    <dd className="mt-1 text-xl font-semibold tabular-nums">
+                      {formatDuration(data.totalEventDurationMinutes)}
+                    </dd>
+                  </div>
+                </dl>
+                {data.events.length > 0 && <AbstinenceHistory goal={goal} events={data.events} />}
+              </>
+            )}
+      </Panel>
+      <GoalDialog open={goalOpen} onOpenChange={setGoalOpen} goal={goal} triggerRef={goalTriggerRef} />
+      <EventDialog open={eventOpen} onOpenChange={setEventOpen} triggerRef={eventTriggerRef} />
+    </>
+  );
+};

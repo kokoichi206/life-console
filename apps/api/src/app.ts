@@ -1,22 +1,46 @@
+import { timingSafeEqual } from "node:crypto";
+
 import { zValidator } from "@hono/zod-validator";
-import { registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
-import { weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
+import { calendarRangeSchema, collectionSettingsSchema, updateCalendarEventSchema } from "@life-console/contracts";
+import { createAgentQuestionSchema, answerAgentQuestionSchema } from "@life-console/contracts";
+import { importWorkConfirmationsSchema } from "@life-console/contracts";
+import { createConnectorScheduleSchema, updateConnectorScheduleSchema } from "@life-console/contracts";
+import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from "@life-console/contracts";
+import { calorieBaselineSchema, nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
+import { mealGalleryQuerySchema, mealPeriodQuerySchema, mealRangeQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
+import { stravaCaloriesQuerySchema, stravaCaloriesReconcileSchema, stravaCaloriesFetchSchema, stravaCaloriesPlanSchema } from "@life-console/contracts";
+import { abstinenceEventSchema, abstinenceGoalSchema, weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, updateMealSchema, createMealUploadSchema, createMealBlurUploadSchema, mealPhotoVariantQuerySchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
+import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
+import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 
 import { createLifeConsoleHandlers } from "./handlers/life-console-handlers";
+import { createAgentQuestionRepository } from "./repositories/agent-question-repository";
+import { createCalendarRepository } from "./repositories/calendar-repository";
+import { createConnectorScheduleRepository } from "./repositories/connector-schedule-repository";
 import { D1LifeConsoleRepository } from "./repositories/d1-life-console-repository";
 import { createMonitoringRepository } from "./repositories/monitoring-repository";
+import { createNutritionRepository } from "./repositories/nutrition-repository";
 import { createPushSubscriptionRepository } from "./repositories/push-subscription-repository";
+import { createShoppingRepository } from "./repositories/shopping-repository";
+import { createStravaApiRepository } from "./repositories/strava-api-repository";
+import { createStravaCaloriesRepository } from "./repositories/strava-calories-repository";
+import { createStravaConnectionRepository } from "./repositories/strava-connection-repository";
 import { createWebPushRepository } from "./repositories/web-push-repository";
+import { createWorkConfirmationRepository } from "./repositories/work-confirmation-repository";
 import type { AppError } from "./shared/app-error";
 import { appError } from "./shared/app-error";
 import { systemClock } from "./shared/clock";
 import { parseApiEnvironment, type ApiEnvironment } from "./shared/environment";
 import { cryptoIdGenerator } from "./shared/id-generator";
-import { cloudLogger } from "./shared/logger";
+import { requestLogging, type RequestLogVariables } from "./shared/request-logging";
+import { createAbstinenceUsecase } from "./usecases/abstinence-usecase";
+import { createAgentQuestionUsecase } from "./usecases/agent-question-usecase";
+import { createCalendarUsecase } from "./usecases/calendar-usecase";
+import { createConnectorScheduleUsecase } from "./usecases/connector-schedule-usecase";
 import { createConversationUsecase } from "./usecases/conversation-usecase";
 import { createDashboardUsecase } from "./usecases/dashboard-usecase";
 import { createFinanceUsecase } from "./usecases/finance-usecase";
@@ -25,18 +49,22 @@ import { createJobUsecase } from "./usecases/job-usecase";
 import { createMealPhotoUsecase } from "./usecases/meal-photo-usecase";
 import { createMonitoringUsecase } from "./usecases/monitoring-usecase";
 import { createNoteUsecase } from "./usecases/note-usecase";
+import { createNutritionUsecase } from "./usecases/nutrition-usecase";
 import { createPushNotificationUsecase } from "./usecases/push-notification-usecase";
 import { createReplyDraftUsecase } from "./usecases/reply-draft-usecase";
 import { createRepositoryUsecase } from "./usecases/repository-usecase";
+import { createShoppingUsecase } from "./usecases/shopping-usecase";
+import { createStravaUsecase } from "./usecases/strava-usecase";
 import { createTaskUsecase } from "./usecases/task-usecase";
+import { createWorkConfirmationUsecase } from "./usecases/work-confirmation-usecase";
 
 type HonoEnvironment = {
   Bindings: ApiEnvironment;
-  Variables: { environment: ApiEnvironment };
+  Variables: RequestLogVariables & { environment: ApiEnvironment };
 };
 
 const identifierParameterSchema = z.object({ id: z.string().min(1).max(128) });
-const photoUploadQuerySchema = z.object({ token: z.string().uuid() });
+const photoUploadQuerySchema = mealPhotoVariantQuerySchema.extend({ token: z.string().uuid() });
 const agentContextQuerySchema = z.object({
   taskId: z.string().min(1).max(128),
   repositoryId: z.string().min(1).max(128),
@@ -46,6 +74,10 @@ const jobReportParameterSchema = z.object({
   token: z.string().uuid(),
 });
 
+const createAgentQuestionHandlers = (environment: ApiEnvironment) => createAgentQuestionUsecase(
+  createAgentQuestionRepository(environment.DB), systemClock, cryptoIdGenerator,
+);
+
 const createHandlers = (environment: ApiEnvironment) => {
   const repository = new D1LifeConsoleRepository(environment.DB);
   return createLifeConsoleHandlers({
@@ -54,6 +86,7 @@ const createHandlers = (environment: ApiEnvironment) => {
     dashboard: createDashboardUsecase(repository),
     finance: createFinanceUsecase(repository, systemClock, cryptoIdGenerator),
     health: createHealthUsecase(repository, systemClock, cryptoIdGenerator),
+    abstinence: createAbstinenceUsecase(repository, systemClock, cryptoIdGenerator),
     jobs: createJobUsecase(repository, systemClock, cryptoIdGenerator),
     mealPhotos: createMealPhotoUsecase(
       repository,
@@ -74,6 +107,14 @@ const createHandlers = (environment: ApiEnvironment) => {
   });
 };
 
+const createShoppingHandlers = (environment: ApiEnvironment) => createShoppingUsecase(createShoppingRepository(environment.DB), systemClock, cryptoIdGenerator);
+const createConnectorScheduleHandlers = (environment: ApiEnvironment) => createConnectorScheduleUsecase(createConnectorScheduleRepository(environment.DB), systemClock, cryptoIdGenerator);
+const shoppingLinkParameters = identifierParameterSchema.extend({ placeId: z.string().min(1).max(128) });
+
+const createNutritionHandlers = (environment: ApiEnvironment) => createNutritionUsecase(
+  createNutritionRepository(environment.DB), new D1LifeConsoleRepository(environment.DB), systemClock, cryptoIdGenerator,
+);
+
 const pushKeys = (environment: ApiEnvironment) => environment.WEB_PUSH_PUBLIC_KEY === undefined
   ? null
   : {
@@ -82,13 +123,30 @@ const pushKeys = (environment: ApiEnvironment) => environment.WEB_PUSH_PUBLIC_KE
 const createPushHandlers = (environment: ApiEnvironment) => createPushNotificationUsecase(
   createPushSubscriptionRepository(environment.DB), createWebPushRepository(pushKeys(environment)), environment.WEB_PUSH_PUBLIC_KEY ?? null, systemClock,
 );
+export const createCalendarHandlers = (environment: ApiEnvironment) => createCalendarUsecase(
+  createCalendarRepository(environment.DB), createPushSubscriptionRepository(environment.DB), createWebPushRepository(pushKeys(environment)),
+  systemClock, cryptoIdGenerator, environment.WEB_PUSH_PUBLIC_KEY !== undefined,
+);
+export const createWorkConfirmationHandlers = (environment: ApiEnvironment) => createWorkConfirmationUsecase(
+  createWorkConfirmationRepository(environment.DB), createPushSubscriptionRepository(environment.DB),
+  createWebPushRepository(pushKeys(environment)), systemClock, cryptoIdGenerator, environment.WEB_PUSH_PUBLIC_KEY !== undefined,
+);
 export const createMonitoringHandlers = (environment: ApiEnvironment) => createMonitoringUsecase(
   createMonitoringRepository(environment.DB), createPushSubscriptionRepository(environment.DB), createWebPushRepository(pushKeys(environment)), systemClock,
   environment.WEB_PUSH_PUBLIC_KEY !== undefined,
   environment.MONITORED_RUNNER_IDS?.split(",").map((id) => id.trim()) ?? [],
 );
 
-const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 500 | 502 => {
+const createStravaHandlers = (environment: ApiEnvironment) => {
+  const configuration = { clientId: environment.STRAVA_CLIENT_ID!, clientSecret: environment.STRAVA_CLIENT_SECRET!, redirectUri: environment.STRAVA_REDIRECT_URI! };
+  return createStravaUsecase(
+    createStravaConnectionRepository(environment.DB, environment.STRAVA_TOKEN_KEY!), createStravaApiRepository(configuration),
+    createStravaCaloriesRepository(environment.DB), new D1LifeConsoleRepository(environment.DB), configuration, systemClock, cryptoIdGenerator,
+  );
+};
+const stravaCallbackSchema = z.object({ state: z.string().max(200), code: z.string().min(1).max(2000).optional(), scope: z.string().max(1000).optional(), error: z.string().max(200).optional() });
+
+const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 412 | 429 | 500 | 502 => {
   switch (error.code) {
     case "validation_error":
       return 400;
@@ -101,6 +159,10 @@ const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 500 | 50
       return 404;
     case "conflict":
       return 409;
+    case "skipped_precondition":
+      return 412;
+    case "rate_limited":
+      return 429;
     case "storage_error":
       return 500;
     case "upstream_error":
@@ -110,6 +172,7 @@ const statusForError = (error: AppError): 400 | 401 | 403 | 404 | 409 | 500 | 50
 
 const respond = <T>(context: Context<HonoEnvironment>, result: Result<T, AppError>) => {
   if (result.ok) return context.json({ data: result.value === undefined ? null : result.value });
+  context.set("errorCode", result.error.code);
   return context.json({
     error: {
       code: result.error.code,
@@ -153,11 +216,11 @@ const parseWeightCsv = (csv: string): Result<ReadonlyArray<z.infer<typeof create
 const app = new Hono<HonoEnvironment>();
 
 app.onError((error, context) => {
-  cloudLogger.error({
-    event: "unhandled_request_error",
-    requestId: context.req.header("cf-ray") ?? "local-request",
-    timestamp: new Date().toISOString(),
-  });
+  if (error instanceof HTTPException) {
+    context.set("errorCode", "http_error");
+    return context.json({ error: { code: "http_error", message: "HTTP リクエストの処理に失敗しました。" } }, error.status);
+  }
+  context.set("errorCode", "internal_error");
   return context.json({
     error: {
       code: "internal_error",
@@ -166,6 +229,8 @@ app.onError((error, context) => {
   }, 500);
 });
 
+app.use("*", requestLogging);
+
 app.use("/api/*", async (context, next) => {
   context.set("environment", parseApiEnvironment(context.env));
   await next();
@@ -173,7 +238,118 @@ app.use("/api/*", async (context, next) => {
 
 app.use("/api/v1/runner/*", runnerAuthentication);
 
+const stravaConfiguration = createMiddleware<HonoEnvironment>(async (context, next) => {
+  context.header("Cache-Control", "no-store");
+  context.header("Referrer-Policy", "no-referrer");
+  const environment = context.get("environment");
+  if (!context.req.path.endsWith("/strava/status") && environment.STRAVA_CLIENT_ID === undefined) return respond(context, err(appError.validation("Strava の接続設定がまだありません。")));
+  if (!["GET", "HEAD"].includes(context.req.method) && context.req.header("Origin") !== new URL(environment.STRAVA_REDIRECT_URI!).origin) return respond(context, err(appError.forbidden("操作元の画面を確認できません。健康画面から操作してください。")));
+  return next();
+});
+
+app.use("/api/v1/strava/*", stravaConfiguration);
+
+app.use("/api/v1/share/:token/*", async (context, next) => {
+  const expected = context.get("environment").HEALTH_SHARE_TOKEN;
+  const token = context.req.param("token");
+  context.header("Cache-Control", "no-store");
+  context.header("Referrer-Policy", "no-referrer");
+  if (!["GET", "HEAD"].includes(context.req.method) || expected === undefined || !/^[a-f0-9]{64}$/u.test(token) || !timingSafeEqual(Buffer.from(token), Buffer.from(expected))) {
+    return respond(context, err(appError.notFound("共有リンクが無効です。")));
+  }
+  await next();
+  // 写真を含め、共有を停止した後の再取得でキャッシュを使わせない。
+  context.header("Cache-Control", "no-store");
+  context.header("Referrer-Policy", "no-referrer");
+  return;
+});
+app.use("/api/v1/share/:token/strava/*", stravaConfiguration);
+
+const healthReadRoutes = new Hono<HonoEnvironment>()
+  .get("/strava/status", async (context) => {
+    const environment = context.get("environment");
+    return environment.STRAVA_CLIENT_ID === undefined ? context.json({ data: { configured: false, athleteId: null } }) : respond(context, await createStravaHandlers(environment).status());
+  })
+  .get("/strava/activities", zValidator("query", stravaActivityQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activities(context.req.valid("query"))))
+  .get("/strava/calories", zValidator("query", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).activityCalories(context.req.valid("query"))))
+  .get("/strava/calories/sync-status", async (context) => respond(context, await createStravaHandlers(context.get("environment")).syncStatus()))
+  .get("/nutrition", zValidator("query", mealPeriodQuerySchema), async (context) => {
+    const period = context.req.valid("query");
+    return respond(context, await createNutritionHandlers(context.get("environment")).list(period.from === undefined ? undefined : { from: period.from, to: period.to }));
+  })
+  .get("/meals", zValidator("query", mealPeriodQuerySchema), async (context) => {
+    const period = context.req.valid("query");
+    return respond(context, await createHandlers(context.get("environment")).listMeals(period.from === undefined ? undefined : { from: period.from, to: period.to }));
+  })
+  .get("/meal-gallery", zValidator("query", mealGalleryQuerySchema), async (context) => respond(context, await createHandlers(context.get("environment")).listMealGallery(context.req.valid("query").to)))
+  .get("/meal-day-counts", zValidator("query", mealRangeQuerySchema), async (context) => {
+    const period = context.req.valid("query");
+    return respond(context, await createHandlers(context.get("environment")).listMealDayCounts(period));
+  })
+  .get("/meal-photos/:id/content", zValidator("param", identifierParameterSchema), zValidator("query", mealPhotoVariantQuerySchema), async (context) => {
+    const result = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id, context.req.valid("query").variant);
+    if (!result.ok) return respond(context, result);
+    return new Response(result.value.body, {
+      headers: {
+        "Cache-Control": "private, max-age=3600",
+        "Content-Type": result.value.contentType,
+        "ETag": result.value.etag,
+      },
+    });
+  })
+  .get("/weight-goal", async (context) => respond(context, await createHandlers(context.get("environment")).getWeightGoal()))
+  .get("/calorie-baseline", async (context) => respond(context, await createHandlers(context.get("environment")).getCalorieBaseline()))
+  .get("/weights", async (context) => respond(context, await createHandlers(context.get("environment")).listWeights()));
+export type HealthReadApp = typeof healthReadRoutes;
+
+app.route("/api/v1", healthReadRoutes);
+app.route("/api/v1/share/:token", healthReadRoutes);
+
 const _routes = app
+  .get("/api/v1/health-share", (context) => {
+    context.header("Cache-Control", "no-store");
+    const token = context.get("environment").HEALTH_SHARE_TOKEN;
+    return context.json({ data: token === undefined ? null : `/share/health/${token}` });
+  })
+  .post("/api/v1/strava/authorize", async (context) => {
+    const environment = context.get("environment");
+    const state = `${crypto.randomUUID()}.${Date.now()}`;
+    await setSignedCookie(context, "strava_state", state, environment.STRAVA_TOKEN_KEY!, { httpOnly: true, secure: new URL(environment.STRAVA_REDIRECT_URI!).protocol === "https:", sameSite: "Lax", path: "/api/v1/strava", maxAge: 600 });
+    return respond(context, createStravaHandlers(environment).authorizationUrl(state));
+  })
+  .get("/api/v1/strava/callback", async (context) => {
+    const environment = context.get("environment");
+    const expected = await getSignedCookie(context, environment.STRAVA_TOKEN_KEY!, "strava_state");
+    deleteCookie(context, "strava_state", { path: "/api/v1/strava" });
+    const input = stravaCallbackSchema.safeParse(context.req.query());
+    const returnUrl = new URL("/health", environment.STRAVA_REDIRECT_URI!);
+    const fail = () => {
+      returnUrl.searchParams.set("strava", "error");
+      return context.redirect(returnUrl.toString(), 303);
+    };
+    if (!input.success || typeof expected !== "string" || input.data.state !== expected || Date.now() - Number(expected.split(".")[1]) > 600_000) return fail();
+    if (input.data.error !== undefined || input.data.code === undefined || input.data.scope === undefined) return fail();
+    const connected = await createStravaHandlers(environment).connect(input.data.code, input.data.scope);
+    if (!connected.ok) return fail();
+    returnUrl.searchParams.set("strava", "connected");
+    return context.redirect(returnUrl.toString(), 303);
+  })
+  .post("/api/v1/strava/sync", zValidator("json", stravaCaloriesQuerySchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).requestSync(context.req.valid("json"))))
+  .post("/api/v1/runner/strava/calories/plan", zValidator("json", stravaCaloriesPlanSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).planCalories(context.req.valid("json"))))
+  .delete("/api/v1/strava/connection", async (context) => respond(context, await createStravaHandlers(context.get("environment")).disconnect()))
+  .post("/api/v1/runner/strava/calories/reconcile", zValidator("json", stravaCaloriesReconcileSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).reconcileCalories(context.req.valid("json"))))
+  .post("/api/v1/runner/strava/calories/fetch", zValidator("json", stravaCaloriesFetchSchema), async (context) => respond(context, await createStravaHandlers(context.get("environment")).fetchCalories(context.req.valid("json"))))
+  .put("/api/v1/nutrition/:id/calories", zValidator("param", identifierParameterSchema), zValidator("json", saveMealCaloriesSchema), async (context) => {
+    return respond(context, await createNutritionHandlers(context.get("environment")).saveManualCalories(context.req.valid("param").id, context.req.valid("json").caloriesKcal));
+  })
+  .post("/api/v1/nutrition/analyze", zValidator("json", nutritionAnalysisPayloadSchema), async (context) => respond(context, await createNutritionHandlers(context.get("environment")).generate(context.req.valid("json"))))
+  .get("/api/v1/runner/nutrition/candidates", zValidator("query", nutritionAnalysisPayloadSchema), async (context) => respond(context, await createNutritionHandlers(context.get("environment")).candidates(context.req.valid("query"))))
+  .post("/api/v1/runner/nutrition/estimates", zValidator("json", saveNutritionEstimateSchema), async (context) => respond(context, await createNutritionHandlers(context.get("environment")).save(context.req.valid("json"))))
+  .get("/api/v1/runner/meal-photos/:id/content", zValidator("param", identifierParameterSchema), async (context) => {
+    const photo = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id);
+    if (!photo.ok) return respond(context, photo);
+    return new Response(photo.value.body, { headers: { "Content-Type": photo.value.contentType, "Cache-Control": "no-store" } });
+  })
   .post("/api/v1/runner/monitoring/register", zValidator("json", registerMonitorsSchema), async (context) => respond(context, await createMonitoringHandlers(context.get("environment")).register(context.req.valid("json"))))
   .post("/api/v1/runner/monitoring/observations", zValidator("json", reportMonitoringSchema), async (context) => {
     const input = context.req.valid("json");
@@ -204,7 +380,34 @@ const _routes = app
   ))
   .get("/api/v1/health", (context) => context.json({ data: { status: "ok" as const } }))
   .get("/api/v1/dashboard", async (context) => respond(context, await createHandlers(context.get("environment")).dashboard()))
+  .get("/api/v1/calendar", zValidator("query", calendarRangeSchema), async (context) => respond(context, await createCalendarHandlers(context.get("environment")).list(context.req.valid("query"))))
+  .put("/api/v1/calendar/settings", zValidator("json", collectionSettingsSchema), async (context) => respond(context, await createCalendarHandlers(context.get("environment")).saveSettings(context.req.valid("json"))))
+  .patch("/api/v1/calendar/events/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateCalendarEventSchema), async (context) => respond(context, await createCalendarHandlers(context.get("environment")).updateEvent(context.req.valid("param").id, context.req.valid("json"))))
+  .post("/api/v1/calendar/events/:id/preparation", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createCalendarHandlers(context.get("environment")).createPreparation(context.req.valid("param").id)))
+  .get("/api/v1/shopping", async (context) => respond(context, await createShoppingHandlers(context.get("environment")).list()))
+  .post("/api/v1/shopping/places", zValidator("json", shoppingNameSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).createPlace(context.req.valid("json"))))
+  .patch("/api/v1/shopping/places/:id", zValidator("param", identifierParameterSchema), zValidator("json", shoppingNameSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).renamePlace(context.req.valid("param").id, context.req.valid("json"))))
+  .post("/api/v1/shopping/places/:id/items", zValidator("param", identifierParameterSchema), zValidator("json", shoppingNameSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).createItem(context.req.valid("param").id, context.req.valid("json"))))
+  .patch("/api/v1/shopping/items/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateShoppingItemSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).updateItem(context.req.valid("param").id, context.req.valid("json"))))
+  .delete("/api/v1/shopping/items/:id", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createShoppingHandlers(context.get("environment")).deleteItem(context.req.valid("param").id)))
+  .put("/api/v1/shopping/items/:id/places/:placeId", zValidator("param", shoppingLinkParameters), zValidator("json", shoppingLinkSchema), async (context) => {
+    const { id, placeId } = context.req.valid("param");
+    return respond(context, await createShoppingHandlers(context.get("environment")).setPlace(id, placeId, context.req.valid("json").linked));
+  })
   .get("/api/v1/tasks", async (context) => respond(context, await createHandlers(context.get("environment")).listTasks()))
+  .get("/api/v1/work-confirmations", async (context) => respond(context, await createWorkConfirmationHandlers(context.get("environment")).list()))
+  .post("/api/v1/work-confirmations/:id/complete", zValidator("param", identifierParameterSchema), async (context) => respond(
+    context, await createWorkConfirmationHandlers(context.get("environment")).complete(context.req.valid("param").id),
+  ))
+  .post("/api/v1/runner/work-confirmations/import", zValidator("json", importWorkConfirmationsSchema), async (context) => {
+    const handlers = createWorkConfirmationHandlers(context.get("environment"));
+    const result = await handlers.import(context.req.valid("json"));
+    if (!result.ok) return respond(context, result);
+    context.executionCtx.waitUntil(handlers.deliverNotifications().then((delivery) => {
+      if (!delivery.ok) context.get("logger").error({ event: "work_confirmation_delivery_failed", errorCode: delivery.error.code });
+    }));
+    return respond(context, result);
+  })
   .post("/api/v1/tasks", zValidator("json", createTaskSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createTask(context.req.valid("json")));
   })
@@ -236,7 +439,6 @@ const _routes = app
   .post("/api/v1/connectors/sync", zValidator("json", createConnectorSyncSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createConnectorSyncJob(context.req.valid("json")));
   })
-  .get("/api/v1/meals", async (context) => respond(context, await createHandlers(context.get("environment")).listMeals()))
   .post("/api/v1/meal-photos/upload", zValidator("json", createMealUploadSchema), async (context) => {
     const input = context.req.valid("json");
     return respond(context, await createHandlers(context.get("environment")).createMealPhotoUpload(
@@ -244,6 +446,10 @@ const _routes = app
       input.contentType,
     ));
   })
+  .post("/api/v1/meal-photos/:id/blur/upload", zValidator("param", identifierParameterSchema), zValidator("json", createMealBlurUploadSchema), async (context) =>
+    respond(context, await createHandlers(context.get("environment")).createMealPhotoBlurUpload(context.req.valid("param").id, context.req.valid("json").contentType)))
+  .post("/api/v1/meal-photos/:id/blur/complete", zValidator("param", identifierParameterSchema), async (context) =>
+    respond(context, await createHandlers(context.get("environment")).confirmMealPhotoUploaded(context.req.valid("param").id, "blurred")))
   .put("/api/v1/meal-photos/:id/content", zValidator("param", identifierParameterSchema), zValidator("query", photoUploadQuerySchema), async (context) => {
     const body = context.req.raw.body;
     const contentType = context.req.header("Content-Type");
@@ -253,34 +459,37 @@ const _routes = app
       context.req.valid("query").token,
       contentType,
       body,
+      context.req.valid("query").variant,
     ));
-  })
-  .get("/api/v1/meal-photos/:id/content", zValidator("param", identifierParameterSchema), async (context) => {
-    const result = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id);
-    if (!result.ok) return respond(context, result);
-    return new Response(result.value.body, {
-      headers: {
-        "Cache-Control": "private, max-age=3600",
-        "Content-Type": result.value.contentType,
-        "ETag": result.value.etag,
-      },
-    });
   })
   .post("/api/v1/meals", zValidator("json", createMealSchema), async (context) => {
     const input = context.req.valid("json");
     const handlers = createHandlers(context.get("environment"));
-    if (input.photoId !== null) {
-      const confirmed = await handlers.confirmMealPhotoUploaded(input.photoId);
+    for (const photoId of input.photoId === null ? [] : [input.photoId, ...input.additionalPhotoIds]) {
+      const confirmed = await handlers.confirmMealPhotoUploaded(photoId);
       if (!confirmed.ok) return respond(context, confirmed);
     }
     return respond(context, await handlers.createMeal(input));
   })
-  .get("/api/v1/weight-goal", async (context) => respond(context, await createHandlers(context.get("environment")).getWeightGoal()))
+  .put("/api/v1/meals/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateMealSchema), async (context) => {
+    const handlers = createHandlers(context.get("environment"));
+    const input = context.req.valid("json");
+    for (const photoId of input.photoId === null ? [] : [input.photoId, ...input.additionalPhotoIds]) {
+      const confirmed = await handlers.confirmMealPhotoUploaded(photoId);
+      if (!confirmed.ok) return respond(context, confirmed);
+    }
+    return respond(context, await handlers.updateMeal(context.req.valid("param").id, input));
+  })
+  .delete("/api/v1/meals/:id", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createHandlers(context.get("environment")).deleteMeal(context.req.valid("param").id)))
+  .post("/api/v1/meals/:id/restore", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createHandlers(context.get("environment")).restoreMeal(context.req.valid("param").id)))
   .put("/api/v1/weight-goal", zValidator("json", weightGoalSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveWeightGoal(context.req.valid("json"))))
-  .get("/api/v1/weights", async (context) => respond(context, await createHandlers(context.get("environment")).listWeights()))
+  .put("/api/v1/calorie-baseline", zValidator("json", calorieBaselineSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveCalorieBaseline(context.req.valid("json"))))
   .post("/api/v1/weights", zValidator("json", createWeightSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createWeight(context.req.valid("json")));
   })
+  .get("/api/v1/abstinence", async (context) => respond(context, await createHandlers(context.get("environment")).abstinence()))
+  .put("/api/v1/abstinence/goal", zValidator("json", abstinenceGoalSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveAbstinenceGoal(context.req.valid("json"))))
+  .post("/api/v1/abstinence/events", zValidator("json", abstinenceEventSchema), async (context) => respond(context, await createHandlers(context.get("environment")).createAbstinenceEvent(context.req.valid("json"))))
   .post("/api/v1/weights/import", async (context) => {
     const parsed = parseWeightCsv(await context.req.text());
     if (!parsed.ok) return respond(context, parsed);
@@ -332,6 +541,18 @@ const _routes = app
       input.target,
     ));
   })
+  .get("/api/v1/agent-questions", async (context) => respond(context, await createAgentQuestionHandlers(context.get("environment")).listPending()))
+  .post("/api/v1/agent-questions/:id/answer", zValidator("param", identifierParameterSchema), zValidator("json", answerAgentQuestionSchema), async (context) => {
+    return respond(context, await createAgentQuestionHandlers(context.get("environment")).answer(context.req.valid("param").id, context.req.valid("json").answer));
+  })
+  .post("/api/v1/job-reports/:id/:token/questions", zValidator("param", jobReportParameterSchema), zValidator("json", createAgentQuestionSchema), async (context) => {
+    const { id, token } = context.req.valid("param");
+    return respond(context, await createAgentQuestionHandlers(context.get("environment")).create(id, token, context.req.valid("json").question));
+  })
+  .get("/api/v1/job-reports/:id/:token/questions/:questionId", zValidator("param", jobReportParameterSchema.extend({ questionId: z.uuid() })), async (context) => {
+    const { id, token, questionId } = context.req.valid("param");
+    return respond(context, await createAgentQuestionHandlers(context.get("environment")).get(questionId, id, token));
+  })
   .get("/api/v1/jobs", async (context) => respond(context, await createHandlers(context.get("environment")).listJobs()))
   .post("/api/v1/jobs/:id/cancel", zValidator("param", identifierParameterSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).cancelJob(context.req.valid("param").id));
@@ -347,6 +568,9 @@ const _routes = app
   .post("/api/v1/schedules", zValidator("json", createScheduleSchema), async (context) => {
     return respond(context, await createHandlers(context.get("environment")).createSchedule(context.req.valid("json")));
   })
+  .get("/api/v1/connector-schedules", async (context) => respond(context, await createConnectorScheduleHandlers(context.get("environment")).list()))
+  .post("/api/v1/connector-schedules", zValidator("json", createConnectorScheduleSchema), async (context) => respond(context, await createConnectorScheduleHandlers(context.get("environment")).create(context.req.valid("json"))))
+  .patch("/api/v1/connector-schedules/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateConnectorScheduleSchema), async (context) => respond(context, await createConnectorScheduleHandlers(context.get("environment")).update(context.req.valid("param").id, context.req.valid("json"))))
   .get("/api/v1/runner/weights/export", async (context) => respond(context, await createHandlers(context.get("environment")).listWeightsForExport()))
   .get("/api/v1/runner/runners", async (context) => respond(context, await createHandlers(context.get("environment")).listRunners()))
   .post("/api/v1/runner/register", zValidator("json", registerRunnerSchema), async (context) => {

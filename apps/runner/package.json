@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^24.22.1 || ^26.12.1"
+  },
   "bin": {
     "life-console-runner": "./dist/index.js"
   },
@@ -15,14 +18,15 @@
   },
   "dependencies": {
     "@life-console/contracts": "workspace:*",
-    "csv-parse": "^7.0.2",
-    "zod": "^4.5.4",
     "@life-console/core": "workspace:*",
-    "@life-console/env": "workspace:*"
+    "@life-console/env": "workspace:*",
+    "csv-parse": "^7.0.2",
+    "drizzle-orm": "0.45.4",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
-    "tsup": "^8.5.1",
+    "tsup": "^9.0.0",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3"
   }

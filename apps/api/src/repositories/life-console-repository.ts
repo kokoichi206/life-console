@@ -1,5 +1,6 @@
-import type { WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, UpdateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, MealDayCount, MealGalleryPage, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
+import type { AgentProvider, AssetKind, ConnectorKind, ConversationClassification, FinanceEntryKind, JobCompletionOutcome, JobKind, JobStatus, MealPhotoContentType, OrcaStatus, RepositoryRole, SourceMappingConnector, SourceScope, TaskArea, TaskStatus, WeightSource } from "@life-console/domain";
 
 import type { AppError } from "../shared/app-error";
 
@@ -7,7 +8,10 @@ export type Task = {
   readonly id: string;
   readonly title: string;
   readonly description: string;
-  readonly status: string;
+  readonly status: TaskStatus;
+  readonly area: TaskArea;
+  readonly scheduledAt: string | null;
+  readonly sourceUrl: string | null;
   readonly dueAt: string | null;
   readonly completedAt: string | null;
   readonly conversationId: string | null;
@@ -19,13 +23,13 @@ export type Task = {
 
 export type Conversation = {
   readonly id: string;
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly externalMessageId: string;
   readonly authorLabel: string;
   readonly excerpt: string;
   readonly sourceUrl: string | null;
-  readonly classification: string;
+  readonly classification: ConversationClassification;
   readonly occurredAt: string;
 };
 
@@ -33,8 +37,9 @@ export type WeightPoint = {
   readonly id: string;
   readonly occurredAt: string;
   readonly recordedAt: string;
-  readonly source: string;
+  readonly source: WeightSource;
   readonly weightKg: number;
+  readonly bodyFatPercent: number | null;
 };
 
 export type FinanceSummary = {
@@ -44,10 +49,10 @@ export type FinanceSummary = {
   readonly netWorthYen: number;
   readonly byCategory: ReadonlyArray<{ readonly category: string; readonly amountYen: number }>;
   readonly byPaymentMethod: ReadonlyArray<{ readonly paymentMethod: string; readonly amountYen: number }>;
-  readonly assetAllocation: ReadonlyArray<{ readonly assetKind: string; readonly amountYen: number }>;
+  readonly assetAllocation: ReadonlyArray<{ readonly assetKind: AssetKind; readonly amountYen: number }>;
   readonly transactions: ReadonlyArray<{
     readonly id: string;
-    readonly kind: string;
+    readonly kind: FinanceEntryKind;
     readonly amountYen: number;
     readonly adjustedAmountYen: number;
     readonly category: string;
@@ -72,16 +77,23 @@ export type Job = {
   readonly id: string;
   readonly taskId: string | null;
   readonly repositoryId: string | null;
-  readonly kind: string;
-  readonly status: string;
+  readonly kind: JobKind;
+  readonly status: JobStatus;
   readonly payloadJson: string;
   readonly leaseToken: string | null;
   readonly cancelRequestedAt: string | null;
-  readonly provider: string | null;
+  readonly provider: AgentProvider | null;
   readonly summary: string | null;
   readonly errorCode: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+};
+
+export type LatestJob = {
+  readonly status: JobStatus;
+  /** 終わっていれば終了時刻、実行中なら作成時刻。 */
+  readonly at: string;
+  readonly errorCode: string | null;
 };
 
 export type RunnerHealth = {
@@ -89,12 +101,12 @@ export type RunnerHealth = {
   readonly name: string;
   readonly lastHeartbeatAt: string;
   readonly tokenExpiresAt: string | null;
-  readonly orcaStatus: string;
+  readonly orcaStatus: OrcaStatus;
   readonly lastErrorCode: string | null;
 };
 
 export type ConnectorHealth = {
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly sourceLabel: string;
   readonly watermark: string | null;
@@ -106,8 +118,9 @@ export type ConnectorHealth = {
 export type Meal = {
   readonly id: string;
   readonly photoId: string | null;
+  readonly additionalPhotoIds: ReadonlyArray<string>;
+  readonly blurredPhotoIds: ReadonlyArray<string>;
   readonly memo: string;
-  readonly mealKind: string;
   readonly occurredAt: string;
   readonly recordedAt: string;
   readonly tags: ReadonlyArray<string>;
@@ -119,8 +132,8 @@ export type Repository = {
 };
 
 export type SourceRepositoryMapping = {
-  readonly connector: "slack" | "chatwork";
-  readonly sourceScope: "channel" | "room";
+  readonly connector: SourceMappingConnector;
+  readonly sourceScope: SourceScope;
   readonly sourceId: string;
   readonly sourceLabel: string;
   readonly repositoryId: string;
@@ -152,19 +165,19 @@ export type Dashboard = {
 
 export type NewConversation = {
   readonly id: string;
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly externalMessageId: string;
   readonly authorLabel: string;
   readonly excerpt: string;
   readonly sourceUrl: string | null;
   readonly occurredAt: string;
-  readonly classification: string;
+  readonly classification: ConversationClassification;
 };
 
 export type ConversationListFilter = {
-  readonly connector: "slack" | "chatwork" | "gmail" | "talknote" | null;
-  readonly classification: string | null;
+  readonly connector: ConnectorKind | null;
+  readonly classification: ConversationClassification | null;
   readonly since: string | null;
 };
 
@@ -179,19 +192,33 @@ export interface LifeConsoleRepository {
   listConversations(filter: ConversationListFilter): Promise<Result<ReadonlyArray<Conversation>, AppError>>;
   getConversation(id: string): Promise<Result<Conversation, AppError>>;
   getSourceRepositoryMapping(connector: string, sourceId: string): Promise<Result<SourceRepositoryMapping | null, AppError>>;
-  classifyConversation(id: string, classification: string, now: string): Promise<Result<void, AppError>>;
+  classifyConversation(id: string, classification: ConversationClassification, now: string): Promise<Result<void, AppError>>;
   createTaskFromConversation(id: string, input: CreateTaskInput, conversationId: string, now: string): Promise<Result<Task, AppError>>;
   saveConversations(conversations: ReadonlyArray<NewConversation>, sourceLabel: string, watermark: string, now: string): Promise<Result<number, AppError>>;
-  listMeals(): Promise<Result<ReadonlyArray<Meal>, AppError>>;
-  createMeal(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>>;
-  createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>>;
-  getMealPhoto(id: string): Promise<Result<{ readonly contentType: string; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>>;
+  listMeals(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<Meal>, AppError>>;
+  listMealGallery(to: string): Promise<Result<MealGalleryPage, AppError>>;
+  listMealDayCounts(period: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<MealDayCount>, AppError>>;
+  createMealAndQueueNutrition(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>>;
+  updateMeal(id: string, input: UpdateMealInput): Promise<Result<void, AppError>>;
+  deleteMeal(id: string, now: string): Promise<Result<void, AppError>>;
+  restoreMeal(id: string): Promise<Result<void, AppError>>;
+  createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>>;
+  getMealPhoto(id: string): Promise<Result<{ readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>>;
   markMealPhotoUploaded(id: string, now: string): Promise<Result<void, AppError>>;
+  reserveMealPhotoBlur(input: { readonly photoId: string; readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<boolean, AppError>>;
+  getMealPhotoBlur(photoId: string): Promise<Result<{ readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>>;
+  markMealPhotoBlurUploaded(photoId: string, now: string): Promise<Result<void, AppError>>;
   getWeightGoal(): Promise<Result<WeightGoal | null, AppError>>;
   saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>>;
+  getCalorieBaseline(): Promise<Result<CalorieBaseline | null, AppError>>;
+  saveCalorieBaseline(input: CalorieBaseline | null): Promise<Result<void, AppError>>;
   listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   listWeightsForExport(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   createWeight(id: string, input: CreateWeightInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>>;
+  getAbstinenceGoal(): Promise<Result<AbstinenceGoal | null, AppError>>;
+  saveAbstinenceGoal(input: AbstinenceGoal | null): Promise<Result<void, AppError>>;
+  listAbstinenceEvents(): Promise<Result<ReadonlyArray<AbstinenceEvent>, AppError>>;
+  createAbstinenceEvent(id: string, input: { readonly occurredAt: string; readonly durationMinutes: number | null; readonly memo: string }, now: string): Promise<Result<void, AppError>>;
   getFinanceSummary(): Promise<Result<FinanceSummary, AppError>>;
   createFinanceTransaction(id: string, input: CreateFinanceTransactionInput, now: string, sourceJobId?: string): Promise<Result<void, AppError>>;
   createFinanceAdjustment(id: string, input: CreateFinanceAdjustmentInput, now: string): Promise<Result<void, AppError>>;
@@ -203,17 +230,23 @@ export interface LifeConsoleRepository {
   createRepository(id: string, name: string, localPath: string, now: string): Promise<Result<void, AppError>>;
   syncRepositories(input: SyncRepositoriesInput, ids: ReadonlyArray<string>, now: string): Promise<Result<number, AppError>>;
   upsertSourceRepositoryMapping(input: UpsertSourceRepositoryMappingInput, now: string): Promise<Result<void, AppError>>;
-  assignTaskRepository(taskId: string, repositoryId: string, role: string, now: string): Promise<Result<void, AppError>>;
+  assignTaskRepository(taskId: string, repositoryId: string, role: RepositoryRole, now: string): Promise<Result<void, AppError>>;
   registerRunner(input: RegisterRunnerInput, now: string): Promise<Result<void, AppError>>;
-  heartbeatRunner(runnerId: string, orcaStatus: string, now: string): Promise<Result<void, AppError>>;
+  heartbeatRunner(runnerId: string, orcaStatus: OrcaStatus, now: string): Promise<Result<void, AppError>>;
   listRunners(): Promise<Result<ReadonlyArray<RunnerHealth>, AppError>>;
   listConnectorHealth(): Promise<Result<ReadonlyArray<ConnectorHealth>, AppError>>;
   listJobs(): Promise<Result<ReadonlyArray<Job>, AppError>>;
-  createJob(input: { readonly id: string; readonly kind: string; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: string }): Promise<Result<Job, AppError>>;
+  createJob(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string; readonly deadlineAt?: string; readonly scheduleId?: string; readonly taskId?: string; readonly repositoryId?: string; readonly provider?: AgentProvider }): Promise<Result<Job, AppError>>;
+  /** 同じ種別の未完了ジョブがなければ 1 件だけ作る。既にあれば作らずに成功で返す。 */
+  createJobUnlessActive(input: { readonly id: string; readonly kind: JobKind; readonly idempotencyKey: string; readonly payloadJson: string; readonly now: string }): Promise<Result<void, AppError>>;
+  /** 種別ごとの最新のジョブ。同期が動いているかを画面へ出すために読む。 */
+  findLatestJob(kind: JobKind): Promise<Result<LatestJob | null, AppError>>;
+  /** lease が有効で実行中のジョブだけを返す。`startedAt` は runner が最初に claim した時刻。 */
+  findRunningJobExecution(jobId: string, leaseToken: string, kind: JobKind, now: string): Promise<Result<{ readonly startedAt: string } | null, AppError>>;
   claimJob(runnerId: string, leaseToken: string, leaseExpiresAt: string, now: string): Promise<Result<Job | null, AppError>>;
   heartbeatJob(jobId: string, input: JobHeartbeatInput, leaseExpiresAt: string, now: string): Promise<Result<{ readonly cancelRequested: boolean }, AppError>>;
   completeJob(jobId: string, input: CompleteJobInput, now: string): Promise<Result<void, AppError>>;
-  completeJobByCapability(jobId: string, leaseToken: string, outcome: string, errorCode: string | null, summary: string, now: string): Promise<Result<void, AppError>>;
+  completeJobByCapability(jobId: string, leaseToken: string, outcome: JobCompletionOutcome, errorCode: string | null, summary: string, now: string): Promise<Result<void, AppError>>;
   requestJobCancel(jobId: string, now: string): Promise<Result<void, AppError>>;
   validateLease(jobId: string, leaseToken: string): Promise<Result<boolean, AppError>>;
   createSchedule(id: string, input: CreateScheduleInput, now: string): Promise<Result<void, AppError>>;

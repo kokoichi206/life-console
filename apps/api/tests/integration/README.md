@@ -6,7 +6,9 @@ API の保存・取得・排他制御を、全 migration を適用したメモ�
 pnpm exec vitest run apps/api/tests/integration
 ```
 
-`pnpm test`、`pnpm check`、CI の対象です。
+`pnpm test`、`pnpm check`、CI の対象です。以下は主なテストです。
+
+食事・栄養・Strava・収集予定・買い物・作業確認・agent の保存テストも同じディレクトリに置きます。API と runner を同一プロセスで接続する栄養解析のテストと、Service Worker のテストはルートの `tests/` に残します。
 
 - `job-storage.test.ts`: ジョブの重複防止、定期設定、実行権限、中止と実行結果不明時の扱い
 - `reply-draft-storage.test.ts`: 会話の再同期、手動編集の保持、下書き保存の競合

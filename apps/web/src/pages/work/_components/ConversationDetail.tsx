@@ -15,8 +15,9 @@ import { serviceLabels } from "../work-search";
 import { CalendarDraftOptions, initialReplyCalendar } from "./CalendarDraftOptions";
 import { ReplyComposer, type DraftEdit } from "./ReplyComposer";
 
-export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, setEditing }: {
+export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, setEditing, onClassified }: {
   readonly conversation: Conversation;
+  readonly onClassified: (conversation: Conversation) => Promise<void>;
   readonly draft: ReplyDraft | undefined;
   readonly jobs: ReadonlyArray<Job>;
   readonly tasks: ReadonlyArray<Task>;
@@ -31,11 +32,17 @@ export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, 
     await Promise.all(["conversations", "tasks", "jobs", "dashboard", "reply-drafts"].map((key) => client.invalidateQueries({ queryKey: [key] })));
   };
   const generate = useMutation({ mutationFn: () => api.generateReplyDrafts({
-    connector: conversation.connector as keyof typeof serviceLabels, period: "7d", conversationId: conversation.id,
+    connector: conversation.connector, period: "7d", conversationId: conversation.id,
     ...(calendarEnabled ? { calendar } : {}),
   }), onSuccess: invalidateWork });
   const createTask = useMutation({ mutationFn: () => api.createTaskFromConversation(conversation.id), onSuccess: invalidateWork });
-  const classify = useMutation({ mutationFn: (classification: "reference" | "no_action") => api.classifyConversation(conversation.id, classification), onSuccess: invalidateWork });
+  const classify = useMutation({
+    mutationFn: (classification: "reference" | "no_action") => api.classifyConversation(conversation.id, classification),
+    onSuccess: async (_, classification) => {
+      await onClassified({ ...conversation, classification });
+      await invalidateWork();
+    },
+  });
   const reply = useMutation({ mutationFn: (body: string) => api.replyConversation(conversation.id, body), onSuccess: async () => {
     setSendBody(null);
     await invalidateWork();
@@ -57,9 +64,9 @@ export const ConversationDetail = ({ conversation, draft, jobs, tasks, editing, 
 
   return (
     <section aria-label="選択した会話" className="min-w-0 space-y-4">
-      <Panel className="gap-4 px-5">
+      <Panel mobileLayout="section" className="gap-4 px-5">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{serviceLabels[conversation.connector as keyof typeof serviceLabels]}</Badge>
+          <Badge variant="outline">{serviceLabels[conversation.connector]}</Badge>
           <time className="text-xs text-muted-foreground">{new Date(conversation.occurredAt).toLocaleString("ja-JP")}</time>
           {conversation.sourceUrl !== null && (
             <a className={buttonVariants({ variant: "ghost", size: "sm", className: "ml-auto" })} href={conversation.sourceUrl} target="_blank" rel="noreferrer">

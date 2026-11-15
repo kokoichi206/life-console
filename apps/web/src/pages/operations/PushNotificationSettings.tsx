@@ -20,9 +20,9 @@ type PushSettingsViewProps = {
 export const PushSettingsView = ({ state, configured, loading, pending, error, testAccepted, onEnable, onDisable, onTest }: PushSettingsViewProps) => {
   const enabled = state?.permission === "granted" && state.registered;
   return (
-    <Panel className="mb-4">
+    <Panel mobileLayout="section" className="mb-4">
       <SectionHeading eyebrow="NOTIFICATIONS" title="この端末への通知" />
-      <div className="space-y-3 px-5">
+      <div className="space-y-3 sm:px-5">
         <p className="text-sm" role="status">
           {loading
             ? "通知設定を確認しています。"
@@ -36,7 +36,7 @@ export const PushSettingsView = ({ state, configured, loading, pending, error, t
                         ? "この環境では通知の準備ができていません。"
                         : enabled ? "この端末への通知は有効です。" : "この端末への通知は無効です。"}
         </p>
-        <p className="text-xs text-muted-foreground">通知を押すと『同期・実行状況』を開きます。通知の許可は端末ごとに設定します。</p>
+        <p className="text-xs text-muted-foreground">テスト通知を押すと『同期・実行状況』を開きます。通知の許可は端末ごとに設定します。</p>
         <div className="flex flex-wrap gap-2">
           {!enabled && <Button type="button" disabled={loading || pending || !configured || state?.supported !== true || state.permission === "denied"} onClick={onEnable}>この端末で通知を有効にする</Button>}
           {state?.subscribed === true && <Button type="button" variant="outline" disabled={pending} onClick={onDisable}>この端末の通知を無効にする</Button>}

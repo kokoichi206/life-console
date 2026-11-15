@@ -6,17 +6,51 @@
 
 `develop` は開発環境、`main` は本番環境に対応します。Worker・D1・R2・Access・Secrets を環境ごとに分け、本番データを開発環境へコピーしません。ローカル用の架空 seed は実データ用 D1 に適用しないでください。
 
-[Terraform の定義と手順](../infra/terraform/README.md)で D1・写真用 R2・Access・Worker・Static Assets・Cron・公開 URL を管理します。`envs/development` と `envs/production` が module を組み合わせ、本人用 Access ポリシーも環境ごとに管理します。state は専用の非公開 R2 bucket `life-console-tfstate` 内の別キーに保存し、bucket 自体は `bootstrap/state-storage` が管理します。
+[Terraform の定義と手順](../infra/terraform/README.md)で D1・写真用 R2・Access・Worker 本体と観測設定を管理します。コード・Static Assets・bindings・Cron・公開 URL は Wrangler が管理します。state は専用の非公開 R2 bucket `life-console-tfstate` 内の環境別キーに保存し、bucket 自体は `bootstrap/state-storage` が管理します。
 
-`deploy.yml` が build・Terraform plan・SQL migration・Terraform apply を順に実行します。Worker と静的ファイルの配置も Terraform が担当し、Wrangler は bundle 作成と SQL migration に使います。D1 の接続先は Terraform output から取得します。GHA 用の入力と資格情報は [Terraform の手順](../infra/terraform/README.md#gha-からの配置)に従い、Repository Secrets と配置用 Environment Secrets に分けて登録します。
+品質検査・Storybook・Terraform 検証は PR の CI が担当します。`deploy.yml` は `detect → infra → upload → migration → deploy` の 5 job に分けます。最後に成功した同じブランチの deploy workflow からの変更を検出し、必要な job だけ実行します。初回と手動実行は全工程を実行します。失敗した deploy の変更は、次の push の検出対象に残ります。
 
-[開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例は SQL migration 用です。通常のアプリ配置には使いません。既存資源は import 済みで、GHA では削除・置き換えを含む plan を停止します。新規環境の初回準備は [Terraform の手順](../infra/terraform/README.md#gha-からの配置)を参照します。
+`infra` はコードなしの Worker・D1・R2 を作成し、その Worker ID で Access を設定します。`upload` は Web / API を build して Wrangler の version として登録し、`migration` が D1 の SQL を適用した後、`deploy` がその version ID に配信を切り替えて公開 URL と Cron を設定します。upload 時点では配信を切り替えず、preview URL も無効です。D1 ID と R2 名は、`deploy.yml` 内の step で適用済み Terraform output から取得し、`jq` で Wrangler の設定へ渡します。
+
+[開発用](../apps/api/wrangler.development.jsonc.example) / [本番用](../apps/api/wrangler.production.jsonc.example) の設定例を、配置と SQL migration に使います。Worker ID の入力・事前 import は不要です。旧リソース型の state を持つ環境では、次回 deploy の前に state を移行します。移行処理は通常の Terraform 定義に含めません。GHA は削除・置き換えを含む plan を停止します。state 保存先と資格情報の初回準備は [Terraform の手順](../infra/terraform/README.md#state-保存先の初回準備)を参照します。
 
 GitHub Environment の配置許可ブランチは `development` が `develop`、`production` が `main` のみとします。デプロイ用 API token は対象アカウントに絞り、Workers Scripts・D1・R2・Access Apps・Access Policies の編集権限を付けて環境別に発行します。配置用の編集 token は各 Environment に登録します。Terraform の環境別入力と PR 用の読み取り専用 token は Repository Secrets で管理します。
 
 同じリポジトリ内のブランチからの PR では、開発・本番の plan を取得し、変更資源と操作を環境ごとのコメントに表示します。push のたびに同じコメントを更新します。PR では apply や SQL migration は行いません。
 
 migration 後に配置が失敗すると、適用済みの migration は残ります。稼働中の Worker との互換性を保ってください。通常の変更は feature ブランチから `develop` へ取り込み、開発環境で確認後、`develop` → `main` の PR を merge commit でマージします。
+
+## 依存関係の更新
+
+[Renovate の設定](../.github/renovate.json5)で、更新 PR の向き先を `develop` に固定する。通常の更新ブランチは日本時間の月曜 0:00〜4:00 に作成し、脆弱性アラートに基づく更新は通常のスケジュールを待たない。npm の workspace 依存は minor・patch 更新をまとめ、major 更新は個別に検証する。推奨 preset に含まれる、互換性上同時に更新するパッケージのグループは維持する。GitHub Actions、Terraform、Android の依存は、それぞれグループ化する。GitHub Actions の更新は、JDK など action の入力に指定する実行環境の更新とは分ける。
+
+GitHub Actions のコミットは、[actions.lock](../.github/workflows/actions.lock)で推移的な依存関係まで固定する。ワークフローにはリリースタグを記述し、リポジトリ内の Terraform composite action は `$/` 参照で同じワークフローのコミットから実行する。別リポジトリの reusable workflow 呼び出しはロックファイルの対象外なので、完全な SHA に固定する。コンテナイメージも digest 固定を維持する。
+
+[workflow CI](../.github/workflows/ci-github-workflows.yml) は共通 reusable workflow を呼び出す。参照先を更新するときは、そこで実行する zizmor 本体が `actions.lock`・`$/` 参照に対応していることを確認する。
+
+初回は `gh extension install github/gh-actions-lock --pin v0.4.1` で生成 CLI を準備する。ワークフローや action の `uses` を追加・変更・削除したら、リポジトリ直下で `gh actions-lock` を実行し、生成されたロックファイルとワークフローの差分を一緒にレビューする。新たなローカル composite action を `./` 参照で追加した場合は、`gh actions-lock --migrate-local-actions` で `$/` 参照へ移行する。ロックファイルは手動編集しない。ローカルでは `gh actions-lock --verify-local` で網羅性、`gh actions-lock --verify` で参照元の検証まで確認できる。後者は [workflow CI](../.github/workflows/ci-github-workflows.yml)でも実行する。
+
+Renovate は action の更新時にロックファイルも再生成する。[公式の対応説明](https://docs.renovatebot.com/modules/manager/github-actions/#github-actions-lockfile-actionslock)にあるとおり、この連携は実験的な扱いなので、更新 PR では両方の差分と検証結果を確認する。`commit` の変更は実行コードの変更、`owner_id` / `repo_id` の変更は参照先リポジトリの変更として確認する。移動したタグやブランチを更新する場合は、上流の履歴を確認したうえで `gh actions-lock --relock` を実行する。ロックファイルだけの変更も Android CI とデプロイの全工程を対象にする。
+
+自動マージと自動 rebase は無効。更新 PR は CI と差分を確認して手動でマージする。ベースブランチの変更を取り込む必要があるときは、Renovate の PR または Dependency Dashboard から rebase を要求する。Node.js を更新する場合は、次節の常駐 runner の切り替えも確認する。
+
+Miniflare が要求する Undici 7 系は、`pnpm-workspace.yaml` の override で 8 系へ置き換えない。`packages/eslint-config` の TypeScript は typescript-eslint とカスタムルールが使う Compiler API の対応範囲に合わせ、6 系を維持する。これらの制限は親パッケージや利用 API の対応を確認してから見直す。
+
+利用開始には [Renovate GitHub App](https://github.com/apps/renovate) の対象リポジトリに `kokoichi206/life-console` を含め、この設定を `develop` に取り込む。[導入手順](https://docs.renovatebot.com/getting-started/installing-onboarding/)に従い、Dependency Dashboard と更新 PR で稼働を確認する。
+
+## Node.js の更新
+
+開発・テスト・ビルドに使う Node.js は、リポジトリ直下の [.node-version](../.node-version) に固定する。GitHub Actions の CI・Terraform plan・デプロイも `node-version-file` で同じ指定を読む。指定ファイルだけを更新した場合も、デプロイの変更検出は全工程を対象にする。
+
+root と runner の `package.json` の `engines.node` は、修正済みの Node.js 24 系と 26 系の範囲を指定する。標準の開発・検証環境は `.node-version` の 24 系であり、26 系へ切り替える指定ではない。npm パッケージとして依存する Undici は Node.js 内蔵版とは別に更新する。`pnpm-workspace.yaml` の override は、Miniflare の固定依存を含む修正前の 7 系だけに適用する。
+
+Mac の常駐 runner は LaunchAgent から起動する実体の Node.js パスも確認する。対話シェルの `node --version` や `.node-version` の変更だけでは、既に動いているプロセスのランタイムは変わらない。
+
+更新時は実行中・本人の回答待ちのジョブを確認し、処理を中断しない時点で切り替える。現行の runner 配布物を新しい Node.js と隔離したテスト API で起動確認した後、既存の起動スクリプトの Node.js パスを変更し、同じ LaunchAgent を再起動する。実行中プロセスの実体パスと、API に届く runner の観測を確認する。Node.js の更新のために配布物や資格情報を入れ替える必要はない。
+
+Cloudflare 上の Web/API は Workers runtime で動くため、この Node.js 指定は Workers の実行エンジンを選ぶものではない。GitHub Actions の JavaScript action 自体の Node.js も runner 側の管理であり、`setup-node` の指定は後続のコマンド実行用である。
+
+2026 年 10 月の影響と確認結果は [セキュリティ更新の調査記録](reviews/node-security-2026-10-22.md)を参照。
 
 ## Mac runner の接続
 
@@ -32,9 +66,19 @@ runner は起動すると API を poll し、実際の同期や job を実行し
 
 日程候補の生成には、Gmail 用アカウントの Calendar 認証権限も必要です。アカウント未指定時に自動選択するのは、Gmail 対応アカウントが 1 件の場合だけです。
 
+Slack の検索結果で表示名が空の場合は、投稿者 ID を表示します。Calendar の空き時間は、gog が予定なしの `busy` 配列を省略する応答にも対応します。カレンダー単位の取得エラーは、予定なしとは扱いません。
+
 外部サービスで返信した後は、会話の下書きを再作成すると履歴と返信判定を更新できます。送信 job が `lost` になった場合は、再度送信する前に元のサービスで投稿の有無を確認します。
 
-体重 CSV の列は `date,weight_kg,ma7_kg,window_samples`。家計 CSV は [サンプル](../apps/runner/examples/finance.csv)、体重の Obsidian 連携は [書き出し設定](weight-obsidian-export.md) を参照します。実データ・資格情報・agent transcript はリポジトリへ含めず、設定例と検証資料には架空データを使います。
+Obsidian へ書き出す体重 CSV の列は `date,weight_kg,ma7_kg,window_samples,body_fat_percent`。体脂肪率は任意で、未記録は空欄。家計 CSV は [サンプル](../apps/runner/examples/finance.csv)、体重の Obsidian 連携は [書き出し設定](weight-obsidian-export.md) を参照します。実データ・資格情報・agent transcript はリポジトリへ含めず、設定例と検証資料には架空データを使います。
+
+## 連絡の定期実行
+
+『同期・実行状況』で会話同期を登録・変更します。接続監視が正常でも、定期実行が未登録なら自動では取り込みません。未設定のサービスも表示するため、接続確認と取り込みの登録状態を分けて確認できます。
+
+初回を今すぐ実行する指定がなければ、登録時刻から指定間隔後が初回になります。頻度変更・再開時も、その時点から指定間隔後に次回を設定します。停止は新しい定期実行の予約を止める操作で、既に予約された job や実行中の同期は中止しません。必要なら実行履歴で中止します。『今すぐ同期』は停止中・未登録でも使えますが、同じサービスの同期が待機・実行中なら追加を拒否します。
+
+同じサービスの定期実行の二重登録と、古い画面からの上書きを拒否します。既存の体重書き出しなど、会話同期以外のスケジュールはこの管理画面の変更対象外です。アカウント・取得範囲の変更は引き続き Mac の接続設定で行います。
 
 ## ホーム画面と通知
 
@@ -42,8 +86,32 @@ Android の Chrome は『ホーム画面に追加』→『インストール』�
 
 Web Push は API に VAPID の公開鍵・秘密鍵と本人の連絡先を設定して使います。鍵は一度生成したものを継続して使い、ローカルでは `apps/api/.dev.vars`、クラウドでは対象環境の Wrangler secret に保存します。
 
-『同期・実行状況』の『この端末への通知』で端末ごとに有効化し、『テスト通知を送る』で OS に届くことを確認します。iPhone / iPad は iOS / iPadOS 16.4 以降で、ホーム画面に追加した Web アプリから通知を許可します。通知を押すと『同期・実行状況』を開きます。
+『同期・実行状況』または『やること』の『カレンダー』にある『この端末への通知』で端末ごとに有効化し、『テスト通知を送る』で OS に届くことを確認します。iPhone / iPad は iOS / iPadOS 16.4 以降で、ホーム画面に追加した Web アプリから通知を許可します。テスト通知は『同期・実行状況』、収集日の通知は『やること』の対象予定を開きます。収集通知の時刻・停止条件は [収集カレンダー](calendar.md) を参照してください。
 
 runner と外部 CLI は起動時と 2 分ごとに確認します。runner は最終受信から 3 分で遅延、5 分で応答なしと判定します。認証切れ・権限不足・アカウント未設定は初回から、それ以外は 2 回連続の失敗で通知します。通信断中の観測は Mac に保存し、復旧後に履歴へ反映します。
 
 使わない連携は `LIFE_CONSOLE_MONITOR_SERVICES` から外します。runner の初回接続前から未着を検知したい場合は、API の `MONITORED_RUNNER_IDS` に対象 ID を設定します。未指定なら初回接続後から監視します。
+
+## D1 の使用量と自動更新
+
+栄養一覧は定期取得せず、表示・復帰・保存後・手動更新で取得する。ジョブの自動取得は待機・実行中が 15 秒、通常時が 60 秒。ホーム集計・監視状態・連絡一覧・同期スケジュールは 60 秒、監視履歴の最新ページは 120 秒。返信案の取得は 15 秒、agent の質問一覧は 15 秒、回答受信コマンドは 5 秒。操作後の再取得と画面へ戻ったときの更新は維持する。
+
+元サービスの同期スケジュール、監視の観測間隔と未着判定、毎分の Cron は別の処理であり、画面更新の間隔と混同しない。D1 の読み取りは走査行数なので、頻度と各 SQL の走査量を分けて調べる。実績、索引と判定対象の見直し、ローカル比較は [D1 の読み取り削減](design/d1-read-usage.md) を参照。
+
+監視の復旧予約は、障害の `recovery_reservation_pending` が有効な対象だけを部分索引から検索する。その障害の受付済み警告から端末への復旧を予約し、警告への予約済み時刻と障害の確認待ち解除を同じ D1 batch で保存する。警告の受付が復旧より後に確定した場合は、有効な通知 ID・lease を確認して、その障害だけを再確認待ちへ戻す。購読解除済みの端末への遡及通知は行わない。
+
+migration `0024` は既存の復旧済み障害を一度だけ確認待ちにする。初回は履歴の処理量が発生するため、定常時の読み取りと分けて見る。本番配置後は新 SQL の平均走査量と回数、UTC 日単位のアカウント全 DB の使用量を確認する。日次上限によって処理が停止した時間帯を、削減に成功した実績として扱わない。
+
+## 健康ページの共有
+
+同じ Worker と Web 配信で、本人用 `/health` と共有用 `/share/health/:token` を提供します。画面と健康の読み取り処理は共通です。共有画面は本人用のナビゲーションを表示せず、更新操作を非活性にします。共有側の API `/api/v1/share/:token/*` は健康の GET / HEAD だけを受け付け、トークンを照合します。表示や条件変更で外部 API 呼び出し・ジョブ予約は行いません。
+
+共有リンクは環境ごとに 1 本です。`openssl rand -hex 32` で生成した 64 桁の小文字 16 進数を、対象 Worker の `HEALTH_SHARE_TOKEN` secret に設定します。ローカルでは `apps/api/.dev.vars` に置きます。値をコード・Terraform・検証記録へ保存しないでください。未設定では共有 API を拒否し、本人画面の『共有リンク』も非活性になります。
+
+本人用画面で期間などを選んで『共有リンク』を押すと、その条件付き URL を取得できます。共有相手は条件を自由に変えられるため、渡した期間だけに閲覧範囲を制限する機能ではありません。食事写真・メモを含む健康データの全期間が対象です。個別の相手やリンクごとの期限・失効は管理しません。
+
+停止は `HEALTH_SHARE_TOKEN` secret の削除、再発行は新しい値への変更で行います。変更が稼働中の Worker に反映されると、以前のリンクからの取得は拒否されます。既に相手が見たデータや保存した写真までは取り消せません。共有の HTML・API・写真には `Cache-Control: no-store` と `Referrer-Policy: no-referrer` を設定します。
+
+Cloudflare Access は Terraform の `health-share-access` モジュールで `/share/health/*`、`/api/v1/share/*`、共通の `/assets/*`・`/icons/*`・`/manifest.webmanifest` だけを Bypass にします。本人用 API と `/api/v1/health-share` は既存の本人用 Access、runner API は既存の Service Auth のままです。静的ファイルに秘密値を含めず、D1 / R2 のデータは Worker のトークン検証後に取得します。
+
+配置時には Terraform とコードの反映後、未ログインのブラウザで有効リンクの表示、不正・停止済みリンクの拒否、共有 API での更新拒否、本人用 `/health` と `/api/v1/weights` の Access 認証を確認します。ローカルテストと Terraform の mock テストでは Cloudflare 上の認証の優先順位までは検証できません。

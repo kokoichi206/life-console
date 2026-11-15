@@ -1,19 +1,46 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
+import type { HealthSearch } from "./health-search";
 import { HealthPage } from "./HealthPage";
 
 export const HealthRoutePage = () => {
   const search = useSearch({ from: "/health" });
   const navigate = useNavigate({ from: "/health" });
   return (
+    <HealthRouteContent search={search} navigate={(options) => { void navigate(options); }} />
+  );
+};
+
+export const HealthRouteContent = ({ search, navigate }: {
+  readonly search: HealthSearch;
+  readonly navigate: (options: { search: HealthSearch; replace: boolean; resetScroll: false }) => void;
+}) => {
+  return (
     <HealthPage
       search={search}
       onRangeChange={(range) => {
-        void navigate({ search: { ...search, range: undefined, from: undefined, to: undefined, ...range }, replace: true, resetScroll: false });
+        void navigate({ search: { ...search, range: undefined, from: undefined, to: undefined, calories: undefined, pfcDay: undefined, ...range }, replace: true, resetScroll: false });
+      }}
+      onPfcDayChange={(pfcDay) => {
+        void navigate({ search: { ...search, pfcDay, meal: undefined }, replace: false, resetScroll: false });
+      }}
+      onMealLayoutChange={(mealLayout) => {
+        void navigate({ search: { ...search, mealLayout: mealLayout === "horizontal" ? undefined : mealLayout }, replace: true, resetScroll: false });
+      }}
+      onOverlayChange={(overlay) => {
+        void navigate({ search: { ...search, overlay }, replace: true, resetScroll: false });
+      }}
+      calorieDays={search.calories ?? 7}
+      onCalorieDaysChange={(days) => {
+        void navigate({ search: { ...search, calories: days > 7 ? days : undefined }, replace: true, resetScroll: false });
       }}
       goalEntryOpen={search.entry === "goal"}
       onGoalEntryOpenChange={(open) => {
         void navigate({ search: { ...search, entry: open ? "goal" : undefined, meal: undefined }, replace: !open, resetScroll: false });
+      }}
+      baselineEntryOpen={search.entry === "baseline"}
+      onBaselineEntryOpenChange={(open) => {
+        void navigate({ search: { ...search, entry: open ? "baseline" : undefined, meal: undefined }, replace: !open, resetScroll: false });
       }}
       selectedMealId={search.entry === undefined ? search.meal : undefined}
       onSelectMeal={(id) => {

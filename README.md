@@ -2,54 +2,25 @@
 
 仕事の連絡とタスク、体重と食事、収支と資産をまとめた、自分用の Web アプリ。
 
-## 仕事
+## 主な機能
 
-Slack・Chatwork・Gmail・Talknote の連絡を集め、返信や作業が必要なものを整理します。会話から返信案を作り、タスクにしたものは作業リポジトリと紐づけて Codex / Claude Code へ渡せます。
+- タスクと買い物の管理
+- Slack・Chatwork・Gmail・Talknote の連絡整理と返信案の作成
+- Codex / Claude Code への作業依頼と GitHub へのタスク昇格
+- 体重・食事・運動の記録と振り返り
+- 収支・資産の管理
 
-- 返信案は会話履歴と本人の返信状況を踏まえて生成。Gmail と同じアカウントのメインカレンダーから日程候補を提案
-- 下書きは本人が確認・編集。Slack / Chatwork はアプリから送信でき、Gmail / Talknote はコピーして元のサービスで送信
-- coding agent は Orca 経由で既存の checkout または新しい worktree に起動
-- GitHub で追跡したいタスクは Issue・非公開 Project へ昇格
+## 開発環境
 
-タスクの管理元は Life Console。GitHub への昇格は一方向で、agent の作業環境は Mac に残ります。
+Node.js は [.node-version](.node-version)、pnpm は [package.json](package.json) の `packageManager` に指定したバージョンを使う。CI とデプロイも同じ Node.js 指定を参照する。初回は `pnpm install --frozen-lockfile`、検証は `pnpm check`。pnpm のバージョンを変更したときは `pnpm install` で lockfile の pnpm 本体の固定情報も更新し、差分をコミットする。健康読み取り skill のテストには Python 3.11 以降と uv を使う。
 
-## 健康と家計
+Mac の常駐 runner の更新方法は [運用上の注意](docs/operations.md#nodejs-の更新)、2026 年 10 月のセキュリティ更新の影響は [調査記録](docs/reviews/node-security-2026-10-22.md)を参照。
 
-| 対象 | 記録・振り返り |
-| --- | --- |
-| 体重 | 実測値と 7 日移動平均、目標への進捗。過去の CSV 取り込みと Obsidian への書き出し |
-| 食事 | 写真とメモによる記録。カロリー・栄養素の自動推定は未実装 |
-| 家計 | 月ごとの収支、カテゴリ別・支払手段別の支出、資産配分と純資産の推移。手入力と CSV 取り込み |
+健康記録を他のリポジトリの AI agent から読む場合は、[読み取り skill の導入と更新](docs/agent-configuration.md#健康記録を読む-skill-の配布)を参照。
 
-スマホのホーム画面に追加して使えます。Android には体重・食事の入力を直接開くウィジェットもあります。
+pnpm 12 は、公開から 24 時間が経過していない依存を lockfile 内も含めて拒否する。公開待機期間の検査で停止した場合は、待機期間を満たすバージョンで lockfile を再生成する。
 
-## 構成
-
-```mermaid
-flowchart TB
-  web["PC / スマホ: React"]
-
-  subgraph cloud["Cloudflare"]
-    api["Workers: Hono API / Web 配信"]
-    db[("D1: 記録・会話・タスク・job")]
-    photos[("R2: 食事写真")]
-    api <--> db
-    api <--> photos
-  end
-
-  subgraph mac["本人の Mac"]
-    runner["runner"]
-    cli["サービス別 CLI / Claude Code / Orca"]
-    runner --> cli
-  end
-
-  web <-->|"Access 認証"| api
-  runner <-->|"job の取得・結果報告"| api
-```
-
-記録と写真の保存は Cloudflare で完結するため、Mac が止まっていても使えます。外部サービスとの同期や AI の実行は Mac の runner が担当し、各サービスの資格情報をローカルに保持します。
-
-同期・送信・agent 起動は job として処理し、実行経過と結果を Web で確認できます。定期実行は D1 のスケジュールと Cloudflare Cron で管理。runner や外部 CLI の異常・復旧は Web Push で通知します。
+依存パッケージの install script の実行可否は [pnpm-workspace.yaml](pnpm-workspace.yaml) の `allowBuilds` に指定する。esbuild・workerd は実行ファイルの準備に必要なため許可する。unrs-resolver は対象環境の optional dependency に含まれるバイナリを使い、postinstall の追加取得は実行しない。MSW の Service Worker は Git で管理するため、MSW の更新時に `pnpm --filter @life-console/web exec msw init .storybook/public --save` で生成して差分を確認する。
 
 ## ライセンス
 

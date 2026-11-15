@@ -1,4 +1,5 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import type { TaskStatus } from "@life-console/contracts";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { CountBadge, EmptyState, Eyebrow, MetricCard, Panel, SectionHeading, StatusDot } from "../../components/DesignSystem";
@@ -6,8 +7,13 @@ import { LineChart } from "../../components/LineChart";
 import { PageHeader } from "../../components/PageHeader";
 import { Badge } from "../../components/ui/badge";
 import { buttonVariants } from "../../components/ui/Button";
+import { AbstinencePanel } from "../../features/abstinence/AbstinencePanel";
+import { collectionCalendarQuery } from "../../features/calendar/queries";
 import { dashboardQuery } from "../../features/overview/queries";
 import { cn } from "../../lib/class-names";
+
+import { AgentQuestions } from "./_components/AgentQuestions";
+import { UpcomingCalendarPanel } from "./UpcomingCalendarPanel";
 
 const money = (value: number): string => new Intl.NumberFormat("ja-JP", {
   style: "currency",
@@ -15,11 +21,14 @@ const money = (value: number): string => new Intl.NumberFormat("ja-JP", {
   maximumFractionDigits: 0,
 }).format(value);
 
-const statusLabel = (status: string): string => ({
+/** 英語の内部識別子を画面へ出さない。候補を足すときは日本語の表示名も足す。 */
+const taskStatusLabels: Readonly<Record<TaskStatus, string>> = {
   inbox: "受信箱",
   todo: "未着手",
   doing: "進行中",
-}[status] ?? status);
+  done: "完了",
+  canceled: "中止",
+};
 
 const HealthItem = ({ healthy, label, detail }: { readonly healthy: boolean; readonly label: string; readonly detail: string }) => (
   <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5">
@@ -31,6 +40,9 @@ const HealthItem = ({ healthy, label, detail }: { readonly healthy: boolean; rea
 
 export const DashboardPage = () => {
   const { data } = useSuspenseQuery(dashboardQuery);
+  const calendar = useQuery(collectionCalendarQuery);
+  const preparationIds = new Set(calendar.data?.events.flatMap((event) => event.preparation === null ? [] : [event.preparation.id]));
+  const otherTasks = data.todayTasks.filter((task) => !preparationIds.has(task.id));
   const latestWeight = data.weights.at(-1);
   const runner = data.runners[0];
   const connectorErrorCount = data.connectors.filter((connector) => connector.lastErrorCode !== null).length;
@@ -43,15 +55,18 @@ export const DashboardPage = () => {
         actions={<CountBadge>{new Intl.DateTimeFormat("ja-JP", { dateStyle: "long" }).format(new Date())}</CountBadge>}
       />
       <nav className="mb-5 flex flex-wrap gap-2" aria-label="クイック入力">
-        <Link className={buttonVariants()} to="/tasks" search={{ create: true }}>タスクを追加</Link>
+        <Link className={buttonVariants()} to="/todos" hash="task-entry">タスクを追加</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/health" search={{ entry: "meal" }}>食事を記録</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/health" search={{ entry: "weight" }}>体重を記録</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/finance" hash="expense-entry">支出を記録</Link>
         <Link className={buttonVariants({ variant: "outline" })} to="/operations" hash="note-entry">メモを記録</Link>
       </nav>
+      <UpcomingCalendarPanel />
+      <AbstinencePanel />
+      <AgentQuestions />
       <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="今日のタスク"
+          label="未完了のタスク"
           value={data.todayTasks.length}
           detail={`${data.todayTasks.filter((task) => task.status === "doing").length}件が進行中`}
           tone="orange"
@@ -71,33 +86,33 @@ export const DashboardPage = () => {
         />
       </section>
       <div className="mb-4 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <Panel>
+        <Panel mobileLayout="section">
           <SectionHeading
             eyebrow="FOCUS"
-            title="対応するタスク"
-            action={<Link className={buttonVariants({ variant: "link", size: "sm" })} to="/tasks" search={{ view: "tasks" }}>すべて見る</Link>}
+            title="その他のタスク"
+            action={<Link className={buttonVariants({ variant: "link", size: "sm" })} to="/todos">すべて見る</Link>}
           />
-          <div className="px-5">
-            {data.todayTasks.slice(0, 5).map((task) => (
+          <div className="sm:px-5">
+            {otherTasks.slice(0, 5).map((task) => (
               <article key={task.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t py-3 first:border-t-0">
                 <StatusDot status={task.status} />
                 <div className="min-w-0">
                   <strong className="block truncate text-sm">{task.title}</strong>
                   <small className="text-[0.7rem] text-muted-foreground">{task.repositoryName ?? "リポジトリ未選択"}</small>
                 </div>
-                <Badge variant="secondary">{statusLabel(task.status)}</Badge>
+                <Badge variant="secondary">{taskStatusLabels[task.status]}</Badge>
               </article>
             ))}
-            {data.todayTasks.length === 0 && <EmptyState>今日対応するタスクはありません。</EmptyState>}
+            {otherTasks.length === 0 && <EmptyState>未完了のタスクはありません。</EmptyState>}
           </div>
         </Panel>
-        <Panel>
+        <Panel mobileLayout="section">
           <SectionHeading
             eyebrow="WEIGHT"
             title="体重の推移"
             action={<Link className={buttonVariants({ variant: "link", size: "sm" })} to="/health">詳細</Link>}
           />
-          <div className="px-5">
+          <div className="sm:px-5">
             <LineChart
               points={data.weights.slice(-21).map((point) => ({
                 label: new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(new Date(point.occurredAt)),
@@ -109,10 +124,10 @@ export const DashboardPage = () => {
           </div>
         </Panel>
       </div>
-      <Panel className="grid gap-5 px-5 lg:grid-cols-[1.2fr_repeat(4,1fr)] lg:items-center">
+      <Panel mobileLayout="section" className="grid gap-5 px-5 lg:grid-cols-[1.2fr_repeat(4,1fr)] lg:items-center">
         <div>
-          <Eyebrow>LOCAL SYSTEM</Eyebrow>
-          <h2 className="mt-1.5 text-base font-semibold">Runner と connector</h2>
+          <Eyebrow className="max-sm:hidden">LOCAL SYSTEM</Eyebrow>
+          <h2 className="mt-1.5 text-xl font-semibold sm:text-base">Runner と connector</h2>
         </div>
         <HealthItem healthy={runner !== undefined} label={runner?.name ?? "runner 未登録"} detail={runner === undefined ? "Mac runner を起動してください" : `最終 heartbeat ${new Date(runner.lastHeartbeatAt).toLocaleString("ja-JP")}`} />
         <HealthItem healthy={runner?.orcaStatus === "healthy"} label="Orca" detail={runner?.orcaStatus ?? "unknown"} />

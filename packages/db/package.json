@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "@life-console/domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

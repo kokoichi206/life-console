@@ -1,6 +1,6 @@
 # Life Console の開発ガイド
 
-本人用のダッシュボード。Web/API は Cloudflare、外部 CLI と coding agent の実行は Mac の runner が担当する。現行機能は [README](README.md)、記録済みの要件は [要件定義](docs/requirements.md) で確認する。
+本人用のダッシュボード。Web/API は Cloudflare、外部 CLI と coding agent の実行は Mac の runner が担当する。現行機能は [機能と操作](docs/features.md)、記録済みの要件は [要件定義](docs/requirements.md) で確認する。
 
 ## 作業の原則
 
@@ -21,7 +21,7 @@
 | API、runner、共通型、環境変数 | [サーバー境界](docs/agent-rules/server-boundaries.md)、[core](packages/core/README.md)、[env](packages/env/README.md) |
 | DB schema、migration、永続化 | [DB](docs/agent-rules/database.md)、[DB パッケージ](packages/db/README.md) |
 | Web、URL、共通 UI、Storybook | [UI](docs/agent-rules/web-ui.md)、[Web 開発](apps/web/README.md) |
-| 外部 CLI、会話取り込み、返信生成、agent job | [外部実行](docs/agent-rules/runner-integrations.md)、README の該当機能 |
+| 外部 CLI、会話取り込み、返信生成、agent job | [外部実行](docs/agent-rules/runner-integrations.md)、[機能と操作](docs/features.md)、[栄養解析](docs/nutrition-analysis.md) |
 | lint の変更・違反 | [ESLint](packages/eslint-config/README.md) と該当ルールの README |
 | Android などの native client | [クライアント](clients/README.md)、[Android](clients/android/README.md) |
 | AI 設定、rule、skill | [ハーネスの管理](docs/agent-configuration.md) |
@@ -29,11 +29,11 @@
 
 ## 実装から検証まで
 
-Node.js 24 以上、pnpm は `package.json` の `packageManager` を使う。初回は `pnpm install --frozen-lockfile`。ローカル API と Web は `pnpm local:setup`、`pnpm dev` で準備する。runner は外部 CLI やジョブを実行するため、画面確認だけなら起動しない。
+Node.js は `.node-version` のバージョン、pnpm は `package.json` の `packageManager` を使う。初回は `pnpm install --frozen-lockfile`。ローカル API と Web は `pnpm local:setup`、`pnpm dev` で準備する。runner は外部 CLI やジョブを実行するため、画面確認だけなら起動しない。
 
 - 実装中は変更箇所のテストと lint・型検査を選んで実行する。バグ修正では再現条件を確認し、継続して守る必要がある挙動に回帰テストを追加する。
 - コード・実行設定の変更を仕上げるときは `pnpm check` を実行する。AI 指示・ルール・スキル本文のみなら `pnpm harness:check` と参照先・内容の確認でよい。CI は `develop` 向け PR で全チェックを実行する。
-- `pnpm check` はハーネスの整合性、lint、型検査、Vitest、Web/API/runner の build、実 API・D1・runner の E2E、Storybook の build とブラウザテストを実行する。Chromium の初回準備は `pnpm --filter @life-console/web exec playwright install chromium`。
+- `pnpm check` はハーネスの整合性、健康読み取り skill の Python テスト、lint、型検査、Vitest、Web/API/runner の build、実 API・D1・runner の E2E、Storybook の build とブラウザテストを実行する。skill テストには Python 3.11 以降と uv を使う。Chromium の初回準備は `pnpm --filter @life-console/web exec playwright install chromium`。
 - テストの配置は [API の DB 結合テスト](apps/api/tests/integration/README.md) と [API・runner の E2E](e2e/README.md) を参照する。`pnpm test:e2e` でビルドと E2E を実行できる。
 - UI や実行経路を変更したら [verify-implementation](.agents/skills/verify-implementation/SKILL.md) を使い、要求された利用経路と最終結果を確認する。Storybook やスタブだけで実データ確認済みとはしない。
 - 完了前は [self-review](.agents/skills/self-review/SKILL.md) の該当観点で差分を点検する。確認済み、未確認、失敗したチェックを分けて報告する。

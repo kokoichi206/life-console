@@ -6,12 +6,29 @@ import { router } from "./router";
 
 const createTestRouter = (entry: string) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  return createRouter({ ...router.options, history: createMemoryHistory({ initialEntries: [entry] }), context: { queryClient } });
+  return createRouter({ ...router.options, isServer: false, origin: "http://localhost", history: createMemoryHistory({ initialEntries: [entry] }), context: { queryClient } });
 };
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("アプリのルーティング", () => {
+  it.each([
+    { path: "/health", calories: [14] },
+    { path: "/health", calories: { toString: null } },
+    { path: `/share/health/${"ab".repeat(32)}`, calories: [14] },
+    { path: `/share/health/${"ab".repeat(32)}`, calories: { toString: null } },
+  ])("$path で JSON の不正な表示日数 $calories があっても健康ページを読み込む", async ({ path, calories }) => {
+    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") || url.endsWith("calorie-baseline") ? null : [] })));
+    vi.stubGlobal("fetch", fetchResponse);
+    const search = new URLSearchParams({ range: "d90", calories: JSON.stringify(calories) });
+    const testRouter = createTestRouter(`${path}?${search}`);
+    await testRouter.load();
+    await testRouter.navigate({ to: ".", search: true, replace: true });
+    expect(testRouter.state.matches.at(-1)?.status).toBe("success");
+    expect(testRouter.state.location.search).toEqual({ range: "d90" });
+    expect(testRouter.state.matches.at(-1)?.search).toEqual({ range: "d90" });
+  });
+
   it("URL の不正なフィルターと未定義項目を、遷移後の画面へ引き継がない", async () => {
     const testRouter = createTestRouter("/tasks?view=tasks&service=%5B%22gmail%22%5D&period=invalid&unexpected=keep");
     await testRouter.load();
@@ -21,7 +38,7 @@ describe("アプリのルーティング", () => {
   });
 
   it("入力を閉じても表示期間を保持し、URL から開き直せる", async () => {
-    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") ? null : [] })));
+    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") || url.endsWith("calorie-baseline") ? null : [] })));
     vi.stubGlobal("fetch", fetchResponse);
     const testRouter = createTestRouter("/health?entry=weight&range=d90");
     await testRouter.load();
@@ -33,14 +50,26 @@ describe("アプリのルーティング", () => {
   });
 
   it("Query のキャッシュを消した後は、直前に事前読み込みしたページも再取得する", async () => {
-    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") ? null : [] })));
+    const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") || url.endsWith("calorie-baseline") ? null : [] })));
     vi.stubGlobal("fetch", fetchResponse);
     const testRouter = createTestRouter("/tasks");
     await testRouter.load();
     await testRouter.preloadRoute({ to: "/health" });
-    expect(fetchResponse).toHaveBeenCalledTimes(3);
+    expect(fetchResponse).toHaveBeenCalledTimes(4);
     testRouter.options.context.queryClient.clear();
     await testRouter.preloadRoute({ to: "/health" });
-    expect(fetchResponse).toHaveBeenCalledTimes(6);
+    expect(fetchResponse).toHaveBeenCalledTimes(8);
   });
+});
+
+it("共有ルートは共有 API だけを読み、編集用の URL 条件を除去する", async () => {
+  const fetchResponse = vi.fn((url: string) => Promise.resolve(Response.json({ data: url.endsWith("weight-goal") || url.endsWith("calorie-baseline") ? null : [] })));
+  vi.stubGlobal("fetch", fetchResponse);
+  const token = "ab".repeat(32);
+  const testRouter = createTestRouter(`/share/health/${token}?entry=weight&strava=connected&range=d90&calories=14`);
+  await testRouter.load();
+  await testRouter.navigate({ to: "/share/health/$token", params: { token }, search: true, replace: true });
+  expect(testRouter.state.location.search).toEqual({ range: "d90", calories: 14 });
+  expect(fetchResponse.mock.calls.length).toBeGreaterThan(0);
+  expect(fetchResponse.mock.calls.every(([url]) => url.includes(`/api/v1/share/${token}/`))).toBe(true);
 });

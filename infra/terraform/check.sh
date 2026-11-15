@@ -15,10 +15,6 @@ while IFS= read -r configuration_file; do
   cp "$terraform_root/$configuration_file" "$check_terraform_root/$configuration_file"
 done < "$check_directory/configuration-files"
 
-mkdir -p "$check_directory/repository/apps/api/dist" "$check_directory/repository/apps/web/dist"
-cp "$terraform_root/tests/fixtures/index.js" "$check_directory/repository/apps/api/dist/index.js"
-cp "$terraform_root/tests/fixtures/index.html" "$check_directory/repository/apps/web/dist/index.html"
-
 for configuration in bootstrap/state-storage envs/development envs/production; do
   configuration_directory="$check_terraform_root/$configuration"
   terraform -chdir="$configuration_directory" init -backend=false -input=false -lockfile=readonly

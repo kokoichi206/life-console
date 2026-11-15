@@ -1,3 +1,4 @@
+import type { AssetKind } from "@life-console/contracts";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useState, type CSSProperties, type FormEvent } from "react";
 
@@ -19,6 +20,10 @@ const money = (value: number): string => new Intl.NumberFormat("ja-JP", {
   maximumFractionDigits: 0,
 }).format(value);
 
+/** 英語の内部識別子を画面へ出さない。候補を足すときは日本語の表示名も足す。 */
+const assetKindLabels: Readonly<Record<AssetKind, string>> = { cash: "現金", investment: "金融資産", debt: "負債" };
+const assetKindDotClasses: Readonly<Record<AssetKind, string>> = { cash: "bg-chart-1", investment: "bg-chart-4", debt: "bg-chart-2" };
+
 const localDateTime = (): string => {
   const date = new Date();
   date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
@@ -35,7 +40,7 @@ export const FinancePage = () => {
   const [payee, setPayee] = useState("");
   const [occurredAt, setOccurredAt] = useState(localDateTime());
   const [accountName, setAccountName] = useState("");
-  const [assetKind, setAssetKind] = useState<"cash" | "investment" | "debt">("cash");
+  const [assetKind, setAssetKind] = useState<AssetKind>("cash");
   const [balanceYen, setBalanceYen] = useState("");
   const [analysisMonth, setAnalysisMonth] = useState(new Date().toISOString().slice(0, 7));
   const [adjustmentTransactionId, setAdjustmentTransactionId] = useState("");
@@ -133,20 +138,20 @@ export const FinancePage = () => {
         <MetricCard label="純資産" value={<span className="text-xl">{money(data.netWorthYen)}</span>} detail="資産 − 負債" tone="gold" />
       </section>
       <div className="mb-4 grid gap-4 xl:grid-cols-2">
-        <Panel>
+        <Panel mobileLayout="section">
           <SectionHeading eyebrow="EXPENSES" title="カテゴリ別支出" />
-          <div className="grid gap-3 px-5">
+          <div className="grid gap-3 sm:px-5">
             {periodCategories.map((entry) => (
               <div key={entry.category} className="grid grid-cols-[90px_1fr_auto] items-center gap-3 text-xs">
                 <span className="truncate text-muted-foreground">{entry.category}</span>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted"><i className="block h-full rounded-full bg-primary" style={{ width: `${periodExpenseYen === 0 ? 0 : entry.amountYen / periodExpenseYen * 100}%` }} /></div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted"><i className="block h-full w-(--expense-width) rounded-full bg-primary" style={{ "--expense-width": `${periodExpenseYen === 0 ? 0 : entry.amountYen / periodExpenseYen * 100}%` } as CSSProperties} /></div>
                 <strong className="text-right tabular-nums">{money(entry.amountYen)}</strong>
               </div>
             ))}
             {periodCategories.length === 0 && <EmptyState>この月の支出はありません。</EmptyState>}
           </div>
-          <h3 className="mt-6 px-5 text-xs font-semibold">支払手段</h3>
-          <div className="mt-3 flex flex-wrap gap-2 px-5">
+          <h3 className="mt-6 sm:px-5 text-xs font-semibold">支払手段</h3>
+          <div className="mt-3 flex flex-wrap gap-2 sm:px-5">
             {periodPaymentMethods.map((entry) => (
               <Badge variant="secondary" key={entry.paymentMethod}>
                 {entry.paymentMethod}
@@ -156,10 +161,10 @@ export const FinancePage = () => {
             ))}
           </div>
         </Panel>
-        <Panel>
+        <Panel mobileLayout="section">
           <SectionHeading eyebrow="ALLOCATION" title="資産配分" />
           <div
-            className="relative mx-auto grid aspect-square w-44 place-items-center rounded-full bg-[conic-gradient(var(--chart-1)_0_var(--cash),var(--chart-4)_var(--cash)_var(--investment),var(--chart-2)_var(--investment)_100%)] before:absolute before:size-28 before:rounded-full before:bg-card"
+            className="relative mx-auto grid aspect-square w-44 place-items-center rounded-full bg-[conic-gradient(var(--chart-1)_0_var(--cash),var(--chart-4)_var(--cash)_var(--investment),var(--chart-2)_var(--investment)_100%)] before:absolute before:size-28 before:rounded-full before:bg-card max-sm:before:bg-background"
             style={{
               "--cash": `${cashAllocationPercentage}%`,
               "--investment": `${cashAllocationPercentage + investmentAllocationPercentage}%`,
@@ -170,27 +175,27 @@ export const FinancePage = () => {
               <small className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">純資産</small>
             </span>
           </div>
-          <div className="mt-5 grid gap-2 px-5">
+          <div className="mt-5 grid gap-2 sm:px-5">
             {data.assetAllocation.map((entry) => (
               <div key={entry.assetKind} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 text-xs">
-                <span className={`size-2 rounded-full ${entry.assetKind === "cash" ? "bg-chart-1" : entry.assetKind === "investment" ? "bg-chart-4" : "bg-chart-2"}`} />
-                <span>{({ cash: "現金", investment: "金融資産", debt: "負債" }[entry.assetKind] ?? entry.assetKind)}</span>
+                <span className={`size-2 rounded-full ${assetKindDotClasses[entry.assetKind]}`} />
+                <span>{assetKindLabels[entry.assetKind]}</span>
                 <strong className="tabular-nums">{money(entry.amountYen)}</strong>
               </div>
             ))}
           </div>
         </Panel>
       </div>
-      <Panel className="mb-4">
+      <Panel mobileLayout="section" className="mb-4">
         <SectionHeading eyebrow="NET WORTH" title="純資産の推移" />
-        <div className="px-5"><LineChart points={data.assetHistory.map((entry) => ({ label: new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(new Date(entry.occurredAt)), value: entry.netWorthYen }))} valueSuffix=" 円" /></div>
+        <div className="sm:px-5"><LineChart points={data.assetHistory.map((entry) => ({ label: new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(new Date(entry.occurredAt)), value: entry.netWorthYen }))} valueSuffix=" 円" /></div>
       </Panel>
       <div className="mb-4 grid items-start gap-4 xl:grid-cols-2">
         <form id="expense-entry" onSubmit={submitTransaction}>
-          <Panel className="gap-4 px-5">
+          <Panel mobileLayout="section" className="gap-4 px-5">
             <div className="space-y-1.5">
-              <Eyebrow>TRANSACTION</Eyebrow>
-              <h2 className="text-base font-semibold">収支を記録</h2>
+              <Eyebrow className="max-sm:hidden">TRANSACTION</Eyebrow>
+              <h2 className="text-xl font-semibold sm:text-base">収支を記録</h2>
             </div>
             <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-1">
               <Button type="button" variant={kind === "expense" ? "default" : "ghost"} onClick={() => setKind("expense")}>支出</Button>
@@ -206,17 +211,15 @@ export const FinancePage = () => {
           </Panel>
         </form>
         <form onSubmit={submitBalance}>
-          <Panel className="gap-4 px-5">
+          <Panel mobileLayout="section" className="gap-4 px-5">
             <div className="space-y-1.5">
-              <Eyebrow>BALANCE</Eyebrow>
-              <h2 className="text-base font-semibold">残高を記録</h2>
+              <Eyebrow className="max-sm:hidden">BALANCE</Eyebrow>
+              <h2 className="text-xl font-semibold sm:text-base">残高を記録</h2>
             </div>
             <Field label="口座名"><Input required value={accountName} onChange={(event) => setAccountName(event.target.value)} /></Field>
             <Field label="種類">
-              <NativeSelect className="w-full" value={assetKind} onChange={(event) => setAssetKind(event.target.value as typeof assetKind)}>
-                <option value="cash">現金</option>
-                <option value="investment">金融資産</option>
-                <option value="debt">負債</option>
+              <NativeSelect className="w-full" value={assetKind} onChange={(event) => setAssetKind(event.target.value as AssetKind)}>
+                {Object.entries(assetKindLabels).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}
               </NativeSelect>
             </Field>
             <Field label="残高"><Input required type="number" inputMode="numeric" value={balanceYen} onChange={(event) => setBalanceYen(event.target.value)} /></Field>
@@ -228,10 +231,10 @@ export const FinancePage = () => {
       </div>
       <div className="grid items-start gap-4 xl:grid-cols-2">
         <form onSubmit={submitAdjustment}>
-          <Panel className="gap-4 px-5">
+          <Panel mobileLayout="section" className="gap-4 px-5">
             <div className="space-y-1.5">
-              <Eyebrow>ADJUSTMENT</Eyebrow>
-              <h2 className="text-base font-semibold">取引を補正</h2>
+              <Eyebrow className="max-sm:hidden">ADJUSTMENT</Eyebrow>
+              <h2 className="text-xl font-semibold sm:text-base">取引を補正</h2>
             </div>
             <p className="text-[0.7rem] leading-5 text-muted-foreground">取込元は変更せず、差額を別レコードとして追加します。</p>
             <Field label="対象取引">
@@ -254,9 +257,9 @@ export const FinancePage = () => {
             {createAdjustment.error !== null && <FormError>{createAdjustment.error.message}</FormError>}
           </Panel>
         </form>
-        <Panel>
+        <Panel mobileLayout="section">
           <SectionHeading eyebrow="HISTORY" title="補正履歴" />
-          <div className="px-5">
+          <div className="sm:px-5">
             {data.adjustments.map((adjustment) => (
               <article key={adjustment.id} className="grid grid-cols-[1fr_auto] items-center gap-3 border-t py-3 first:border-t-0">
                 <div className="min-w-0">

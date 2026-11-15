@@ -1,0 +1,70 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    'schedule:earlyMondays',
+    ':enableVulnerabilityAlertsWithLabel(security)',
+    'helpers:pinGitHubActionDigestsToSemver',
+  ],
+  timezone: 'Asia/Tokyo',
+  baseBranchPatterns: ['develop'],
+  // 更新ブランチへの手動修正を、自動 rebase で上書きしない。
+  rebaseWhen: 'never',
+  automerge: false,
+  labels: ['dependencies'],
+  packageRules: [
+    {
+      // Action のコミットは actions.lock で固定する。
+      matchManagers: ['github-actions'],
+      matchDepTypes: ['action'],
+      pinDigests: false,
+    },
+    {
+      matchManagers: ['github-actions'],
+      matchDatasources: ['github-tags'],
+      groupName: 'GitHub Actions',
+      groupSlug: 'github-actions',
+    },
+    {
+      // major の移行を個別に検証できるよう、通常更新だけをまとめる。
+      matchManagers: ['npm'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'npm dependencies',
+      groupSlug: 'npm-updates',
+    },
+    {
+      matchFileNames: ['infra/terraform/**'],
+      groupName: 'terraform dependencies',
+      groupSlug: 'terraform-updates',
+      rangeStrategy: 'update-lockfile',
+    },
+    {
+      matchManagers: ['gradle', 'gradle-wrapper'],
+      groupName: 'Android dependencies',
+      groupSlug: 'android-updates',
+    },
+    {
+      // Miniflare が要求する Undici 7 系の API を保つ。
+      matchManagers: ['npm'],
+      matchDepTypes: ['pnpm-workspace.overrides'],
+      matchPackageNames: ['undici'],
+      allowedVersions: '<8.0.0',
+    },
+    {
+      // typescript-eslint とカスタムルールは TypeScript 6 の Compiler API を使う。
+      matchManagers: ['npm'],
+      matchFileNames: ['packages/eslint-config/package.json'],
+      matchPackageNames: ['typescript'],
+      allowedVersions: '<7.0.0',
+    },
+    {
+      // 公式コンテナのブラウザと npm パッケージは同じバージョンが必要。
+      matchPackageNames: ['playwright', 'mcr.microsoft.com/playwright'],
+      groupName: 'Playwright',
+      groupSlug: 'playwright',
+    },
+  ],
+  vulnerabilityAlerts: {
+    labels: ['security', 'dependencies'],
+  },
+}

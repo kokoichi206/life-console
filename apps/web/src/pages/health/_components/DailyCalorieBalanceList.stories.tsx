@@ -1,0 +1,376 @@
+import type { MealNutrition } from "@life-console/contracts";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { expect, fn, within } from "storybook/test";
+
+import { calorieBalanceRows, recentBalanceWindow, type ExerciseInput } from "../calorie-balance";
+import type { ExerciseDayCalories } from "../exercise-calories";
+
+import { DailyCalorieBalanceList } from "./DailyCalorieBalanceList";
+
+const PERIOD = { from: "2026-09-02", to: "2026-09-13" } as const;
+const meal = (mealId: string, date: string, caloriesKcal: number | null): MealNutrition => ({
+  mealId, photoId: null, occurredAt: `${date}T12:00:00+09:00`, manualCaloriesKcal: caloriesKcal, estimate: null, analysisStatus: null, analysisSummary: null,
+});
+const exercise = (kcal: number, pendingActivities = 0, unavailableActivities = 0): ExerciseDayCalories => ({ kcal, pendingActivities, unavailableActivities });
+const tracked = (byDay: Record<string, ExerciseDayCalories>): ExerciseInput => ({ mode: "tracked", byDay: new Map(Object.entries(byDay)) });
+
+const sampleMeals: MealNutrition[] = [
+  meal("13-a", "2026-09-13", 600), meal("13-b", "2026-09-13", 600), meal("13-c", "2026-09-13", 503),
+  meal("12-a", "2026-09-12", 500), meal("12-b", "2026-09-12", 582), meal("12-c", "2026-09-12", null),
+  meal("11-a", "2026-09-11", 700), meal("11-b", "2026-09-11", 645),
+  meal("10-a", "2026-09-10", 700), meal("10-b", "2026-09-10", 700), meal("10-c", "2026-09-10", 502),
+  meal("8-a", "2026-09-08", 600), meal("8-b", "2026-09-08", 700), meal("8-c", "2026-09-08", 600),
+];
+const sampleExercise = tracked({
+  "2026-09-13": exercise(320), "2026-09-12": exercise(0, 1), "2026-09-11": exercise(0, 0, 1),
+  "2026-09-10": exercise(180), "2026-09-09": exercise(410), "2026-09-08": exercise(500),
+});
+const RECENT = recentBalanceWindow(PERIOD.from, PERIOD.to);
+const recentRows = calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, sampleExercise, 1500);
+const wholePeriodRows = calorieBalanceRows(PERIOD.from, PERIOD.to, sampleMeals, sampleExercise, 1500);
+
+/** 表を包むスクロール枠。折りたたみ時は role を持たないので、表からたどる。 */
+const scrollBox = (canvas: { getByRole: (role: string) => HTMLElement }): HTMLElement => canvas.getByRole("table").parentElement!;
+
+/** 棒は `aria-hidden` なので、その日の行から唯一の inline style を持つ要素として引く。 */
+const barWidth = (canvas: { getByRole: (role: string, options: { name: string }) => HTMLElement }, date: string): number => {
+  const bar = canvas.getByRole("rowheader", { name: date }).closest("tr")?.querySelector("span[style]");
+  return bar === null || bar === undefined ? 0 : bar.getBoundingClientRect().width;
+};
+
+const meta = {
+  title: "Health/カロリー収支",
+  component: DailyCalorieBalanceList,
+  // 失敗時の `/operations` への導線が Link なので、部品単体でもルーターを用意する。
+  decorators: [(Story) => {
+    const router = useMemo(() => {
+      const root = createRootRoute();
+      const health = createRoute({ getParentRoute: () => root, path: "/", component: Story });
+      const operations = createRoute({ getParentRoute: () => root, path: "/operations", component: () => <p>実行状況</p> });
+      return createRouter({ routeTree: root.addChildren([health, operations]), history: createMemoryHistory({ initialEntries: ["/"] }) });
+    }, [Story]);
+    return <RouterProvider router={router} />;
+  }],
+  args: {
+    rows: recentRows,
+    baselineKcal: 1500,
+    exerciseState: "tracked",
+    pendingActivities: 1,
+    nutritionPending: false,
+    nutritionErrorMessage: null,
+    onEditBaseline: fn(),
+    expanded: false,
+    hiddenDays: RECENT.hiddenDays,
+    onLoadMore: fn(),
+    onCollapse: fn(),
+    syncStatus: { lastJob: { status: "succeeded", at: "2026-09-14T06:12:00.000Z", errorCode: null }, backfill: { cursorTo: "2026-03-01", completedAt: null } },
+  },
+} satisfies Meta<typeof DailyCalorieBalanceList>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const SavingAndOverrun: Story = {
+  name: "貯金と超過の日がある",
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("+117")).toBeVisible();
+    await expect(canvas.getByText("+100")).toBeVisible();
+    await expect(canvas.getByText("−222")).toBeVisible();
+    await expect(canvas.getByText("1,900")).toBeVisible();
+    await expect(canvas.getByText("500")).toBeVisible();
+    await expect(canvas.getByText("摂取 1,900 kcal、運動 500 kcal")).toBeInTheDocument();
+    // ラベルはヘッダーに 1 回だけ出す。
+    await expect(canvas.getByText("摂取")).toBeVisible();
+    await expect(canvas.getByText("運動")).toBeVisible();
+    await expect(barWidth(canvas, "9/10")).toBeGreaterThan(12);
+    await expect(canvas.getByRole("button", { name: "基準消費量を編集" })).toBeVisible();
+  },
+};
+
+export const RecentDaysByDefault: Story = {
+  name: "既定は直近 7 日だけ出す",
+  play: async ({ canvas, userEvent, args }) => {
+    await expect(canvas.getAllByRole("rowheader").map((header) => header.textContent)).toEqual(["9/13", "9/12", "9/11", "9/10", "9/9", "9/8", "9/7"]);
+    await expect(canvas.queryByText(/9\/2〜9\/7/)).not.toBeInTheDocument();
+    const expand = canvas.getByRole("button", { name: "さらに前の 5 日を表示" });
+    await userEvent.click(expand);
+    await expect(args.onLoadMore).toHaveBeenCalled();
+  },
+};
+
+export const SyncStatus: Story = {
+  name: "定期同期が成功している",
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 15:12 完了・遡り: 2026-03-02 まで完了/)).toBeVisible();
+    // 正常なときは実行状況への導線を出さない。
+    await expect(canvas.queryByRole("link", { name: "実行状況を見る" })).not.toBeInTheDocument();
+  },
+};
+
+export const SyncFailed: Story = {
+  name: "定期同期が失敗している",
+  args: { syncStatus: { lastJob: { status: "failed", at: "2026-09-14T04:10:00.000Z", errorCode: "unknown_job_kind" }, backfill: null } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 13:10 失敗（unknown_job_kind）/)).toBeVisible();
+    await expect(canvas.getByRole("link", { name: "実行状況を見る" })).toHaveAttribute("href", "/operations");
+  },
+};
+
+export const SyncExpired: Story = {
+  name: "runner が実行せず期限切れになっている",
+  args: { syncStatus: { lastJob: { status: "expired", at: "2026-09-14T02:00:00.000Z", errorCode: null }, backfill: { cursorTo: "2026-03-01", completedAt: null } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 11:00 期限切れ・遡り: 2026-03-02 まで完了/)).toBeVisible();
+    await expect(canvas.getByRole("link", { name: "実行状況を見る" })).toBeVisible();
+  },
+};
+
+export const SyncQueued: Story = {
+  // runner が止まると queued のまま止まる。「実行中」に畳むとこの症状に気づけない。
+  name: "実行待ちのまま止まっている",
+  args: { syncStatus: { lastJob: { status: "queued", at: "2026-09-14T06:00:00.000Z", errorCode: null }, backfill: { cursorTo: "2026-03-01", completedAt: null } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/同期: 実行待ち（9\/14 15:00 に予約）・遡り: 2026-03-02 まで完了/)).toBeVisible();
+    await expect(canvas.queryByText(/実行中/)).not.toBeInTheDocument();
+  },
+};
+
+export const SyncRunning: Story = {
+  name: "同期を実行中",
+  args: { syncStatus: { lastJob: { status: "running", at: "2026-09-14T06:00:00.000Z", errorCode: null }, backfill: null } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/同期: 実行中（9\/14 15:00 に予約）/)).toBeVisible();
+    await expect(canvas.queryByRole("link", { name: "実行状況を見る" })).not.toBeInTheDocument();
+  },
+};
+
+export const SyncSkipped: Story = {
+  name: "実行条件が揃わず見送っている",
+  args: { syncStatus: { lastJob: { status: "skipped_precondition", at: "2026-09-14T06:00:00.000Z", errorCode: "skipped_precondition" }, backfill: null } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 15:00 前提条件待ち/)).toBeVisible();
+    // 失敗以外の errorCode は内部識別子なので出さない。
+    await expect(canvas.queryByText(/skipped_precondition/)).not.toBeInTheDocument();
+  },
+};
+
+export const SyncNotStarted: Story = {
+  name: "まだ一度も同期していない",
+  args: { syncStatus: { lastJob: null, backfill: null } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("まだ同期していません")).toBeVisible();
+  },
+};
+
+export const SyncBackfillCompleted: Story = {
+  name: "遡りが完了している",
+  args: { syncStatus: { lastJob: { status: "succeeded", at: "2026-09-14T06:12:00.000Z", errorCode: null }, backfill: { cursorTo: "2008-12-31", completedAt: "2026-09-14T06:12:00.000Z" } } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/最後の同期: 9\/14 15:12 完了・遡り: 完了/)).toBeVisible();
+  },
+};
+
+export const SyncStatusHidden: Story = {
+  name: "Strava 未接続なら同期の状態を出さない",
+  args: {
+    syncStatus: undefined,
+    exerciseState: "untracked",
+    rows: calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, { mode: "untracked" }, 1500),
+    pendingActivities: 0,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText(/最後の同期|まだ同期していません|同期: /)).not.toBeInTheDocument();
+    await expect(canvas.getByText("Strava 未接続のため、運動を含めていません。")).toBeVisible();
+  },
+};
+
+export const WithoutHiddenDays: Story = {
+  name: "期間が 7 日以下ならボタンを出さない",
+  args: { hiddenDays: 0 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("+117")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: /さらに前/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: /直近/ })).not.toBeInTheDocument();
+  },
+};
+
+export const BaselineUnset: Story = {
+  name: "基準消費量が未設定",
+  args: { rows: calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, sampleExercise, null), baselineKcal: null },
+  play: async ({ canvas, userEvent, args }) => {
+    await expect(canvas.getByText("基準消費量が未設定・体重と同じ期間・日本時間")).toBeVisible();
+    await expect(canvas.queryByText("+117")).not.toBeInTheDocument();
+    await expect(canvas.getByText("1,703")).toBeVisible();
+    await expect(canvas.getByText("320")).toBeVisible();
+    // 棒を 1 本も描かないので、ゼロの目盛りと凡例は出さない。摂取と運動の数値は残る。
+    await expect(canvas.queryByText("0")).not.toBeInTheDocument();
+    await expect(canvas.queryByText("貯金")).not.toBeInTheDocument();
+    await expect(canvas.getByText(/収支 = 基準消費量 \+ 運動 − 摂取/)).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "基準消費量を設定" }));
+    await expect(args.onEditBaseline).toHaveBeenCalled();
+  },
+};
+
+export const SignOnlyConfirmed: Story = {
+  name: "符号だけ確定した日",
+  args: {
+    hiddenDays: 0,
+    rows: calorieBalanceRows("2026-09-10", "2026-09-11", [
+      meal("10-a", "2026-09-10", 1902), meal("10-b", "2026-09-10", null),
+      meal("11-a", "2026-09-11", 1345),
+    ], tracked({ "2026-09-10": exercise(180), "2026-09-11": exercise(0, 1) }), 1500),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("−222 以下")).toBeVisible();
+    await expect(canvas.getByText("1,902")).toBeVisible();
+    await expect(canvas.getByText("180")).toBeVisible();
+    await expect(canvas.getByText("未記録 1 件")).toBeVisible();
+    await expect(canvas.getByText("+155 以上")).toBeVisible();
+    await expect(canvas.getByText("1,345")).toBeVisible();
+    await expect(canvas.getByText("取得待ち 1 件")).toBeVisible();
+  },
+};
+
+export const SignUnknown: Story = {
+  name: "符号も未確定の日",
+  args: {
+    hiddenDays: 0,
+    rows: calorieBalanceRows("2026-09-12", "2026-09-12", [meal("12-a", "2026-09-12", 1082), meal("12-b", "2026-09-12", null)], tracked({}), 1500),
+    pendingActivities: 0,
+  },
+  play: async ({ canvas }) => {
+    // 「未確定」は収支の列だけに出し、副行にはその理由を置く。
+    await expect(within(canvas.getByRole("table")).getByText("未確定")).toBeVisible();
+    await expect(canvas.getByText("1,082")).toBeVisible();
+    await expect(canvas.getByText("未記録 1 件")).toBeVisible();
+  },
+};
+
+export const AllMealsUnrecorded: Story = {
+  name: "全件が未記録の日",
+  args: {
+    hiddenDays: 0,
+    rows: calorieBalanceRows("2026-09-12", "2026-09-12", [meal("12-a", "2026-09-12", null), meal("12-b", "2026-09-12", null)], tracked({}), 1500),
+    pendingActivities: 0,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("未記録 2 件")).toBeVisible();
+    // 食べたがカロリーが未記録の日は、摂取を 0 とも「食事なし」の `—` とも見せない。
+    await expect(canvas.queryByText("—")).not.toBeInTheDocument();
+    await expect(canvas.getByText("摂取のカロリーが未記録")).toBeInTheDocument();
+    await expect(within(canvas.getByRole("table")).getByText("未確定")).toBeVisible();
+  },
+};
+
+export const UnavailableExercise: Story = {
+  name: "算入外の運動がある日",
+  args: { hiddenDays: 0, rows: calorieBalanceRows("2026-09-11", "2026-09-11", [meal("11-a", "2026-09-11", 1345)], tracked({ "2026-09-11": exercise(0, 0, 1) }), 1500), pendingActivities: 0 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("+155")).toBeVisible();
+    await expect(canvas.getByText("1,345")).toBeVisible();
+    await expect(canvas.getByText("算入外 1 件")).toBeVisible();
+  },
+};
+
+export const PendingCalories: Story = {
+  name: "取得待ちがある期間",
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("status")).toHaveTextContent("消費カロリーを取得中（残り 1 件）。Mac の runner が順に取得します。");
+    await expect(canvas.getByText("未記録 1 件・取得待ち 1 件")).toBeVisible();
+  },
+};
+
+export const GapDays: Story = {
+  name: "追加表示で記録なしの日と空白期間を出す",
+  args: { rows: wholePeriodRows, expanded: true, hiddenDays: 0 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "直近 7 日に戻す" })).toBeVisible();
+    // 展開時は行が増えるので、高さを制限してキーボードで送れるようにする。
+    await expect(canvas.getByRole("region", { name: "日別の収支" })).toBeVisible();
+    await expect(canvas.getByText("9/2〜9/7 食事と運動の記録なし（6 日）")).toBeVisible();
+    await expect(canvas.getByText("食事の記録なし")).toBeVisible();
+    await expect(canvas.getByText("410")).toBeVisible();
+    // 食事のない日は摂取も収支も `—`。全件未記録の日（摂取は空）と区別する。
+    await expect(canvas.getAllByText("—")).toHaveLength(2);
+  },
+};
+
+export const WithoutStrava: Story = {
+  name: "運動を含めない収支",
+  args: {
+    rows: calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, { mode: "untracked" }, 1500),
+    exerciseState: "untracked",
+    pendingActivities: 0,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Strava 未接続のため、運動を含めていません。")).toBeVisible();
+    await expect(canvas.getByText("−203")).toBeVisible();
+    await expect(canvas.queryByText("Powered by Strava")).not.toBeInTheDocument();
+    // 値が永久に出ない列の見出しは残さない。摂取の見出しは残る。
+    await expect(canvas.queryByText("運動")).not.toBeInTheDocument();
+    await expect(canvas.getByText("摂取")).toBeVisible();
+  },
+};
+
+export const ActivitiesLoading: Story = {
+  name: "運動の一覧を取得中",
+  args: {
+    rows: calorieBalanceRows(RECENT.from, PERIOD.to, sampleMeals, undefined, 1500),
+    exerciseState: "loading",
+    pendingActivities: 0,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("status")).toHaveTextContent("運動を取得しています。取得後に収支を表示します。");
+    await expect(canvas.queryByText("+117")).not.toBeInTheDocument();
+    await expect(canvas.getByText("1,703")).toBeVisible();
+  },
+};
+
+export const ActivitiesFailed: Story = {
+  name: "運動の一覧の取得失敗",
+  args: { ...ActivitiesLoading.args, exerciseState: "failed" },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("運動を取得できていないため、収支を表示していません。")).toBeVisible();
+    await expect(canvas.queryByText("+117")).not.toBeInTheDocument();
+  },
+};
+
+export const NutritionLoading: Story = {
+  // 食事が未取得の間は行を組まない。空配列で組むと期間全体が「記録なし」の表になる。
+  name: "カロリーの読み込み中",
+  args: { rows: [], pendingActivities: 0, nutritionPending: true, hiddenDays: 0 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("status")).toHaveTextContent("カロリーを読み込んでいます。");
+    await expect(canvas.queryByText(/記録なし/)).not.toBeInTheDocument();
+    await expect(canvas.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(0);
+  },
+};
+
+export const NutritionFailed: Story = {
+  name: "カロリーの取得失敗",
+  args: { ...NutritionLoading.args, nutritionPending: false, nutritionErrorMessage: "食事のカロリーを取得できませんでした。" },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("alert")).toHaveTextContent("食事のカロリーを取得できませんでした。");
+    await expect(canvas.queryByText(/記録なし/)).not.toBeInTheDocument();
+  },
+};
+
+export const Dark: Story = { name: "ダーク", globals: { theme: "dark" } };
+export const Mobile: Story = {
+  name: "モバイル",
+  // 棒の幅はビューポート幅で切り替えるため、コンテナを狭めるだけでは実機の見え方にならない。
+  parameters: { viewport: { options: { calorieMobile: { name: "カロリー収支 · 390 × 800", styles: { width: "390px", height: "800px" }, type: "mobile" } } } },
+  globals: { viewport: { value: "calorieMobile", isRotated: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("−222")).toBeVisible();
+    await expect(canvas.getByText("1,902")).toBeVisible();
+    await expect(canvas.getByText("180")).toBeVisible();
+    // 狭い画面でも収支の棒が視認できる幅を持つこと。
+    await expect(barWidth(canvas, "9/10")).toBeGreaterThan(12);
+    // 既定の 7 行は狭い画面でもスクロールさせない。スクロールしない枠は tab 止まりにもしない。
+    const box = scrollBox(canvas);
+    await expect(box.scrollHeight).toBeLessThanOrEqual(box.clientHeight);
+    await expect(canvas.queryByRole("region", { name: "日別の収支" })).not.toBeInTheDocument();
+  },
+};

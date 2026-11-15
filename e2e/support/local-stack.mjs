@@ -12,7 +12,7 @@ import { promisify } from "node:util";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const apiDirectory = join(repositoryRoot, "apps/api");
-const require = createRequire(join(apiDirectory, "package.json"));
+const require = createRequire(import.meta.url);
 const wrangler = resolve(dirname(require.resolve("wrangler/package.json")), require("wrangler/package.json").bin.wrangler);
 const execute = promisify(execFile);
 

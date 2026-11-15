@@ -1,54 +1,27 @@
+import { taskAreas, taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoVariants, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
 import { z } from "zod";
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const identifierSchema = z.string().min(1).max(128);
 
-export const taskStatusSchema = z.enum(["inbox", "todo", "doing", "done", "canceled"]);
-export const conversationClassificationSchema = z.enum([
-  "unprocessed",
-  "task_candidate",
-  "reference",
-  "no_action",
-]);
-export const connectorKindSchema = z.enum(["slack", "chatwork", "talknote", "gmail"]);
-export const repositoryRoleSchema = z.enum(["work", "context", "default_work", "always_read"]);
-export const sourceScopeSchema = z.enum(["channel", "room"]);
-export const jobStatusSchema = z.enum([
-  "queued",
-  "claimed",
-  "running",
-  "waiting_for_user",
-  "succeeded",
-  "failed",
-  "canceled",
-  "lost",
-  "expired",
-  "skipped_precondition",
-]);
-export const jobKindSchema = z.enum([
-  "slack_sync",
-  "chatwork_sync",
-  "gmail_sync",
-  "talknote_sync",
-  "reply_drafts",
-  "conversation_reply",
-  "weight_import",
-  "weight_obsidian_export",
-  "finance_import",
-  "nutrition_analysis",
-  "agent",
-  "github_promotion",
-  "backup",
-  "repository_scan",
-]);
-export const agentProviderSchema = z.enum(["codex", "claude"]);
-export const scheduleIntervalSchema = z.enum(["hourly", "daily", "weekly"]);
-export const scheduleCoalescingSchema = z.enum(["skip_if_pending", "queue_all"]);
-export const mealKindSchema = z.enum(["breakfast", "lunch", "dinner", "snack"]);
-export const financeEntryKindSchema = z.enum(["income", "expense"]);
-export const assetKindSchema = z.enum(["cash", "investment", "debt"]);
+export const taskStatusSchema = z.enum(taskStatuses);
+export const conversationClassificationSchema = z.enum(conversationClassifications);
+export const connectorKindSchema = z.enum(connectorKinds);
+export const repositoryRoleSchema = z.enum(repositoryRoles);
+export const sourceScopeSchema = z.enum(sourceScopes);
+export const jobStatusSchema = z.enum(jobStatuses);
+export const jobKindSchema = z.enum(jobKinds);
+export const agentProviderSchema = z.enum(agentProviders);
+export const scheduleIntervalSchema = z.enum(scheduleIntervals);
+export const scheduleCoalescingSchema = z.enum(scheduleCoalescingModes);
+export const financeEntryKindSchema = z.enum(financeEntryKinds);
+export const assetKindSchema = z.enum(assetKinds);
+export const weightSourceSchema = z.enum(weightSources);
 
 export const createTaskSchema = z.object({
+  area: z.enum(taskAreas).optional(),
+  scheduledAt: isoDateTimeSchema.nullable().optional(),
+  sourceUrl: z.url({ protocol: /^https?$/ }).max(2000).nullable().optional(),
   title: z.string().trim().min(1).max(240),
   description: z.string().trim().max(10_000).default(""),
   dueAt: isoDateTimeSchema.nullable().default(null),
@@ -56,7 +29,12 @@ export const createTaskSchema = z.object({
   repositoryId: identifierSchema.nullable().default(null),
 });
 
-export const updateTaskSchema = createTaskSchema.partial().extend({
+export const updateTaskSchema = createTaskSchema.extend({
+  description: createTaskSchema.shape.description.removeDefault(),
+  dueAt: createTaskSchema.shape.dueAt.removeDefault(),
+  conversationId: createTaskSchema.shape.conversationId.removeDefault(),
+  repositoryId: createTaskSchema.shape.repositoryId.removeDefault(),
+}).partial().extend({
   status: taskStatusSchema.optional(),
 });
 
@@ -109,7 +87,7 @@ export const createReplyDraftsSchema = z.object({
   calendar: replyCalendarRequestSchema.optional(),
 });
 export const replyDraftDecisionSchema = z.object({
-  status: z.enum(["ready", "replied", "no_action", "needs_review"]),
+  status: z.enum(replyDraftStatuses),
   body: z.string().max(5_000),
   reason: z.string().min(1).max(3_000),
   replyEvidenceId: z.string().nullable(),
@@ -134,21 +112,32 @@ export const createConversationReplySchema = z.object({
   body: z.string().trim().min(1).max(5_000),
 });
 
+export const mealPhotoVariantQuerySchema = z.object({ variant: z.enum(mealPhotoVariants).default("original") });
+export const createMealBlurUploadSchema = z.object({ contentType: z.enum(mealPhotoContentTypes) });
+
 export const createMealUploadSchema = z.object({
   clientId: z.uuid(),
-  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  contentType: z.enum(mealPhotoContentTypes),
 });
 
-export const createMealSchema = z.object({
-  clientId: z.uuid(),
+export const updateMealSchema = z.object({
   photoId: identifierSchema.nullable().default(null),
+  additionalPhotoIds: z.array(identifierSchema).default([]),
   memo: z.string().trim().max(2_000).default(""),
-  mealKind: mealKindSchema,
   occurredAt: isoDateTimeSchema,
   tags: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
+}).refine((input) => input.additionalPhotoIds.length === 0 || input.photoId !== null, {
+  message: "追加の写真には代表写真が必要です。", path: ["additionalPhotoIds"],
+}).refine((input) => new Set([input.photoId, ...input.additionalPhotoIds]).size === input.additionalPhotoIds.length + 1, {
+  message: "同じ写真を複数回追加できません。", path: ["additionalPhotoIds"],
 }).refine((input) => input.photoId !== null || input.memo.length > 0, {
   message: "写真またはメモのどちらかが必要です。",
   path: ["memo"],
+});
+
+export const createMealSchema = updateMealSchema.safeExtend({
+  clientId: z.uuid(),
+  manualCaloriesKcal: z.number().int().nonnegative().optional(),
 });
 
 export const createNutritionEstimateSchema = z.object({
@@ -162,9 +151,10 @@ export const createNutritionEstimateSchema = z.object({
 });
 
 export const createWeightSchema = z.object({
-  source: z.enum(["manual", "csv"]),
+  source: weightSourceSchema,
   sourceKey: z.string().trim().min(1).max(240),
-  weightKg: z.number().positive().max(500),
+  weightKg: z.number().min(30).max(110),
+  bodyFatPercent: z.number().min(5).max(40).optional(),
   occurredAt: isoDateTimeSchema,
 });
 
@@ -206,12 +196,12 @@ export const registerRunnerSchema = z.object({
   runnerId: identifierSchema,
   name: z.string().trim().min(1).max(120),
   tokenExpiresAt: isoDateTimeSchema.nullable(),
-  orcaStatus: z.enum(["healthy", "unreachable", "unknown"]),
+  orcaStatus: z.enum(orcaStatuses),
 });
 
 export const runnerHeartbeatSchema = z.object({
   runnerId: identifierSchema,
-  orcaStatus: z.enum(["healthy", "unreachable", "unknown"]),
+  orcaStatus: z.enum(orcaStatuses),
 });
 
 export const claimJobSchema = z.object({
@@ -228,7 +218,7 @@ export const jobHeartbeatSchema = z.object({
 export const completeJobSchema = z.object({
   runnerId: identifierSchema,
   leaseToken: z.uuid(),
-  outcome: z.enum(["succeeded", "failed", "canceled", "skipped_precondition"]),
+  outcome: z.enum(jobCompletionOutcomes),
   errorCode: z.string().trim().max(80).nullable().default(null),
   summary: z.string().trim().max(240),
 });
@@ -242,7 +232,7 @@ export const createAgentJobSchema = z.object({
   taskId: identifierSchema,
   repositoryId: identifierSchema,
   provider: agentProviderSchema,
-  executionMode: z.enum(["main_checkout", "new_worktree"]),
+  executionMode: z.enum(agentExecutionModes),
 });
 
 export const createRepositorySchema = z.object({
@@ -255,7 +245,7 @@ export const syncRepositoriesSchema = z.object({
 });
 
 export const upsertSourceRepositoryMappingSchema = z.object({
-  connector: connectorKindSchema.extract(["slack", "chatwork"]),
+  connector: z.enum(sourceMappingConnectors),
   sourceScope: sourceScopeSchema,
   sourceId: identifierSchema,
   repositoryId: identifierSchema,
@@ -267,7 +257,7 @@ export const assignRepositorySchema = z.object({
 });
 
 export const promoteTaskSchema = z.object({
-  target: z.enum(["github_issue", "github_project"]),
+  target: z.enum(promotionTargets),
   repositoryId: identifierSchema,
 });
 
@@ -302,6 +292,7 @@ export const createScheduleSchema = z.discriminatedUnion("jobKind", [
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+export type UpdateMealInput = z.infer<typeof updateMealSchema>;
 export type CreateMealInput = z.infer<typeof createMealSchema>;
 export type CreateWeightInput = z.infer<typeof createWeightSchema>;
 export type CreateFinanceTransactionInput = z.infer<typeof createFinanceTransactionSchema>;
@@ -318,12 +309,39 @@ export type CreateConnectorSyncInput = z.infer<typeof createConnectorSyncSchema>
 export type CreateConversationReplyInput = z.infer<typeof createConversationReplySchema>;
 export type SyncRepositoriesInput = z.infer<typeof syncRepositoriesSchema>;
 export type UpsertSourceRepositoryMappingInput = z.infer<typeof upsertSourceRepositoryMappingSchema>;
-export type JobKind = z.infer<typeof jobKindSchema>;
-export type JobStatus = z.infer<typeof jobStatusSchema>;
+export type { AssetKind, JobKind, JobStatus, TaskStatus } from "@life-console/domain";
 
 export const weightGoalSchema = z.object({
+  startDate: z.iso.date().nullable(),
   startWeightKg: z.number().min(0.1).max(500),
   targetWeightKg: z.number().min(0.1).max(500),
   targetDate: z.iso.date().nullable(),
-});
+}).refine((goal) => goal.startDate === null || goal.targetDate === null || goal.startDate <= goal.targetDate, { message: "期限は開始日以降にしてください。", path: ["targetDate"] });
 export type WeightGoal = z.infer<typeof weightGoalSchema>;
+
+export const abstinenceGoalSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  startedAt: isoDateTimeSchema,
+  targetDays: z.number().int().positive().max(100_000),
+  targetDate: z.iso.date().nullable(),
+});
+
+export const abstinenceEventSchema = z.object({
+  occurredAt: isoDateTimeSchema,
+  durationMinutes: z.number().int().nonnegative().max(100_000).nullable(),
+  memo: z.string().trim().max(2_000).default(""),
+});
+
+export type AbstinenceGoalInput = z.infer<typeof abstinenceGoalSchema>;
+export type AbstinenceEventInput = z.infer<typeof abstinenceEventSchema>;
+
+export const mealRangeQuerySchema = z.object({ from: z.iso.date(), to: z.iso.date() }).refine((value) => value.from <= value.to);
+
+export const mealPeriodQuerySchema = z.union([
+  mealRangeQuerySchema,
+  z.object({}).strict(),
+]);
+
+export const mealGalleryQuerySchema = z.object({
+  to: z.iso.date(),
+});

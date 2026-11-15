@@ -49,15 +49,14 @@ export const WeightWheel = ({ label, value, minimum, maximum, onChange }: {
       aria-valuemax={maximum}
       onKeyDown={handleKeyDown}
       onScroll={(event) => onChange(Math.round(event.currentTarget.scrollTop / ROW_HEIGHT) + minimum)}
-      className="relative z-10 h-60 touch-pan-y snap-y snap-mandatory overflow-y-auto overscroll-contain rounded-2xl py-24 text-center tabular-nums outline-none [scrollbar-width:none] focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-scrollbar]:hidden"
-      style={{ maskImage: "linear-gradient(transparent, black 30%, black 70%, transparent)" }}
+      className="relative z-10 h-60 touch-pan-y snap-y snap-mandatory overflow-y-auto overscroll-contain rounded-2xl py-24 text-center tabular-nums outline-none [scrollbar-width:none] [mask-image:linear-gradient(transparent,black_30%,black_70%,transparent)] focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-scrollbar]:hidden"
     >
       {Array.from({ length: maximum - minimum + 1 }, (_, index) => minimum + index).map((number) => (
         <div
           key={number}
           aria-hidden="true"
           onClick={() => selectValue(number)}
-          className={cn("flex h-12 cursor-pointer snap-center items-center justify-center text-3xl font-medium transition-[color,opacity] select-none", number === value ? "text-foreground dark:text-white" : "text-muted-foreground/60 dark:text-white/40")}
+          className={cn("flex h-12 cursor-pointer snap-center items-center justify-center text-3xl font-medium transition-[color,opacity] select-none", number === value ? "text-foreground" : "text-muted-foreground/60")}
         >
           {number}
         </div>

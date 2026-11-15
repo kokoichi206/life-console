@@ -34,6 +34,20 @@ const setup = async () => {
 };
 
 describe("監視履歴と通知予約", () => {
+  it("CLI の観測は当該対象だけ、runner の観測は同じ runner の対象だけを再判定する", async () => {
+    const f = await setup();
+    await f.usecase.register({ runnerId: "other-runner", targets: [{ service: "runner", account: "process" }] });
+    const decide = vi.spyOn(f.repository, "decide");
+    await f.usecase.record(f.event("slack"), false);
+    expect(decide.mock.calls.map(([target]) => target.service)).toEqual(["slack"]);
+    decide.mockClear();
+    await f.usecase.record(f.event("runner"), false);
+    expect(decide.mock.calls.map(([target]) => target.service).sort()).toEqual(["runner", "slack"]);
+    expect(decide.mock.calls.every(([target]) => target.runnerId === "mac-test")).toBe(true);
+    decide.mockClear();
+    await f.usecase.maintain();
+    expect(decide).toHaveBeenCalledTimes(3);
+  });
   it("同じ観測の再送では履歴も連続失敗数も増えない", async () => {
     const fixture = await setup();
     const observation = fixture.event("slack", "unavailable");
@@ -176,10 +190,87 @@ describe("監視履歴と通知予約", () => {
     const claimed = await f.repository.claim(f.now());
     if (!claimed.ok || claimed.value === null) throw new Error("claim failed");
     await f.usecase.record(f.event("slack"), false);
+    expect(f.database.prepare("SELECT recovery_reservation_pending AS pending FROM monitor_incidents").get()!.pending).toBe(0);
     await f.repository.finish(claimed.value, "accepted", f.now());
+    expect(f.database.prepare("SELECT recovery_reservation_pending AS pending FROM monitor_incidents").get()!.pending).toBe(1);
     await f.usecase.maintain();
+    expect(f.database.prepare("SELECT recovery_reservation_pending AS pending FROM monitor_incidents").get()!.pending).toBe(0);
     expect(f.send).toHaveBeenCalledTimes(1);
     expect(f.send.mock.calls[0]![1].body).toContain("復旧");
+  });
+  it("復旧後に lease が交代した古い配送の受付では復旧を予約しない", async () => {
+    const f = await setup();
+    await f.usecase.record(f.event("slack", "auth_required"), false);
+    const first = await f.repository.claim(f.now());
+    if (!first.ok || first.value === null) throw new Error("claim failed");
+    f.advance(60_000);
+    const claimed = await Promise.all([f.repository.claim(f.now()), f.repository.claim(f.now())]);
+    const current = claimed.flatMap((result) => result.ok && result.value !== null ? [result.value] : []).find((delivery) => delivery.id === first.value!.id)!;
+    expect(current.leaseToken).not.toBe(first.value.leaseToken);
+    await f.usecase.record(f.event("slack"), false);
+    expect(await f.repository.finish(first.value, "accepted", f.now())).toEqual(ok(undefined));
+    expect(f.database.prepare("SELECT recovery_reservation_pending AS pending FROM monitor_incidents").get()!.pending).toBe(0);
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind='recovery'").get()!.n).toBe(0);
+    expect(await f.repository.finish(current, "accepted", f.now())).toEqual(ok(undefined));
+    expect(await f.usecase.maintain()).toEqual(ok(undefined));
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind='recovery'").get()!.n).toBe(1);
+  });
+  it("復旧予約済みの端末は再 INSERT せず、別の端末の遅い受付は復旧を予約する", async () => {
+    const f = await setup();
+    await f.usecase.record(f.event("slack", "auth_required"), false);
+    const first = await f.repository.claim(f.now());
+    const second = await f.repository.claim(f.now());
+    if (!first.ok || first.value === null || !second.ok || second.value === null) throw new Error("claim failed");
+    await f.repository.finish(first.value, "accepted", f.now());
+    await f.usecase.record(f.event("slack"), false);
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind = 'recovery'").get()!.n).toBe(1);
+    f.database.exec(`CREATE TRIGGER reject_duplicate_recovery BEFORE INSERT ON monitor_notifications
+      WHEN NEW.kind = 'recovery' AND EXISTS (SELECT 1 FROM monitor_notifications WHERE incident_id = NEW.incident_id AND endpoint = NEW.endpoint AND kind = 'recovery' AND slot = 0)
+      BEGIN SELECT RAISE(ABORT, 'duplicate recovery attempted'); END`);
+    expect(await f.usecase.record(f.event("slack"), false)).toEqual(ok(undefined));
+    await f.repository.finish(second.value, "accepted", f.now());
+    expect(await f.usecase.record(f.event("slack"), false)).toEqual(ok(undefined));
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind = 'recovery'").get()!.n).toBe(2);
+  });
+  it("複数の受付済み警告を同じ端末の復旧 1 件にまとめ、予約済みとして記録する", async () => {
+    const f = await setup();
+    await f.usecase.record(f.event("slack", "auth_required"), false);
+    await f.usecase.maintain();
+    f.advance(1_800_000);
+    await f.usecase.record(f.event("runner"), false);
+    await f.usecase.record(f.event("slack", "auth_required"), false);
+    await f.usecase.maintain();
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind='alert' AND accepted_at IS NOT NULL").get()!.n).toBe(4);
+    await f.usecase.record(f.event("slack"), false);
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind='recovery'").get()!.n).toBe(2);
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind='alert' AND recovery_reserved_at IS NOT NULL").get()!.n).toBe(4);
+  });
+  it("復旧予約が失敗したら予約済みの印も保存せず、次の保守で再試行できる", async () => {
+    const f = await setup();
+    await f.usecase.record(f.event("slack", "auth_required"), false);
+    await f.usecase.maintain();
+    f.database.exec("CREATE TRIGGER reject_recovery BEFORE INSERT ON monitor_notifications WHEN NEW.kind='recovery' BEGIN SELECT RAISE(ABORT,'fixture failure'); END");
+    expect((await f.usecase.record(f.event("slack"), false)).ok).toBe(false);
+    expect(f.database.prepare("SELECT resolved_at FROM monitor_incidents").get()!.resolved_at).toBeNull();
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE recovery_reserved_at IS NOT NULL").get()!.n).toBe(0);
+    f.database.exec("DROP TRIGGER reject_recovery");
+    expect(await f.usecase.maintain()).toEqual(ok(undefined));
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind='recovery'").get()!.n).toBe(2);
+  });
+  it("遅い受付の保存が失敗したら、障害の再確認待ちへの変更も取り消す", async () => {
+    const f = await setup();
+    await f.usecase.record(f.event("slack", "auth_required"), false);
+    const claimed = await f.repository.claim(f.now());
+    if (!claimed.ok || claimed.value === null) throw new Error("claim failed");
+    await f.usecase.record(f.event("slack"), false);
+    f.database.exec(`CREATE TRIGGER reject_acceptance BEFORE UPDATE ON monitor_notifications
+      WHEN NEW.accepted_at IS NOT NULL BEGIN SELECT RAISE(ABORT,'fixture failure'); END`);
+    expect((await f.repository.finish(claimed.value, "accepted", f.now())).ok).toBe(false);
+    expect(f.database.prepare("SELECT recovery_reservation_pending AS pending FROM monitor_incidents").get()!.pending).toBe(0);
+    f.database.exec("DROP TRIGGER reject_acceptance");
+    expect(await f.repository.finish(claimed.value, "accepted", f.now())).toEqual(ok(undefined));
+    expect(await f.usecase.maintain()).toEqual(ok(undefined));
+    expect(f.database.prepare("SELECT count(*) AS n FROM monitor_notifications WHERE kind='recovery'").get()!.n).toBe(1);
   });
   it("解除した購読への未送信通知を取り消す", async () => {
     const f = await setup();

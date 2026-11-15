@@ -1,9 +1,3 @@
-variable "access_worker_id" {
-  type        = string
-  sensitive   = true
-  description = "既存 Access が参照する Worker ID"
-}
-
 variable "runner_service_token_id" {
   type        = string
   sensitive   = true

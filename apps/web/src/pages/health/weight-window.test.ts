@@ -24,6 +24,16 @@ describe("体重グラフの表示期間", () => {
     expect(moved.end - moved.start).toBe(20 * day);
     expect(snapWeightWindow(moved)).toEqual(window);
   });
+  it("走行距離は URL で明示した場合だけ重ねる", () => {
+    expect(parseHealthSearch({})).toEqual({});
+    expect(parseHealthSearch({ running: "show" })).toEqual({ overlay: "running" });
+    expect(parseHealthSearch({ running: "hide" })).toEqual({});
+    expect(parseHealthSearch({ overlay: "body-fat" })).toEqual({ overlay: "body-fat" });
+    expect(parseHealthSearch({ overlay: "running" })).toEqual({ overlay: "running" });
+    expect(parseHealthSearch({ overlay: "exercise-calories" })).toEqual({ overlay: "exercise-calories" });
+    expect(parseHealthSearch({ overlay: "invalid" })).toEqual({});
+    expect(parseHealthSearch({ overlay: "body-fat", running: "show" })).toEqual({ overlay: "body-fat" });
+  });
   it("期間と目標設定の URL を復元し、不正な日付や逆転期間を受け付けない", () => {
     expect(parseHealthSearch({ entry: "goal", range: "all", from: "2026-08-01", to: "2026-09-01" })).toEqual({ entry: "goal", range: "all", from: "2026-08-01", to: "2026-09-01" });
     expect(parseHealthSearch({ from: "2026-02-30", to: "2026-09-01" })).toEqual({});

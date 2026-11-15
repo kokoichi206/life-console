@@ -11,8 +11,25 @@ android {
         applicationId = "dev.kokoichi.lifeconsole"
         minSdk = 31
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 8
+        versionName = "0.5.1"
+        buildConfigField(
+            "String",
+            "MEAL_API_ORIGIN",
+            "\"https://life-console.kokoichi206.workers.dev\"",
+        )
+        buildConfigField("boolean", "MEAL_API_USES_OAUTH", "true")
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    buildTypes {
+        debug {
+            buildConfigField("String", "MEAL_API_ORIGIN", "\"http://127.0.0.1:8790\"")
+            buildConfigField("boolean", "MEAL_API_USES_OAUTH", "false")
+        }
     }
 
     compileOptions {
@@ -23,4 +40,12 @@ android {
 
 kotlin {
     jvmToolchain(17)
+}
+
+dependencies {
+    implementation(libs.appauth)
+    implementation(libs.subject.segmentation)
+    implementation(libs.androidx.core)
+    testImplementation(libs.junit)
+    testImplementation(libs.json)
 }

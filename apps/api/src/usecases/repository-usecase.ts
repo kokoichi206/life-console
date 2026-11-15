@@ -1,6 +1,7 @@
 import type { LifeConsoleRepository, Repository, SourceRepositoryMapping } from "@api/repositories/life-console-repository";
 import type { SyncRepositoriesInput, UpsertSourceRepositoryMappingInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
+import type { RepositoryRole } from "@life-console/domain";
 
 import type { AppError } from "../shared/app-error";
 import type { Clock } from "../shared/clock";
@@ -12,7 +13,7 @@ export interface RepositoryUsecase {
   create(name: string, localPath: string): Promise<Result<void, AppError>>;
   sync(input: SyncRepositoriesInput): Promise<Result<number, AppError>>;
   upsertMapping(input: UpsertSourceRepositoryMappingInput): Promise<Result<void, AppError>>;
-  assign(taskId: string, repositoryId: string, role: string): Promise<Result<void, AppError>>;
+  assign(taskId: string, repositoryId: string, role: RepositoryRole): Promise<Result<void, AppError>>;
 }
 
 export const createRepositoryUsecase = (

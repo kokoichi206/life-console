@@ -1,3 +1,4 @@
+import type { AbstinenceUsecase } from "@api/usecases/abstinence-usecase";
 import type { ConversationUsecase } from "@api/usecases/conversation-usecase";
 import type { DashboardUsecase } from "@api/usecases/dashboard-usecase";
 import type { FinanceUsecase } from "@api/usecases/finance-usecase";
@@ -9,6 +10,7 @@ import type { ReplyDraftUsecase } from "@api/usecases/reply-draft-usecase";
 import type { RepositoryUsecase } from "@api/usecases/repository-usecase";
 import type { TaskUsecase } from "@api/usecases/task-usecase";
 import type {
+  CalorieBaseline,
   WeightGoal,
   CompleteJobInput,
   CreateReplyDraftsInput,
@@ -21,6 +23,7 @@ import type {
   CreateFinanceAdjustmentInput,
   CreateFinanceTransactionInput,
   CreateMealInput,
+  UpdateMealInput,
   CreateScheduleInput,
   CreateTaskInput,
   CreateWeightInput,
@@ -32,6 +35,7 @@ import type {
   UpsertSourceRepositoryMappingInput,
   UpdateTaskInput,
 } from "@life-console/contracts";
+import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, MealPhotoContentType, MealPhotoVariant } from "@life-console/domain";
 
 type Dependencies = {
   readonly replyDrafts: ReplyDraftUsecase;
@@ -39,6 +43,7 @@ type Dependencies = {
   readonly dashboard: DashboardUsecase;
   readonly finance: FinanceUsecase;
   readonly health: HealthUsecase;
+  readonly abstinence: AbstinenceUsecase;
   readonly jobs: JobUsecase;
   readonly mealPhotos: MealPhotoUsecase;
   readonly notes: NoteUsecase;
@@ -57,21 +62,32 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   createTask: (input: CreateTaskInput) => dependencies.tasks.create(input),
   updateTask: (id: string, input: UpdateTaskInput) => dependencies.tasks.update(id, input),
   listConversations: (input: ListConversationsInput) => dependencies.conversations.list(input),
-  classifyConversation: (id: string, classification: string) => dependencies.conversations.classify(id, classification),
+  classifyConversation: (id: string, classification: ConversationClassification) => dependencies.conversations.classify(id, classification),
   createTaskFromConversation: (id: string) => dependencies.conversations.createTask(id),
   importConversations: (input: ImportConversationsInput) => dependencies.conversations.import(input),
-  listMeals: () => dependencies.health.listMeals(),
+  listMeals: (period?: { readonly from: string; readonly to: string }) => dependencies.health.listMeals(period),
+  listMealGallery: (to: string) => dependencies.health.listMealGallery(to),
+  listMealDayCounts: (period: { readonly from: string; readonly to: string }) => dependencies.health.listMealDayCounts(period),
   createMeal: (input: CreateMealInput) => dependencies.health.createMeal(input),
-  createMealPhotoUpload: (clientId: string, contentType: string) => dependencies.mealPhotos.createUpload(clientId, contentType),
-  confirmMealPhotoUploaded: (photoId: string) => dependencies.mealPhotos.confirmUploaded(photoId),
-  uploadMealPhoto: (photoId: string, token: string, contentType: string, body: ReadableStream) => dependencies.mealPhotos.uploadViaWorker(photoId, token, contentType, body),
-  readMealPhoto: (photoId: string) => dependencies.mealPhotos.read(photoId),
+  updateMeal: (id: string, input: UpdateMealInput) => dependencies.health.updateMeal(id, input),
+  deleteMeal: (id: string) => dependencies.health.deleteMeal(id),
+  restoreMeal: (id: string) => dependencies.health.restoreMeal(id),
+  createMealPhotoUpload: (clientId: string, contentType: MealPhotoContentType) => dependencies.mealPhotos.createUpload(clientId, contentType),
+  confirmMealPhotoUploaded: (photoId: string, variant?: MealPhotoVariant) => dependencies.mealPhotos.confirmUploaded(photoId, variant),
+  createMealPhotoBlurUpload: (photoId: string, contentType: MealPhotoContentType) => dependencies.mealPhotos.createBlurUpload(photoId, contentType),
+  uploadMealPhoto: (photoId: string, token: string, contentType: string, body: ReadableStream, variant?: MealPhotoVariant) => dependencies.mealPhotos.uploadViaWorker(photoId, token, contentType, body, variant),
+  readMealPhoto: (photoId: string, variant?: MealPhotoVariant) => dependencies.mealPhotos.read(photoId, variant),
   getWeightGoal: () => dependencies.health.getWeightGoal(),
   saveWeightGoal: (input: WeightGoal | null) => dependencies.health.saveWeightGoal(input),
+  getCalorieBaseline: () => dependencies.health.getCalorieBaseline(),
+  saveCalorieBaseline: (input: CalorieBaseline | null) => dependencies.health.saveCalorieBaseline(input),
   listWeights: () => dependencies.health.listWeights(),
   listWeightsForExport: () => dependencies.health.listWeightsForExport(),
   createWeight: (input: CreateWeightInput) => dependencies.health.createWeight(input),
   importWeights: (inputs: ReadonlyArray<CreateWeightInput>) => dependencies.health.importWeights(inputs),
+  abstinence: () => dependencies.abstinence.getOverview(),
+  saveAbstinenceGoal: (input: Parameters<AbstinenceUsecase["saveGoal"]>[0]) => dependencies.abstinence.saveGoal(input),
+  createAbstinenceEvent: (input: Parameters<AbstinenceUsecase["createEvent"]>[0]) => dependencies.abstinence.createEvent(input),
   financeSummary: () => dependencies.finance.summary(),
   createFinanceTransaction: (input: CreateFinanceTransactionInput) => dependencies.finance.createTransaction(input),
   createFinanceAdjustment: (input: CreateFinanceAdjustmentInput) => dependencies.finance.createAdjustment(input),
@@ -82,15 +98,15 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   createRepository: (name: string, localPath: string) => dependencies.repositories.create(name, localPath),
   syncRepositories: (input: SyncRepositoriesInput) => dependencies.repositories.sync(input),
   upsertSourceRepositoryMapping: (input: UpsertSourceRepositoryMappingInput) => dependencies.repositories.upsertMapping(input),
-  assignRepository: (taskId: string, repositoryId: string, role: string) => dependencies.repositories.assign(taskId, repositoryId, role),
+  assignRepository: (taskId: string, repositoryId: string, role: RepositoryRole) => dependencies.repositories.assign(taskId, repositoryId, role),
   listJobs: () => dependencies.jobs.list(),
   listRunners: () => dependencies.jobs.listRunners(),
   registerRunner: (input: RegisterRunnerInput) => dependencies.jobs.registerRunner(input),
-  heartbeatRunner: (runnerId: string, orcaStatus: string) => dependencies.jobs.heartbeatRunner(runnerId, orcaStatus),
+  heartbeatRunner: (runnerId: string, orcaStatus: OrcaStatus) => dependencies.jobs.heartbeatRunner(runnerId, orcaStatus),
   claimJob: (runnerId: string) => dependencies.jobs.claim(runnerId),
   heartbeatJob: (jobId: string, input: JobHeartbeatInput) => dependencies.jobs.heartbeat(jobId, input),
   completeJob: (jobId: string, input: CompleteJobInput) => dependencies.jobs.complete(jobId, input),
-  reportJob: (jobId: string, leaseToken: string, input: { readonly outcome: string; readonly errorCode: string | null; readonly summary: string }) => dependencies.jobs.report(jobId, leaseToken, input),
+  reportJob: (jobId: string, leaseToken: string, input: { readonly outcome: JobCompletionOutcome; readonly errorCode: string | null; readonly summary: string }) => dependencies.jobs.report(jobId, leaseToken, input),
   validateLease: (jobId: string, leaseToken: string) => dependencies.jobs.validateLease(jobId, leaseToken),
   cancelJob: (jobId: string) => dependencies.jobs.cancel(jobId),
   createAgentJob: (input: CreateAgentJobInput) => dependencies.jobs.createAgentJob(input),
@@ -102,5 +118,3 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   getAgentJobContext: (taskId: string, repositoryId: string) => dependencies.jobs.getAgentJobContext(taskId, repositoryId),
   runScheduledMaintenance: () => dependencies.jobs.runScheduledMaintenance(),
 });
-
-export type LifeConsoleHandlers = ReturnType<typeof createLifeConsoleHandlers>;

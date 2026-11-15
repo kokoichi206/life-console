@@ -1,8 +1,12 @@
+import type { AgentProvider, AssetKind, ConnectorKind, ConversationClassification, FinanceEntryKind, JobKind, JobStatus, OrcaStatus, ReplyDraftStatus, SourceMappingConnector, SourceScope, TaskArea, TaskStatus, WeightSource } from "@life-console/domain";
 export type Task = {
   readonly id: string;
   readonly title: string;
   readonly description: string;
-  readonly status: string;
+  readonly status: TaskStatus;
+  readonly area: TaskArea;
+  readonly scheduledAt: string | null;
+  readonly sourceUrl: string | null;
   readonly dueAt: string | null;
   readonly completedAt: string | null;
   readonly conversationId: string | null;
@@ -14,24 +18,24 @@ export type Task = {
 
 export type Conversation = {
   readonly id: string;
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly externalMessageId: string;
   readonly authorLabel: string;
   readonly excerpt: string;
   readonly sourceUrl: string | null;
-  readonly classification: string;
+  readonly classification: ConversationClassification;
   readonly occurredAt: string;
 };
 
 export type ReplyDraft = {
   readonly conversationId: string;
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly authorLabel: string;
   readonly excerpt: string;
   readonly sourceUrl: string | null;
   readonly occurredAt: string;
-  readonly status: "ready" | "replied" | "no_action" | "needs_review";
+  readonly status: ReplyDraftStatus;
   readonly body: string;
   readonly reason: string;
   readonly replyEvidenceId: string | null;
@@ -44,8 +48,32 @@ export type WeightPoint = {
   readonly id: string;
   readonly occurredAt: string;
   readonly recordedAt: string;
-  readonly source: string;
+  readonly source: WeightSource;
   readonly weightKg: number;
+  readonly bodyFatPercent: number | null;
+};
+
+export type AbstinenceGoal = {
+  readonly name: string;
+  readonly startedAt: string;
+  readonly targetDays: number;
+  readonly targetDate: string | null;
+};
+
+export type AbstinenceEvent = {
+  readonly id: string;
+  readonly occurredAt: string;
+  readonly durationMinutes: number | null;
+  readonly memo: string;
+  readonly recordedAt: string;
+};
+
+export type AbstinenceOverview = {
+  readonly goal: AbstinenceGoal | null;
+  readonly events: ReadonlyArray<AbstinenceEvent>;
+  readonly totalEventDurationMinutes: number;
+  readonly currentStreakDays: number;
+  readonly longestStreakDays: number;
 };
 
 export type FinanceSummary = {
@@ -55,10 +83,10 @@ export type FinanceSummary = {
   readonly netWorthYen: number;
   readonly byCategory: ReadonlyArray<{ readonly category: string; readonly amountYen: number }>;
   readonly byPaymentMethod: ReadonlyArray<{ readonly paymentMethod: string; readonly amountYen: number }>;
-  readonly assetAllocation: ReadonlyArray<{ readonly assetKind: string; readonly amountYen: number }>;
+  readonly assetAllocation: ReadonlyArray<{ readonly assetKind: AssetKind; readonly amountYen: number }>;
   readonly transactions: ReadonlyArray<{
     readonly id: string;
-    readonly kind: string;
+    readonly kind: FinanceEntryKind;
     readonly amountYen: number;
     readonly adjustedAmountYen: number;
     readonly category: string;
@@ -83,12 +111,12 @@ export type Job = {
   readonly id: string;
   readonly taskId: string | null;
   readonly repositoryId: string | null;
-  readonly kind: string;
-  readonly status: string;
+  readonly kind: JobKind;
+  readonly status: JobStatus;
   readonly payloadJson: string;
   readonly leaseToken: string | null;
   readonly cancelRequestedAt: string | null;
-  readonly provider: string | null;
+  readonly provider: AgentProvider | null;
   readonly summary: string | null;
   readonly errorCode: string | null;
   readonly createdAt: string;
@@ -100,12 +128,12 @@ export type RunnerHealth = {
   readonly name: string;
   readonly lastHeartbeatAt: string;
   readonly tokenExpiresAt: string | null;
-  readonly orcaStatus: string;
+  readonly orcaStatus: OrcaStatus;
   readonly lastErrorCode: string | null;
 };
 
 export type ConnectorHealth = {
-  readonly connector: string;
+  readonly connector: ConnectorKind;
   readonly sourceId: string;
   readonly sourceLabel: string;
   readonly watermark: string | null;
@@ -117,11 +145,22 @@ export type ConnectorHealth = {
 export type Meal = {
   readonly id: string;
   readonly photoId: string | null;
+  readonly additionalPhotoIds: ReadonlyArray<string>;
+  readonly blurredPhotoIds: ReadonlyArray<string>;
   readonly memo: string;
-  readonly mealKind: string;
   readonly occurredAt: string;
   readonly recordedAt: string;
   readonly tags: ReadonlyArray<string>;
+};
+
+export type MealGalleryPage = {
+  readonly meals: ReadonlyArray<Meal>;
+  readonly nextTo: string | null;
+};
+
+export type MealDayCount = {
+  readonly occurredAt: string;
+  readonly count: number;
 };
 
 export type Repository = {
@@ -130,8 +169,8 @@ export type Repository = {
 };
 
 export type SourceRepositoryMapping = {
-  readonly connector: "slack" | "chatwork";
-  readonly sourceScope: "channel" | "room";
+  readonly connector: SourceMappingConnector;
+  readonly sourceScope: SourceScope;
   readonly sourceId: string;
   readonly sourceLabel: string;
   readonly repositoryId: string;

@@ -1,11 +1,16 @@
 import type { MonitorObservation, MonitorTarget } from "@life-console/contracts";
-import { type WeightPoint, type Conversation, type CreateReplyDraftsInput, type SaveReplyDraftInput } from "@life-console/contracts";
+import { nutritionCandidateSchema, type NutritionAnalysisPayload, type NutritionCandidate, type SaveNutritionEstimateInput } from "@life-console/contracts";
+import { stravaCaloriesFetchResultSchema, stravaCaloriesPlanResultSchema, stravaCaloriesReconcileResultSchema, type StravaCaloriesFetchInput, type StravaCaloriesFetchResult, type StravaCaloriesPlanInput, type StravaCaloriesPlanResult, type StravaCaloriesReconcileInput, type StravaCaloriesReconcileResult } from "@life-console/contracts";
+import { connectorKindSchema, conversationClassificationSchema, weightSourceSchema, type WeightPoint, type Conversation, type CreateReplyDraftsInput, type SaveReplyDraftInput } from "@life-console/contracts";
 import { err, ok, safeTry, type Result } from "@life-console/core";
 import { z } from "zod";
 
 import type { RunnerConfig } from "../config";
 import { runnerError, type RunnerError } from "../errors";
 
+// runner は手動更新のため API より古い版で動きうる。
+// kind・status・provider を候補値で検証すると、新しい値を持つ job の claim 応答が parse できず、
+// claim 済みの job を完了報告できないまま lease 切れまで抱える。未対応の kind は job の実行時に失敗として報告する。
 const jobSchema = z.object({
   id: z.string(),
   taskId: z.string().nullable(),
@@ -42,6 +47,12 @@ export type RunnerJob = z.infer<typeof jobSchema>;
 export type AgentJobContext = z.infer<typeof agentContextSchema>;
 
 export interface ApiRepository {
+  nutritionCandidates(input: NutritionAnalysisPayload, signal: AbortSignal): Promise<Result<NutritionCandidate[], RunnerError>>;
+  readMealPhoto(photoId: string, signal: AbortSignal): Promise<Result<{ readonly contentType: "image/jpeg" | "image/png" | "image/webp"; readonly base64: string }, RunnerError>>;
+  saveNutritionEstimate(input: SaveNutritionEstimateInput, signal: AbortSignal): Promise<Result<null, RunnerError>>;
+  planStravaCalories(input: StravaCaloriesPlanInput, signal: AbortSignal): Promise<Result<StravaCaloriesPlanResult, RunnerError>>;
+  reconcileStravaCalories(input: StravaCaloriesReconcileInput, signal: AbortSignal): Promise<Result<StravaCaloriesReconcileResult, RunnerError>>;
+  fetchStravaCalories(input: StravaCaloriesFetchInput, signal: AbortSignal): Promise<Result<StravaCaloriesFetchResult, RunnerError>>;
   registerMonitors(targets: ReadonlyArray<MonitorTarget>): Promise<Result<null, RunnerError>>;
   reportObservation(observation: MonitorObservation, historical: boolean): Promise<Result<null, RunnerError>>;
   replyCandidates(input: CreateReplyDraftsInput): Promise<Result<Conversation[], RunnerError>>;
@@ -63,11 +74,7 @@ export interface ApiRepository {
 const responseEnvelope = <T extends z.ZodType>(schema: T) => z.object({ data: schema });
 
 export const createApiRepository = (configuration: RunnerConfig): ApiRepository => {
-  const request = async <T>(
-    path: string,
-    schema: z.ZodType<T>,
-    init?: RequestInit,
-  ): Promise<Result<T, RunnerError>> => {
+  const fetchResponse = async (path: string, init?: RequestInit): Promise<Result<Response, RunnerError>> => {
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Bearer ${configuration.runnerToken}`);
     if (configuration.cfAccessClientId !== undefined && configuration.cfAccessClientSecret !== undefined) {
@@ -84,6 +91,11 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
     if (fetched.value.status >= 300 && fetched.value.status < 400) {
       return err(runnerError("access_session_required", "Cloudflare Access がログイン redirect を返しました。"));
     }
+    return ok(fetched.value);
+  };
+  const request = async <T>(path: string, schema: z.ZodType<T>, init?: RequestInit): Promise<Result<T, RunnerError>> => {
+    const fetched = await fetchResponse(path, init);
+    if (!fetched.ok) return fetched;
     const contentType = fetched.value.headers.get("Content-Type");
     if (contentType === null || !contentType.includes("application/json")) {
       return err(runnerError("invalid_api_content_type", "Life Console API が JSON 以外を返しました。"));
@@ -107,12 +119,35 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
   });
 
   return {
+    nutritionCandidates: (input, signal) => request(`/api/v1/runner/nutrition/candidates?${new URLSearchParams(input.mealId === undefined ? {} : { mealId: input.mealId }).toString()}`, z.array(nutritionCandidateSchema), { signal }),
+    saveNutritionEstimate: (input, signal) => request("/api/v1/runner/nutrition/estimates", z.null(), {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal,
+    }),
+    planStravaCalories: (input, signal) => request("/api/v1/runner/strava/calories/plan", stravaCaloriesPlanResultSchema, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal,
+    }),
+    reconcileStravaCalories: (input, signal) => request("/api/v1/runner/strava/calories/reconcile", stravaCaloriesReconcileResultSchema, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal,
+    }),
+    fetchStravaCalories: (input, signal) => request("/api/v1/runner/strava/calories/fetch", stravaCaloriesFetchResultSchema, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), signal,
+    }),
+    async readMealPhoto(photoId, signal) {
+      const fetched = await fetchResponse(`/api/v1/runner/meal-photos/${encodeURIComponent(photoId)}/content`, { signal });
+      if (!fetched.ok) return fetched;
+      if (!fetched.value.ok) return err(runnerError("meal_photo_unavailable", `食事写真の取得に失敗しました（HTTP ${String(fetched.value.status)}）。`));
+      const mediaType = z.enum(["image/jpeg", "image/png", "image/webp"]).safeParse(fetched.value.headers.get("Content-Type"));
+      if (!mediaType.success) return err(runnerError("invalid_meal_photo_type", "食事写真の形式に対応していません。"));
+      const bytes = await safeTry(() => fetched.value.arrayBuffer());
+      if (!bytes.ok) return err(runnerError("meal_photo_read_failed", "食事写真を読み込めませんでした。", bytes.error));
+      return ok({ contentType: mediaType.data, base64: Buffer.from(bytes.value).toString("base64") });
+    },
     registerMonitors: (targets) => jsonRequest("/api/v1/runner/monitoring/register", z.null(), { runnerId: configuration.runnerId, targets }),
     reportObservation: (observation, historical) => jsonRequest("/api/v1/runner/monitoring/observations", z.null(), { observation, historical }),
     replyCandidates: (input) => request(`/api/v1/runner/reply-candidates?${new URLSearchParams({ connector: input.connector, period: input.period,
       ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }) }).toString()}`, z.array(z.object({
-      id: z.string(), connector: z.string(), sourceId: z.string(), externalMessageId: z.string(), authorLabel: z.string(),
-      excerpt: z.string(), sourceUrl: z.string().nullable(), classification: z.string(), occurredAt: z.string(),
+      id: z.string(), connector: connectorKindSchema, sourceId: z.string(), externalMessageId: z.string(), authorLabel: z.string(),
+      excerpt: z.string(), sourceUrl: z.string().nullable(), classification: conversationClassificationSchema, occurredAt: z.string(),
     }))),
     saveReplyDraft: (input) => jsonRequest("/api/v1/runner/reply-drafts", z.null(), input),
     registerRunner: async (orcaStatus) => {
@@ -159,7 +194,7 @@ export const createApiRepository = (configuration: RunnerConfig): ApiRepository 
     ),
     importConversations: (input) => jsonRequest("/api/v1/runner/conversations/import", z.number(), input),
     listWeightsForExport: (signal) => request("/api/v1/runner/weights/export", z.array(z.object({
-      id: z.string(), source: z.string(), weightKg: z.number(),
+      id: z.string(), source: weightSourceSchema, weightKg: z.number(), bodyFatPercent: z.number().nullable(),
       occurredAt: z.iso.datetime({ offset: true }), recordedAt: z.iso.datetime({ offset: true }),
     })), { signal }),
     importWeightCsv: (csv) => request("/api/v1/weights/import", z.number(), {

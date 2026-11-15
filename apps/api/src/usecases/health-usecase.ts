@@ -1,5 +1,5 @@
 import type { LifeConsoleRepository, Meal, WeightPoint } from "@api/repositories/life-console-repository";
-import type { CreateMealInput, CreateWeightInput, WeightGoal } from "@life-console/contracts";
+import type { CalorieBaseline, CreateMealInput, UpdateMealInput, CreateWeightInput, MealDayCount, MealGalleryPage, WeightGoal } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
@@ -7,10 +7,17 @@ import type { Clock } from "../shared/clock";
 import type { IdGenerator } from "../shared/id-generator";
 
 export interface HealthUsecase {
-  listMeals(): Promise<Result<ReadonlyArray<Meal>, AppError>>;
+  listMeals(period?: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<Meal>, AppError>>;
+  listMealGallery(to: string): Promise<Result<MealGalleryPage, AppError>>;
+  listMealDayCounts(period: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<MealDayCount>, AppError>>;
   createMeal(input: CreateMealInput): Promise<Result<Meal, AppError>>;
+  updateMeal(id: string, input: UpdateMealInput): Promise<Result<void, AppError>>;
+  deleteMeal(id: string): Promise<Result<void, AppError>>;
+  restoreMeal(id: string): Promise<Result<void, AppError>>;
   getWeightGoal(): Promise<Result<WeightGoal | null, AppError>>;
   saveWeightGoal(input: WeightGoal | null): Promise<Result<void, AppError>>;
+  getCalorieBaseline(): Promise<Result<CalorieBaseline | null, AppError>>;
+  saveCalorieBaseline(input: CalorieBaseline | null): Promise<Result<void, AppError>>;
   listWeights(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   listWeightsForExport(): Promise<Result<ReadonlyArray<WeightPoint>, AppError>>;
   createWeight(input: CreateWeightInput): Promise<Result<void, AppError>>;
@@ -22,10 +29,17 @@ export const createHealthUsecase = (
   clock: Clock,
   idGenerator: IdGenerator,
 ): HealthUsecase => ({
-  listMeals: () => repository.listMeals(),
-  createMeal: (input) => repository.createMeal(idGenerator.create(), input, clock.now().toISOString()),
+  listMeals: (period) => repository.listMeals(period),
+  listMealGallery: (to) => repository.listMealGallery(to),
+  listMealDayCounts: (period) => repository.listMealDayCounts(period),
+  createMeal: (input) => repository.createMealAndQueueNutrition(idGenerator.create(), input, clock.now().toISOString()),
+  updateMeal: (id, input) => repository.updateMeal(id, input),
+  deleteMeal: (id) => repository.deleteMeal(id, clock.now().toISOString()),
+  restoreMeal: (id) => repository.restoreMeal(id),
   getWeightGoal: () => repository.getWeightGoal(),
   saveWeightGoal: (input) => repository.saveWeightGoal(input),
+  getCalorieBaseline: () => repository.getCalorieBaseline(),
+  saveCalorieBaseline: (input) => repository.saveCalorieBaseline(input),
   listWeights: () => repository.listWeights(),
   listWeightsForExport: () => repository.listWeightsForExport(),
   createWeight: (input) => repository.createWeight(

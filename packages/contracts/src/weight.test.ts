@@ -8,7 +8,7 @@ const point = (id: string, date: string, weightKg: number): WeightPoint => ({
   occurredAt: `${date}T00:00:00+09:00`,
   recordedAt: `${date}T00:01:00+09:00`,
   source: "csv",
-  weightKg,
+  weightKg, bodyFatPercent: null,
 });
 
 describe("calculate7DayMovingAverage", () => {

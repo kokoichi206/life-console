@@ -1,0 +1,148 @@
+import { writeFile } from "node:fs/promises";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { app } from "../apps/api/src/app";
+import { createApiStorage } from "../apps/api/tests/integration/support/d1-storage";
+import type { RunnerConfig } from "../apps/runner/src/config";
+import { createApiRepository } from "../apps/runner/src/repositories/api-repository";
+import { createNutritionGenerator } from "../apps/runner/src/repositories/nutrition-generator";
+import { createJobExecutorUsecase } from "../apps/runner/src/usecases/job-executor-usecase";
+import { createRunnerUsecase } from "../apps/runner/src/usecases/runner-usecase";
+import { ok } from "../packages/core/src/index";
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("栄養解析の HTTP と runner の経路", () => {
+  it("runner の認証がない写真取得・結果保存を拒否する", async () => {
+    for (const [path, method] of [["/api/v1/runner/meal-photos/photo/content", "GET"], ["/api/v1/runner/nutrition/candidates", "GET"], ["/api/v1/runner/nutrition/estimates", "POST"]] as const) {
+      expect((await app.request(path, { method }, { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker" })).status).toBe(401);
+    }
+  });
+  it.each(["photo", null])("写真またはメモの取得から解析・lease 付き保存・ジョブ完了・再表示まで通る: %s", async (photoId) => {
+    const { database, repository, binding } = createApiStorage();
+    const get = vi.fn().mockResolvedValue({ body: new Blob(["test-image"]).stream(), httpEtag: "\"test\"" });
+    const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding, MEAL_PHOTOS: { get, head: vi.fn().mockResolvedValue({}) } };
+    try {
+      const now = new Date().toISOString();
+      await repository.createMealPhoto({ id: "photo", clientId: "photo-client", contentType: "image/jpeg", objectKey: "meals/test.jpg", tokenHash: "hash", expiresAt: now, now });
+      const response = await app.request("/api/v1/meals", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: "11111111-1111-4111-8111-111111111111", photoId, additionalPhotoIds: [], memo: "牛乳200ml", occurredAt: now, tags: [] }) }, environment);
+      expect(response.status).toBe(200);
+      expect(database.prepare("SELECT status, kind FROM jobs").get()).toMatchObject({ status: "queued", kind: "nutrition_analysis" });
+      vi.stubGlobal("fetch", (url: string, init: RequestInit) => app.request(url, init, environment));
+      const api = createApiRepository({ apiUrl: "http://localhost", runnerId: "test-runner", runnerName: "Test runner", runnerToken: "local-runner-token" } as RunnerConfig);
+      const execute = vi.fn().mockImplementation(async (_command: string, args: ReadonlyArray<string>, options: { stdin: string }) => {
+        expect(JSON.parse(options.stdin) as unknown).toEqual({ memo: "牛乳200ml" });
+        expect(args.includes("--image")).toBe(photoId !== null);
+        await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({
+          estimate: { caloriesKcal: 650, proteinGrams: 30, fatGrams: 20, carbohydrateGrams: 87.5 },
+        }));
+        return ok({ stdout: JSON.stringify({ type: "turn.completed" }), stderr: "" });
+      });
+      const executor = createJobExecutorUsecase({ api, nutritionGenerator: createNutritionGenerator({ execute }, api) } as Parameters<typeof createJobExecutorUsecase>[0]);
+      const runner = createRunnerUsecase({ api, executor, heartbeatMilliseconds: 60_000, logger: { info: vi.fn(), error: vi.fn() } });
+      expect(await runner.register()).toBe(true);
+      await runner.runOnce();
+      expect(database.prepare("SELECT status, error_code FROM jobs").get()).toMatchObject({ status: "succeeded", error_code: null });
+      const listed = await app.request("/api/v1/nutrition", {}, environment);
+      expect(await listed.json()).toMatchObject({ data: [{ estimate: { caloriesKcal: 650, model: "gpt-5.6-luna" } }] });
+      if (photoId === null) expect(get).not.toHaveBeenCalled();
+      else expect(get).toHaveBeenCalledWith("meals/test.jpg");
+      expect(execute).toHaveBeenCalledOnce();
+    } finally { database.close(); }
+  });
+});
+
+describe("手入力カロリーの HTTP 経路", () => {
+  it("写真とカロリーを初回保存し、詳細から変更して再取得できる", async () => {
+    const { database, repository, binding } = createApiStorage();
+    const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding, MEAL_PHOTOS: { head: vi.fn().mockResolvedValue({}) } };
+    const headers = { "Content-Type": "application/json" };
+    try {
+      const now = new Date().toISOString();
+      await repository.createMealPhoto({ id: "photo", clientId: "photo-client", contentType: "image/jpeg", objectKey: "meals/test.jpg", tokenHash: "hash", expiresAt: now, now });
+      const input = { clientId: "11111111-1111-4111-8111-111111111111", photoId: "photo", additionalPhotoIds: [], occurredAt: now, manualCaloriesKcal: 520 };
+      expect((await app.request("/api/v1/meals", { method: "POST", headers, body: JSON.stringify(input) }, environment)).status).toBe(200);
+      const meal = database.prepare("SELECT id FROM meals").get()!;
+      expect(database.prepare("SELECT count(*) AS count FROM jobs").get()?.count).toBe(0);
+      expect(await (await app.request("/api/v1/nutrition", {}, environment)).json()).toMatchObject({ data: [{ manualCaloriesKcal: 520, estimate: null }] });
+      const path = `/api/v1/nutrition/${String(meal.id)}/calories`;
+      expect((await app.request(path, { method: "PUT", headers, body: JSON.stringify({ caloriesKcal: 0 }) }, environment)).status).toBe(200);
+      expect(await (await app.request("/api/v1/nutrition", {}, environment)).json()).toMatchObject({ data: [{ manualCaloriesKcal: 0, estimate: null }] });
+      for (const caloriesKcal of [-1, 1.5, "520", null]) {
+        expect((await app.request(path, { method: "PUT", headers, body: JSON.stringify({ caloriesKcal }) }, environment)).status).toBe(400);
+        expect((await app.request("/api/v1/meals", { method: "POST", headers, body: JSON.stringify({ ...input, manualCaloriesKcal: caloriesKcal }) }, environment)).status).toBe(400);
+      }
+      expect((await app.request("/api/v1/nutrition/missing/calories", { method: "PUT", headers, body: JSON.stringify({ caloriesKcal: 100 }) }, environment)).status).toBe(404);
+    } finally { database.close(); }
+  });
+});
+
+describe("解析予約後の手入力", () => {
+  it("画像解析中に手入力された個別ジョブを失敗にせず、手入力値を保持する", async () => {
+    const { database, repository, binding } = createApiStorage();
+    const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
+    const now = new Date().toISOString();
+    try {
+      expect((await repository.createMealAndQueueNutrition("meal", { clientId: "client", photoId: "photo", additionalPhotoIds: [], memo: "", occurredAt: now, tags: [] }, now)).ok).toBe(true);
+      vi.stubGlobal("fetch", (url: string, init: RequestInit) => app.request(url, init, environment));
+      const api = createApiRepository({ apiUrl: "http://localhost", runnerId: "test-runner", runnerName: "Test runner", runnerToken: "local-runner-token" } as RunnerConfig);
+      const generate = vi.fn().mockImplementation(async () => {
+        const response = await app.request("/api/v1/nutrition/meal/calories", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ caloriesKcal: 520 }) }, environment);
+        expect(response.status).toBe(200);
+        return ok({ caloriesKcal: 600, proteinGrams: 20, fatGrams: 20, carbohydrateGrams: 60, model: "test", analyzedAt: now, inputHash: "a".repeat(64) });
+      });
+      const executor = createJobExecutorUsecase({ api, nutritionGenerator: { generate } } as unknown as Parameters<typeof createJobExecutorUsecase>[0]);
+      const runner = createRunnerUsecase({ api, executor, heartbeatMilliseconds: 60_000, logger: { info: vi.fn(), error: vi.fn() } });
+      expect(await runner.register()).toBe(true);
+      await runner.runOnce();
+      expect(database.prepare("SELECT status, error_code FROM jobs").get()).toMatchObject({ status: "succeeded", error_code: null });
+      expect(await (await app.request("/api/v1/nutrition", {}, environment)).json()).toMatchObject({ data: [{ manualCaloriesKcal: 520, estimate: { proteinGrams: 20, fatGrams: 20, carbohydrateGrams: 60 }, analysisStatus: "succeeded" }] });
+    } finally { database.close(); }
+  });
+  it.each(["photo", null])("手入力済みの記録を個別解析・再解析し、カロリーと最新の栄養素を再取得する: %s", async (photoId) => {
+    const { database, repository, binding } = createApiStorage();
+    const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
+    const now = new Date().toISOString();
+    try {
+      expect((await repository.createMealAndQueueNutrition("manual", { clientId: "manual", photoId, additionalPhotoIds: [], memo: "おにぎり 1 個", manualCaloriesKcal: 200, occurredAt: now, tags: [] }, now)).ok).toBe(true);
+      vi.stubGlobal("fetch", (url: string, init: RequestInit) => app.request(url, init, environment));
+      const api = createApiRepository({ apiUrl: "http://localhost", runnerId: "test-runner", runnerName: "Test runner", runnerToken: "local-runner-token" } as RunnerConfig);
+      const generate = vi.fn();
+      const executor = createJobExecutorUsecase({ api, nutritionGenerator: { generate } } as unknown as Parameters<typeof createJobExecutorUsecase>[0]);
+      const runner = createRunnerUsecase({ api, executor, heartbeatMilliseconds: 60_000, logger: { info: vi.fn(), error: vi.fn() } });
+      expect(await runner.register()).toBe(true);
+      for (const proteinGrams of [5, 8]) {
+        generate.mockResolvedValue(ok({ caloriesKcal: 250, proteinGrams, fatGrams: 2, carbohydrateGrams: 50, model: "test", analyzedAt: new Date().toISOString(), inputHash: "a".repeat(64) }));
+        const response = await app.request("/api/v1/nutrition/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mealId: "manual" }) }, environment);
+        expect(response.status).toBe(200);
+        await runner.runOnce();
+        expect(await (await app.request("/api/v1/nutrition", {}, environment)).json()).toMatchObject({ data: [{ manualCaloriesKcal: 200, estimate: { proteinGrams }, analysisStatus: "succeeded" }] });
+      }
+      expect(generate).toHaveBeenCalledWith({ id: "manual", photoId, additionalPhotoIds: [], memo: "おにぎり 1 個" }, expect.any(AbortSignal));
+      expect(database.prepare("SELECT count(*) AS count FROM nutrition_estimates").get()?.count).toBe(2);
+    } finally { database.close(); }
+  });
+});
+
+it("栄養 API は日本時間の指定範囲だけを返し、不完全な範囲を拒否する", async () => {
+  const { database, repository, binding } = createApiStorage();
+  const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
+  try {
+    for (const [id, occurredAt] of [
+      ["before", "2026-09-06T14:59:59Z"],
+      ["start", "2026-09-06T15:00:00Z"],
+      ["end", "2026-09-13T23:59:59+09:00"],
+      ["after", "2026-09-13T15:00:00Z"],
+    ] as const) {
+      await repository.createMealAndQueueNutrition(id, { clientId: id, photoId: null, additionalPhotoIds: [], memo: "", occurredAt, tags: [], manualCaloriesKcal: 500 }, "2026-09-14T00:00:00Z");
+    }
+    const response = await app.request("/api/v1/nutrition?from=2026-09-07&to=2026-09-13", {}, environment);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: [{ mealId: "end" }, { mealId: "start" }] });
+    for (const query of ["from=2026-09-07", "to=2026-09-13", "from=2026-09-14&to=2026-09-13", "from=invalid&to=2026-09-13"]) {
+      expect((await app.request(`/api/v1/nutrition?${query}`, {}, environment)).status).toBe(400);
+    }
+  } finally { database.close(); }
+});

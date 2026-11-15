@@ -31,15 +31,15 @@ export const createRunnerUsecase = (dependencies: Dependencies): RunnerUsecase =
     let heartbeatActive = true;
     let heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
     let leaseLost = false;
-    const waitingForUser = job.kind === "agent" || job.kind === "github_promotion";
+    const agentExecution = job.kind === "agent" || job.kind === "github_promotion";
 
     const heartbeat = async (): Promise<boolean> => {
       if (!heartbeatActive) return false;
       const result = await dependencies.api.heartbeatJob(
         job.id,
         leaseToken,
-        waitingForUser,
-        waitingForUser ? "agent の明示的な完了報告を待っています。" : "実行中",
+        false,
+        agentExecution ? null : "実行中",
       );
       if (!heartbeatActive) return false;
       if (!result.ok) {

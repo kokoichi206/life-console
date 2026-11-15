@@ -1,26 +1,38 @@
-import type { WeightPoint, WeightGoal } from "@life-console/contracts";
+import type { CalorieBaseline, Meal, MealNutrition, StravaActivityCalories, WeightPoint, WeightGoal } from "@life-console/contracts";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { useMemo } from "react";
-import { expect, fireEvent, waitFor, within } from "storybook/test";
+import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
 
 import { parseHealthSearch } from "./health-search";
 import { HealthRoutePage } from "./HealthRoutePage";
 
 const weights: WeightPoint[] = [
-  { id: "previous", source: "csv", weightKg: 84, occurredAt: "2026-08-31T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
-  { id: "csv", source: "csv", weightKg: 80, occurredAt: "2026-09-07T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
-  { id: "manual", source: "manual", weightKg: 81.4, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
+  { id: "previous", source: "csv", bodyFatPercent: null, weightKg: 84, occurredAt: "2026-08-31T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
+  { id: "csv", source: "csv", bodyFatPercent: null, weightKg: 80, occurredAt: "2026-09-07T00:00:00+09:00", recordedAt: "2026-09-07T00:00:00Z" },
+  { id: "manual", source: "manual", bodyFatPercent: null, weightKg: 81.4, occurredAt: "2026-09-06T23:00:00Z", recordedAt: "2026-09-07T00:00:00Z" },
 ];
-const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null) => [
+const handlers = (entries: WeightPoint[], goal: WeightGoal | null = null, baseline: CalorieBaseline | null = null) => [
+  http.get("*/api/v1/health-share", () => HttpResponse.json({ data: null })),
+  http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: false, athleteId: null } })),
   http.get("*/api/v1/weight-goal", () => HttpResponse.json({ data: goal })),
   http.put("*/api/v1/weight-goal", async ({ request }) => {
     goal = await request.json() as WeightGoal | null;
     return HttpResponse.json({ data: null });
   }),
+  http.get("*/api/v1/calorie-baseline", () => HttpResponse.json({ data: baseline })),
+  http.put("*/api/v1/calorie-baseline", async ({ request }) => {
+    baseline = await request.json() as CalorieBaseline | null;
+    return HttpResponse.json({ data: null });
+  }),
+  http.get("*/api/v1/strava/calories", () => HttpResponse.json({ data: [] })),
+  http.get("*/api/v1/strava/calories/sync-status", () => HttpResponse.json({ data: { lastJob: null, backfill: null } })),
   http.get("*/api/v1/weights", () => HttpResponse.json({ data: entries })),
+  http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: [] })),
   http.get("*/api/v1/meals", () => HttpResponse.json({ data: [] })),
+  http.get("*/api/v1/meal-day-counts", () => HttpResponse.json({ data: [] })),
+  http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [], nextTo: null } })),
 ];
 const meta = {
   title: "Pages/健康",
@@ -30,8 +42,8 @@ const meta = {
     const router = useMemo(() => {
       const root = createRootRoute();
       const health = createRoute({ getParentRoute: () => root, path: "/health", validateSearch: parseHealthSearch, component: Story });
-      return createRouter({ routeTree: root.addChildren([health]), history: createMemoryHistory({ initialEntries: [context.parameters.entry === undefined ? "/health" : `/health?entry=${context.parameters.entry}`] }) });
-    }, [context.parameters.entry, Story]);
+      return createRouter({ routeTree: root.addChildren([health]), search: { strict: true }, history: createMemoryHistory({ initialEntries: [context.parameters.initialUrl ?? (context.parameters.entry === undefined ? "/health" : `/health?entry=${context.parameters.entry}`)] }) });
+    }, [context.parameters.entry, context.parameters.initialUrl, Story]);
     return <RouterProvider router={router} />;
   }],
 } satisfies Meta<typeof HealthRoutePage>;
@@ -40,19 +52,70 @@ type Story = StoryObj<typeof meta>;
 
 export const Recorded: Story = {
   play: async ({ canvas, userEvent }) => {
-    await expect(await canvas.findByRole("button", { name: "体重を記録" })).toBeVisible();
+    await expect(await canvas.findByRole("button", { name: /^体重$/ })).toBeVisible();
     await expect(canvas.getByRole("group", { name: "表示期間" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "表で見る" }));
-    await expect(canvas.getByRole("table")).toHaveTextContent("80.70");
+    await expect(canvas.getByRole("table", { name: "体重の推移" })).toHaveTextContent("80.70");
     await expect(canvas.getByText("25%")).toBeVisible();
   },
 };
+
+export const OpenAndroidMealApp: Story = {
+  name: "Android の食事一覧を開く入口",
+  beforeEach: () => {
+    const userAgent = navigator.userAgent;
+    Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Android" });
+    return () => {
+      Object.defineProperty(navigator, "userAgent", { configurable: true, value: userAgent });
+    };
+  },
+  play: async ({ canvas }) => {
+    const link = await canvas.findByRole("link", { name: "Android アプリで食事を開く" });
+    await expect(link).toHaveAttribute("href", "intent://meals#Intent;scheme=dev.kokoichi.lifeconsole;package=dev.kokoichi.lifeconsole;end");
+    await expect(await canvas.findByRole("button", { name: /^食事$/ })).toBeEnabled();
+  },
+};
 export const Empty: Story = { parameters: { msw: { handlers: handlers([]) } } };
+const galleryMeal = (id: string, occurredAt: string): Meal => ({ id, photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "", occurredAt, recordedAt: occurredAt, tags: [] });
+export const LoadOlderMeals: Story = {
+  name: "食事は 1 週間ずつ追加で読み込む",
+  parameters: { msw: { handlers: [
+    http.get("*/api/v1/meal-gallery", ({ request }) => {
+      const to = new URL(request.url).searchParams.get("to");
+      if (to === "2026-09-06") return HttpResponse.json({ data: { meals: [galleryMeal("older", "2026-09-01T09:00:00+09:00")], nextTo: null } });
+      return HttpResponse.json({ data: { meals: [galleryMeal("recent", "2026-09-07T09:00:00+09:00")], nextTo: "2026-09-06" } });
+    }),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(await canvas.findByRole("button", { name: "2026/9/7 09:00 の食事を開く" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "もっと見る" }));
+    await expect(await canvas.findByRole("button", { name: "2026/9/1 09:00 の食事を開く" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "もっと見る" })).not.toBeInTheDocument();
+  },
+};
+export const MealLayoutUrl: Story = {
+  name: "食事一覧の URL の表示形式を復元し、詳細の開閉後も保つ",
+  parameters: { initialUrl: "/health?mealLayout=wrapped", msw: { handlers: [
+    http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [galleryMeal("layout-meal", "2026-09-07T09:00:00+09:00")], nextTo: null } })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await expect(await canvas.findByRole("button", { name: "2 列折り返し" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(canvas.getByRole("button", { name: "2026/9/7 09:00 の食事を開く" }));
+    const screen = within(canvasElement.ownerDocument.body);
+    const dialog = within(await screen.findByRole("dialog", { name: "食事の記録" }));
+    await userEvent.click(dialog.getByRole("button", { name: "食事の詳細を閉じる" }));
+    await expect(canvas.getByRole("button", { name: "2 列折り返し" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(canvas.getByRole("button", { name: "横スクロール" }));
+    await expect(canvas.getByRole("button", { name: "横スクロール" })).toHaveAttribute("aria-pressed", "true");
+  },
+};
 export const Dark: Story = { globals: { theme: "dark" } };
 export const ChartTooltipMobile: Story = {
   name: "狭い画面でも体重の詳細が切れない",
   parameters: { msw: { handlers: handlers(weights.map((point) => point.id === "csv" ? { ...point, occurredAt: "2026-09-05T00:00:00+09:00" } : point)) } },
-  decorators: [(Story) => <div style={{ maxWidth: 360 }}><Story /></div>],
+  decorators: [(Story) => <div className="max-w-90"><Story /></div>],
   play: async ({ canvas, userEvent }) => {
     const chart = await canvas.findByRole("img", { name: "体重の実測値と 7 日移動平均の推移" });
     chart.scrollIntoView({ block: "center" });
@@ -91,17 +154,19 @@ export const MealEntryOpen: Story = {
     await expect(screen.queryByRole("dialog", { name: "体重を記録" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "食事の記録を閉じる" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: "体重を記録" }));
+    await userEvent.click(screen.getByRole("button", { name: /^体重$/ }));
     await expect(await screen.findByRole("dialog", { name: "体重を記録" })).toBeVisible();
   },
 };
 
 export const Goal: Story = {
-  parameters: { msw: { handlers: handlers(weights, { startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-12-31" }) } },
+  parameters: { msw: { handlers: handlers(weights, { startDate: "2026-09-01", startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-12-31" }) } },
   play: async ({ canvas, canvasElement, userEvent }) => {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(await canvas.findByRole("button", { name: "目標を編集" }));
     const dialog = await screen.findByRole("dialog", { name: "体重の目標を設定" });
+    await expect(within(dialog).getByLabelText("開始日（任意）")).toHaveValue("2026-09-01");
+    await fireEvent.change(within(dialog).getByLabelText("開始日（任意）"), { target: { value: "2026-08-01" } });
     await userEvent.clear(within(dialog).getByLabelText("目標体重 (kg)"));
     await userEvent.type(within(dialog).getByLabelText("目標体重 (kg)"), "79");
     await userEvent.click(within(dialog).getByRole("button", { name: "目標を保存" }));
@@ -109,6 +174,15 @@ export const Goal: Story = {
     await expect(canvas.getByText("目標 79.0 kg")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "目標を編集" }));
     await expect(await screen.findByLabelText("目標体重 (kg)")).toHaveValue(79);
+    await expect(within(await screen.findByRole("dialog", { name: "体重の目標を設定" })).getByLabelText("開始日（任意）")).toHaveValue("2026-08-01");
+    const reopenedDialog = await screen.findByRole("dialog", { name: "体重の目標を設定" });
+    await fireEvent.change(within(reopenedDialog).getByLabelText("開始日（任意）"), { target: { value: "" } });
+    await userEvent.click(within(reopenedDialog).getByRole("button", { name: "目標を保存" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await expect(canvas.getByRole("img", { name: /^目標の達成率/ })).toBeVisible();
+    await expect(canvas.queryByText("日付 未設定")).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "目標を編集" }));
+    await expect(within(await screen.findByRole("dialog", { name: "体重の目標を設定" })).getByLabelText("開始日（任意）")).toHaveValue("");
     await userEvent.click(screen.getByRole("button", { name: "目標を解除" }));
     await waitFor(() => expect(canvas.getByRole("button", { name: "目標を設定" })).toBeVisible());
   },
@@ -130,7 +204,7 @@ export const RangeControls: Story = {
     await expect(start).toHaveValue("2026-08-31");
     await userEvent.click(canvas.getByRole("button", { name: "表示期間を狭める" }));
     await expect(start).not.toHaveValue("2026-08-31");
-    await userEvent.click(canvas.getByRole("button", { name: "体重を記録" }));
+    await userEvent.click(canvas.getByRole("button", { name: /^体重$/ }));
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(await screen.findByRole("button", { name: "体重の記録を閉じる" }));
     await expect(start).not.toHaveValue("2026-08-31");
@@ -138,11 +212,11 @@ export const RangeControls: Story = {
 };
 
 const trendWeights: WeightPoint[] = Array.from({ length: 120 }, (_, index) => ({
-  id: `trend-${index}`, source: "manual", weightKg: Math.round((90 - index * 0.08 + Math.sin(index * 0.7) * 0.5) * 10) / 10,
+  id: `trend-${index}`, source: "manual", bodyFatPercent: null, weightKg: Math.round((90 - index * 0.08 + Math.sin(index * 0.7) * 0.5) * 10) / 10,
   occurredAt: new Date(Date.UTC(2026, 4, 1 + index)).toISOString(), recordedAt: "2026-09-01T00:00:00Z",
 }));
 export const GoalOverview: Story = {
-  parameters: { msw: { handlers: handlers(trendWeights, { startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-09-30" }) } },
+  parameters: { msw: { handlers: handlers(trendWeights, { startDate: "2026-09-01", startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-09-30" }) } },
 };
 
 export const MobileWeightOverview: Story = {
@@ -158,10 +232,30 @@ export const MobileWeightOverview: Story = {
   globals: { viewport: { value: "weightMobile", isRotated: false } },
 };
 
+export const NarrowWeightOverview: Story = {
+  name: "狭い表示領域でもページが横にはみ出さない",
+  parameters: {
+    viewport: {
+      options: {
+        narrowWeight: { name: "体重グラフ · 300 × 840", styles: { width: "300px", height: "840px" }, type: "mobile" },
+      },
+    },
+  },
+  globals: { viewport: { value: "narrowWeight", isRotated: false } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await canvas.findByRole("img", { name: "体重の実測値と 7 日移動平均の推移" });
+    const root = canvasElement.ownerDocument.documentElement;
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+    await userEvent.click(canvas.getByRole("button", { name: "表で見る" }));
+    await expect(canvas.getByRole("table", { name: "体重の推移" })).toBeVisible();
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+  },
+};
+
 export const DragWeightPeriod: Story = {
   name: "グラフを直接動かし、最新の期間へ戻る",
   parameters: { ...GoalOverview.parameters },
-  decorators: [(Story) => <div style={{ maxWidth: 390 }}><Story /></div>],
+  decorators: [(Story) => <div className="max-w-97.5"><Story /></div>],
   play: async ({ canvas, canvasElement, userEvent }) => {
     const chart = await canvas.findByRole("img", { name: "体重の実測値と 7 日移動平均の推移" });
     chart.scrollIntoView({ block: "center" });
@@ -180,7 +274,7 @@ export const DragWeightPeriod: Story = {
     const shiftedStart = (start as HTMLInputElement).value;
     const shiftedEnd = (end as HTMLInputElement).value;
     await expect(Date.parse(shiftedEnd) - Date.parse(shiftedStart)).toBe(Date.parse(initialEnd) - Date.parse(initialStart));
-    await userEvent.click(canvas.getByRole("button", { name: "体重を記録" }));
+    await userEvent.click(canvas.getByRole("button", { name: /^体重$/ }));
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(await screen.findByRole("button", { name: "体重の記録を閉じる" }));
     await expect(start).toHaveValue(shiftedStart);
@@ -212,5 +306,519 @@ export const TapWeightDetails: Story = {
     await expect(canvas.getByRole("tooltip")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "表示期間を狭める" }));
     await expect(canvas.queryByRole("tooltip")).not.toBeInTheDocument();
+  },
+};
+
+export const WeeklyExerciseAndMeals: Story = {
+  name: "週を選んで体重・運動・食事を一緒に振り返る",
+  parameters: { initialUrl: "/health?running=show&from=2026-08-31&to=2026-09-13", msw: { handlers: [
+    http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+    http.get("*/api/v1/strava/activities", async ({ request }) => {
+      await delay(1_200);
+      return HttpResponse.json({ data: new URL(request.url).searchParams.get("page") === "1"
+        ? {
+            activities: [{ id: "123", name: "架空の朝ラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 15000, movingSeconds: 5400, elapsedSeconds: 5500, averageHeartrate: 145 }], nextPage: 2,
+          }
+        : { activities: [], nextPage: null } });
+    }),
+    http.get("*/api/v1/meal-day-counts", () => HttpResponse.json({ data: [{ occurredAt: "2026-09-07", count: 1 }, { occurredAt: "2026-08-31", count: 1 }] })),
+    http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [
+      { id: "current-meal", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "架空の食事メモ・今週", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
+      { id: "previous-meal", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "架空の食事メモ・前週", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
+    ], nextTo: null } })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" });
+    await expect(chart).toHaveTextContent("15.0 km ・ 1 回");
+    await expect(canvas.getByText("架空の食事メモ・前週")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "この週のランと食事を見る" }));
+    await expect(canvas.getByText("架空の食事メモ・前週")).toBeVisible();
+    await expect(await canvas.findByText("架空の食事メモ・今週")).toBeVisible();
+    await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-09-07");
+    await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-13");
+    await expect(await canvas.findByText("架空の朝ラン")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "2026/9/7 12:00 の食事を開く" }));
+  },
+};
+
+const combinedTrendHandlers = [
+  http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+  http.get("*/api/v1/strava/activities", ({ request }) => HttpResponse.json({ data: {
+    activities: new URL(request.url).searchParams.get("page") === "1"
+      ? Array.from({ length: 12 }, (_, index) => ({
+          id: `synthetic-${index}`, name: "架空のランニング", sportType: "Run", occurredAt: new Date(Date.UTC(2026, 5, 15 + index * 7)).toISOString(),
+          distanceMeters: [10000, 18000, 0, 22000, 15000, 0, 9000, 19000, 25000, 8000, 16000, 23000][index]!, movingSeconds: 3600, elapsedSeconds: 3700, averageHeartrate: 145,
+        })).filter((run) => run.distanceMeters > 0)
+      : [], nextPage: new URL(request.url).searchParams.get("page") === "1" ? 2 : null,
+  } })),
+  ...handlers(trendWeights),
+];
+export const CombinedTrendOverview: Story = {
+  name: "体重の線と週の走行距離",
+  parameters: { initialUrl: "/health?running=show&from=2026-06-12&to=2026-09-09", msw: { handlers: combinedTrendHandlers } },
+  play: async ({ canvas, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" });
+    chart.scrollIntoView({ block: "center" });
+    const bounds = chart.getBoundingClientRect();
+    await userEvent.pointer({ target: chart, keys: "[MouseLeft]", coords: { clientX: bounds.left + bounds.width * 0.65, clientY: bounds.top + 180 } });
+    await expect(canvas.getByRole("tooltip")).toBeVisible();
+    await userEvent.unhover(chart);
+    await expect(canvas.getByRole("button", { name: "この週のランと食事を見る" })).toBeVisible();
+  },
+};
+export const CombinedTrendDark: Story = { ...CombinedTrendOverview, globals: { theme: "dark" } };
+export const CombinedTrendMobile: Story = { ...CombinedTrendOverview, parameters: { ...CombinedTrendOverview.parameters, viewport: MobileWeightOverview.parameters?.viewport }, globals: { viewport: { value: "weightMobile", isRotated: false } } };
+export const CombinedTrendMobileDark: Story = { ...CombinedTrendMobile, globals: { ...CombinedTrendMobile.globals, theme: "dark" } };
+export const ExerciseFetchFailure: Story = {
+  name: "運動の取得が途中で失敗したら棒グラフを出さない",
+  parameters: { initialUrl: "/health?running=show", msw: { handlers: [
+    http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+    http.get("*/api/v1/strava/activities", ({ request }) => new URL(request.url).searchParams.get("page") === "1"
+      ? HttpResponse.json({ data: { activities: [{ id: "synthetic-run", name: "架空のラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 15000, movingSeconds: 5400, elapsedSeconds: 5500, averageHeartrate: null }], nextPage: 2 } })
+      : HttpResponse.json({ error: { message: "Strava の取得に失敗しました。" } }, { status: 502 })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText(/期間全体を取得できていないため/)).toBeVisible();
+    await expect(canvas.queryByRole("img", { name: "体重と週ごとの走行距離の推移" })).not.toBeInTheDocument();
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "この週のランと食事を見る" })).not.toBeInTheDocument();
+  },
+};
+
+export const RunningWithoutWeight: Story = {
+  name: "体重未記録でも走行距離を表示する",
+  parameters: { initialUrl: "/health?running=show&from=2026-06-12&to=2026-09-09", msw: { handlers: [
+    http.get("*/api/v1/weights", () => HttpResponse.json({ data: [] })), ...combinedTrendHandlers,
+  ] } },
+  play: async ({ canvas }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" });
+    await expect(chart).toBeVisible();
+    await expect(chart).toHaveTextContent("25.0 km ・ 1 回");
+    await expect(canvas.getByText("この週の体重記録はありません")).toBeVisible();
+    await expect(canvas.queryByText("表示できる体重記録がありません。")).not.toBeInTheDocument();
+  },
+};
+
+const calorieMeals: MealNutrition[] = [600, 700, 600].map((caloriesKcal, index) => ({
+  mealId: `meal-${String(index)}`, photoId: null, occurredAt: `2026-09-07T0${String(index + 6)}:00:00Z`,
+  manualCaloriesKcal: caloriesKcal, estimate: null, analysisStatus: null, analysisSummary: null,
+}));
+const calorieRun = { id: "run-907", name: "架空の朝ラン", sportType: "Run", occurredAt: "2026-09-07T00:00:00Z", distanceMeters: 12000, movingSeconds: 3600, elapsedSeconds: 3700, averageHeartrate: 142 };
+const measuredCalories: StravaActivityCalories[] = [{ activityId: "run-907", occurredAt: calorieRun.occurredAt, status: "measured", caloriesKcal: 500 }];
+const calorieBalanceHandlers = (calories: (call: number) => StravaActivityCalories[]) => {
+  let call = 0;
+  return [
+    http.post("*/api/v1/strava/sync", async ({ request }) => {
+      await expect(await request.json()).toEqual({ from: "2026-09-01", to: "2026-09-07" });
+      return HttpResponse.json({ data: null });
+    }),
+    http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+    http.get("*/api/v1/strava/activities", ({ request }) => HttpResponse.json({ data: new URL(request.url).searchParams.get("page") === "1"
+      ? { activities: [calorieRun], nextPage: 2 }
+      : { activities: [], nextPage: null } })),
+    http.get("*/api/v1/strava/calories/sync-status", () => HttpResponse.json({ data: { lastJob: { status: "succeeded", at: "2026-09-14T06:12:00.000Z", errorCode: null }, backfill: null } })),
+    http.get("*/api/v1/strava/calories", () => {
+      call += 1;
+      return HttpResponse.json({ data: calories(call) });
+    }),
+    http.get("*/api/v1/nutrition", () => HttpResponse.json({ data: calorieMeals })),
+    ...handlers(weights, null, { dailyExpenditureKcal: 1500 }),
+  ];
+};
+
+export const CalorieBaselineEntry: Story = {
+  name: "URL から基準消費量を設定して解除する",
+  parameters: { entry: "baseline" },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    const dialog = await screen.findByRole("dialog", { name: "1 日の基準消費量を設定" });
+    await userEvent.type(within(dialog).getByLabelText("1 日の基準消費量（kcal）"), "1500");
+    await userEvent.click(within(dialog).getByRole("button", { name: "基準消費量を保存" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await expect(await canvas.findByText(/基準消費量 1,500 kcal/)).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "基準消費量を編集" }));
+    await expect(await screen.findByLabelText("1 日の基準消費量（kcal）")).toHaveValue(1500);
+    await userEvent.click(screen.getByRole("button", { name: "基準消費量を解除" }));
+    await waitFor(() => expect(canvas.getByRole("button", { name: "基準消費量を設定" })).toBeVisible());
+  },
+};
+
+export const CalorieBaselineSaveError: Story = {
+  name: "基準消費量の保存失敗",
+  parameters: { entry: "baseline", msw: { handlers: [
+    http.put("*/api/v1/calorie-baseline", () => HttpResponse.json({ error: { message: "基準消費量を保存できませんでした。" } }, { status: 500 })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvasElement, userEvent }) => {
+    const screen = within(canvasElement.ownerDocument.body);
+    await userEvent.type(await screen.findByLabelText("1 日の基準消費量（kcal）"), "1500");
+    await userEvent.click(screen.getByRole("button", { name: "基準消費量を保存" }));
+    await expect(await screen.findByRole("alert")).toHaveTextContent("基準消費量を保存できませんでした。");
+    await expect(screen.getByLabelText("1 日の基準消費量（kcal）")).toHaveValue(1500);
+  },
+};
+
+export const CalorieBalanceWithStrava: Story = {
+  name: "摂取と運動を同じ期間で見る",
+  parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: calorieBalanceHandlers(() => measuredCalories) } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("+100")).toBeVisible();
+    await expect(canvas.getByText("摂取 1,900 kcal、運動 500 kcal")).toBeInTheDocument();
+    await expect(canvas.getByText(/基準消費量 1,500 kcal/)).toBeVisible();
+  },
+};
+
+export const NarrowHealthRecords: Story = {
+  name: "狭い画面で収支・運動・食事とフォーカスを確認する",
+  parameters: {
+    ...NarrowWeightOverview.parameters,
+    initialUrl: "/health?from=2026-09-01&to=2026-09-07",
+    msw: { handlers: [
+      http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: calorieMeals.map((meal) => ({
+        id: meal.mealId, photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "架空の食事", tags: [], occurredAt: meal.occurredAt, recordedAt: meal.occurredAt,
+      })), nextTo: null } })),
+      ...calorieBalanceHandlers(() => measuredCalories),
+    ] },
+  },
+  globals: { viewport: { value: "narrowWeight", isRotated: false } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await expect(await canvas.findByText("+100")).toBeVisible();
+    await expect(await canvas.findByText("架空の朝ラン")).toBeVisible();
+    await expect(await canvas.findAllByText("架空の食事")).toHaveLength(3);
+    const root = canvasElement.ownerDocument.documentElement;
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+    await userEvent.click(canvas.getByText("週ごとの数字を見る", { selector: "summary" }));
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+    const goalButton = canvas.getByRole("button", { name: "目標を設定" });
+    goalButton.focus();
+    await expect(goalButton).toHaveFocus();
+    const buttonBounds = goalButton.getBoundingClientRect();
+    for (let ancestor = goalButton.parentElement; ancestor !== null && ancestor !== root; ancestor = ancestor.parentElement) {
+      if (["hidden", "clip", "auto", "scroll"].includes(getComputedStyle(ancestor).overflowX)) {
+        // 外側に描く 3 px のリングまで、祖先の切り取り領域に収まる必要がある。
+        await expect(ancestor.getBoundingClientRect().right).toBeGreaterThanOrEqual(buttonBounds.right + 3);
+      }
+    }
+  },
+};
+
+export const NarrowHealthRecordsDark: Story = { ...NarrowHealthRecords, globals: { ...NarrowHealthRecords.globals, theme: "dark" } };
+
+export const CalorieBalanceBeforeActivities: Story = {
+  name: "運動一覧を待たず保存済みのカロリー収支を表示する",
+  parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: [
+    http.get("*/api/v1/strava/activities", async () => {
+      await delay("infinite");
+      return HttpResponse.json({ data: { activities: [], nextPage: null } });
+    }),
+    ...calorieBalanceHandlers(() => measuredCalories),
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("+100")).toBeVisible();
+    await expect(canvas.getByText("保存済みの運動で計算しています。未同期の運動は含まれません。")).toBeVisible();
+    await expect(canvas.getByText("摂取 1,900 kcal、運動 500 kcal")).toBeInTheDocument();
+  },
+};
+
+export const CalorieBalanceStoredAfterActivityError: Story = {
+  name: "運動一覧の DB 読み取りに失敗しても保存済みの収支を残す",
+  parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: [
+    http.get("*/api/v1/strava/activities", () => HttpResponse.json({ error: { code: "upstream_error", message: "運動を取得できませんでした。" } }, { status: 502 })),
+    ...calorieBalanceHandlers(() => measuredCalories),
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("+100")).toBeVisible();
+    await expect(await canvas.findByText("保存済みの運動で計算しています。未同期の運動は含まれません。")).toBeVisible();
+  },
+};
+
+export const CalorieBalanceWithoutStoredActivities: Story = {
+  name: "初回の同期前は運動ゼロにしない",
+  parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: [
+    http.get("*/api/v1/strava/activities", async () => {
+      await delay("infinite");
+      return HttpResponse.json({ data: { activities: [], nextPage: null } });
+    }),
+    http.get("*/api/v1/strava/calories/sync-status", () => HttpResponse.json({ data: { lastJob: null, backfill: null } })),
+    ...calorieBalanceHandlers(() => []),
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("運動の同期を待っています。「運動を同期」から開始できます。")).toBeVisible();
+    await expect(await canvas.findByText("摂取 1,900 kcal")).toBeInTheDocument();
+    await expect(canvas.queryByText("−400")).not.toBeInTheDocument();
+    await expect(canvas.queryByText(/Strava 未接続/)).not.toBeInTheDocument();
+  },
+};
+
+export const CalorieBalancePendingFilled: Story = {
+  name: "取得待ちの消費カロリーが実測に変わる",
+  parameters: { initialUrl: "/health?from=2026-09-01&to=2026-09-07", msw: { handlers: calorieBalanceHandlers(
+    (call) => call === 1 ? [{ activityId: "run-907", occurredAt: calorieRun.occurredAt, status: "pending", caloriesKcal: null }] : measuredCalories,
+  ) } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(await canvas.findByText(/取得待ち 1 件/)).toBeVisible();
+    await expect(within(canvas.getByRole("table", { name: /日別のカロリー収支/ })).getByText("未確定")).toBeVisible();
+    await waitFor(() => expect(canvas.getByRole("button", { name: "運動を同期" })).toBeEnabled());
+    await userEvent.click(canvas.getByRole("button", { name: "運動を同期" }));
+    await expect(await canvas.findByText("+100", undefined, { timeout: 10_000 })).toBeVisible();
+    await expect(canvas.queryByText(/取得待ち/)).not.toBeInTheDocument();
+  },
+};
+
+export const OptionalRunningOverlay: Story = {
+  name: "追加表示を切り替える",
+  parameters: { initialUrl: "/health?from=2026-06-12&to=2026-09-09", msw: { handlers: combinedTrendHandlers } },
+  play: async ({ canvas, userEvent }) => {
+    const toggle = await canvas.findByRole("button", { name: "走行距離" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
+    await userEvent.click(toggle);
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();
+    await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-06-12");
+    await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-09");
+    await userEvent.click(canvas.getByRole("button", { name: "30 日" }));
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "体脂肪率" }));
+    await expect(canvas.getByRole("img", { name: "体重と体脂肪率の推移" })).toBeVisible();
+    await expect(canvas.queryByLabelText("週ごとの走行距離")).not.toBeInTheDocument();
+    const start = (canvas.getByLabelText("表示開始日") as HTMLInputElement).value;
+    const end = (canvas.getByLabelText("表示終了日") as HTMLInputElement).value;
+    await userEvent.click(canvas.getByRole("button", { name: "体脂肪率" }));
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "この週のランと食事を見る" })).not.toBeInTheDocument();
+    await expect(canvas.getByLabelText("表示開始日")).toHaveValue(start);
+    await expect(canvas.getByLabelText("表示終了日")).toHaveValue(end);
+    await expect(within(canvas.getByRole("group", { name: "追加表示" })).getAllByRole("button")).toHaveLength(3);
+    await userEvent.click(toggle);
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
+  },
+};
+
+export const BodyFatOverlay: Story = {
+  name: "体脂肪率と欠測を表示",
+  parameters: {
+    initialUrl: "/health?overlay=body-fat&from=2026-08-30&to=2026-09-09",
+    msw: { handlers: handlers(weights.map((point, index) => ({ ...point, bodyFatPercent: index === 1 ? null : 23 - index }))) },
+  },
+  play: async ({ canvas, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と体脂肪率の推移" });
+    const samples = within(chart).getByLabelText("体脂肪率の実測値");
+    await expect(samples.querySelectorAll("circle")).toHaveLength(2);
+    await expect(samples.querySelector("path")!.getAttribute("d")!.match(/M/g)).toHaveLength(2);
+    await expect(samples.querySelector("path")!.getAttribute("d")).not.toContain("L");
+    await expect(canvas.getByText("体脂肪率 21.0 %")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "走行距離" })).toBeDisabled();
+    await userEvent.click(canvas.getByRole("button", { name: "体脂肪率" }));
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "体脂肪率" }));
+    await expect(canvas.getByRole("img", { name: "体重と体脂肪率の推移" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "表で見る" }));
+    await expect(canvas.getByRole("table", { name: "体重の推移" })).toHaveTextContent("23.0 %");
+  },
+};
+export const BodyFatEmpty: Story = {
+  name: "体脂肪率の記録なし",
+  parameters: { initialUrl: "/health?overlay=body-fat" },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("この期間の体脂肪率の記録はありません。")).toBeVisible();
+    await expect(canvas.queryByLabelText("体脂肪率の実測値")).not.toBeInTheDocument();
+  },
+};
+export const BodyFatDark: Story = { ...BodyFatOverlay, name: "体脂肪率・ダーク", globals: { theme: "dark" } };
+
+export const WeeklyExerciseCalories: Story = {
+  name: "週の消費カロリーを体重に重ねて切り替える",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-09-01&to=2026-09-07", msw: { handlers: calorieBalanceHandlers(() => measuredCalories) } },
+  play: async ({ canvas, userEvent }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" });
+    await expect(chart).toHaveTextContent("500 kcal");
+    await expect(chart).toHaveTextContent("（一部・1 日分）");
+    const finalDayBar = within(chart).getByText(/500 kcal/, { selector: "title" }).parentElement!;
+    await expect(finalDayBar.getBoundingClientRect().width).toBeGreaterThan(0);
+    await userEvent.click(canvas.getByRole("button", { name: "走行距離" }));
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの走行距離の推移" })).toBeVisible();
+    await expect(canvas.queryByLabelText("週ごとの消費カロリー")).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "消費カロリー" }));
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" })).toHaveTextContent("500 kcal");
+    await userEvent.click(canvas.getByRole("button", { name: "この週の運動と食事を見る" }));
+    await expect(canvas.getByLabelText("表示開始日")).toHaveValue("2026-09-07");
+    await expect(canvas.getByLabelText("表示終了日")).toHaveValue("2026-09-13");
+    await userEvent.click(canvas.getByRole("button", { name: "消費カロリー" }));
+    await expect(canvas.getByRole("img", { name: "体重の実測値と 7 日移動平均の推移" })).toBeVisible();
+  },
+};
+
+export const WeeklyExerciseCaloriesMissing: Story = {
+  name: "カロリー全件未取得の週は欠損として表示する",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-09-01&to=2026-09-07", msw: { handlers: calorieBalanceHandlers(() => [{ ...measuredCalories[0]!, status: "unavailable", caloriesKcal: null }]) } },
+  play: async ({ canvas }) => {
+    const chart = await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" });
+    await expect(chart).toHaveTextContent("カロリー未取得 ・ 取得不可 1 件");
+    await expect(chart).not.toHaveTextContent("0 kcal");
+    await expect(canvas.getByText("カロリー未取得 ・ 取得不可 1 件", { selector: "p" })).toBeVisible();
+  },
+};
+
+export const WeeklyExerciseCaloriesFailed: Story = {
+  name: "消費カロリーの取得失敗を週のゼロとして表示しない",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-09-01&to=2026-09-07", msw: { handlers: [
+    http.get("*/api/v1/strava/calories", () => HttpResponse.json({ error: { message: "架空の取得失敗", code: "internal_error" } }, { status: 500 })),
+    ...calorieBalanceHandlers(() => measuredCalories),
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("消費カロリーを取得できませんでした。週の合計は表示していません。")).toBeVisible();
+    await expect(canvas.queryByLabelText("週ごとの消費カロリー")).not.toBeInTheDocument();
+  },
+};
+
+export const WeeklyExerciseCaloriesOverview: Story = {
+  name: "体重と週の消費カロリー・欠損のある期間",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-06-12&to=2026-09-09", msw: { handlers: [
+    http.get("*/api/v1/strava/calories", () => HttpResponse.json({ data: Array.from({ length: 12 }, (_, index) => ({
+      activityId: `synthetic-${index}`, occurredAt: new Date(Date.UTC(2026, 5, 15 + index * 7)).toISOString(),
+      status: index === 3 ? "unavailable" : "measured", caloriesKcal: index === 3 ? null : 600 + index * 110,
+    })) })),
+    ...combinedTrendHandlers,
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" })).toHaveTextContent("1,810 kcal");
+  },
+};
+
+export const WeeklyExerciseCaloriesMobileDark: Story = {
+  ...WeeklyExerciseCaloriesOverview,
+  name: "週の消費カロリー・スマホ・ダーク",
+  globals: { theme: "dark", viewport: { value: "narrowWeight", isRotated: false } },
+  parameters: { ...WeeklyExerciseCaloriesOverview.parameters, viewport: { options: { narrowWeight: { name: "狭い画面", styles: { width: "390px", height: "844px" } } } } },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" })).toBeVisible();
+    const root = canvasElement.ownerDocument.documentElement;
+    await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+  },
+};
+
+export const WeeklyExerciseCaloriesPartial: Story = {
+  name: "週の消費カロリーは取得済み分と未取得件数を示す",
+  parameters: { initialUrl: "/health?overlay=exercise-calories&from=2026-09-01&to=2026-09-07", msw: { handlers: [
+    http.get("*/api/v1/strava/activities", () => HttpResponse.json({ data: { activities: [calorieRun, { ...calorieRun, id: "pending-walk", sportType: "Walk" }], nextPage: null } })),
+    ...calorieBalanceHandlers(() => measuredCalories),
+  ] } },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole("img", { name: "体重と週ごとの消費カロリーの推移" })).toHaveTextContent("500 kcal（取得済み分） ・ 未取得 1 件");
+    await expect(canvas.getByText("500 kcal（取得済み分） ・ 未取得 1 件", { selector: "p" })).toBeVisible();
+  },
+};
+
+export const GoalMobileDark: Story = {
+  ...Goal,
+  globals: { theme: "dark", viewport: { value: "narrowWeight", isRotated: false } },
+  parameters: { msw: { handlers: handlers(weights, { startDate: "2026-09-01", startWeightKg: 90, targetWeightKg: 80, targetDate: "2026-12-31" }) }, viewport: { options: { narrowWeight: { name: "狭い画面", styles: { width: "390px", height: "844px" } } } } },
+};
+
+const balanceRangeRequests = fn();
+export const LoadOlderCalorieBalance: Story = {
+  name: "カロリー収支は API から前の 7 日だけ追加取得する",
+  beforeEach: () => { balanceRangeRequests.mockClear(); },
+  parameters: {
+    initialUrl: "/health?from=2026-09-02&to=2026-09-20",
+    msw: { handlers: [
+      http.get("*/api/v1/strava/status", () => HttpResponse.json({ data: { configured: true, athleteId: 42 } })),
+      http.get("*/api/v1/strava/calories/sync-status", async () => {
+        await delay(300);
+        return HttpResponse.json({ data: { lastJob: { status: "succeeded", at: "2026-09-21T00:00:00Z", errorCode: null }, backfill: null } });
+      }),
+      http.get("*/api/v1/strava/calories", ({ request }) => {
+        const query = new URL(request.url).searchParams;
+        balanceRangeRequests("exercise", query.get("from"), query.get("to"));
+        return HttpResponse.json({ data: [] });
+      }),
+      http.get("*/api/v1/nutrition", async ({ request }) => {
+        const query = new URL(request.url).searchParams;
+        const from = query.get("from")!;
+        const to = query.get("to")!;
+        balanceRangeRequests("nutrition", from, to);
+        if (to !== "2026-09-20") await delay(200);
+        const days = (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1;
+        return HttpResponse.json({ data: Array.from({ length: days }, (_, index) => {
+          const date = new Date(Date.parse(to) - index * 86_400_000).toISOString().slice(0, 10);
+          return { mealId: date, photoId: null, occurredAt: `${date}T12:00:00+09:00`, manualCaloriesKcal: 500, estimate: null, analysisStatus: null, analysisSummary: null };
+        }) });
+      }),
+      ...handlers(weights, null, { dailyExpenditureKcal: 1500 }),
+    ] },
+  },
+  play: async ({ canvas, userEvent }) => {
+    const panel = within((await canvas.findByRole("heading", { name: "カロリー収支" })).closest("[data-slot=card]") as HTMLElement);
+    await expect(await panel.findByRole("rowheader", { name: "9/20" })).toBeVisible();
+    await waitFor(() => expect(balanceRangeRequests).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(panel.getByRole("button", { name: "さらに前の 7 日を表示" })).toBeEnabled());
+    await userEvent.click(panel.getByRole("button", { name: "さらに前の 7 日を表示" }));
+    await expect(panel.getByRole("rowheader", { name: "9/20" })).toBeVisible();
+    await expect(await panel.findByRole("rowheader", { name: "9/7" })).toBeInTheDocument();
+    await waitFor(() => expect(balanceRangeRequests).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(panel.getByRole("button", { name: "さらに前の 5 日を表示" })).toBeEnabled());
+    await userEvent.click(panel.getByRole("button", { name: "さらに前の 5 日を表示" }));
+    await expect(await panel.findByRole("rowheader", { name: "9/2" })).toBeInTheDocument();
+    await expect(panel.queryByRole("button", { name: /さらに前/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(balanceRangeRequests).toHaveBeenCalledTimes(6));
+    for (const kind of ["nutrition", "exercise"]) {
+      await expect(balanceRangeRequests).toHaveBeenCalledWith(kind, "2026-09-14", "2026-09-20");
+      await expect(balanceRangeRequests).toHaveBeenCalledWith(kind, "2026-09-07", "2026-09-13");
+      await expect(balanceRangeRequests).toHaveBeenCalledWith(kind, "2026-09-02", "2026-09-06");
+    }
+    await userEvent.click(panel.getByRole("button", { name: "直近 7 日に戻す" }));
+    await expect(panel.queryByRole("rowheader", { name: "9/7" })).not.toBeInTheDocument();
+    await waitFor(() => expect(panel.getByRole("button", { name: "さらに前の 7 日を表示" })).toBeEnabled());
+    await userEvent.click(panel.getByRole("button", { name: "さらに前の 7 日を表示" }));
+    await expect(await panel.findByRole("rowheader", { name: "9/7" })).toBeInTheDocument();
+    await expect(balanceRangeRequests).toHaveBeenCalledTimes(6);
+  },
+};
+
+export const MalformedCalorieDays: Story = {
+  ...LoadOlderCalorieBalance,
+  name: "不正な表示日数を含む URL でもカロリー収支を操作できる",
+  parameters: {
+    ...LoadOlderCalorieBalance.parameters,
+    initialUrl: `/health?from=2026-09-02&to=2026-09-20&calories=${encodeURIComponent(JSON.stringify({ toString: null }))}`,
+  },
+};
+
+const pfcMeals: Meal[] = [
+  { id: "pfc-analyzed", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "ごはんと鶏肉", occurredAt: "2026-10-08T12:00:00+09:00", recordedAt: "2026-10-08T12:00:00+09:00", tags: [] },
+  { id: "pfc-manual", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "手入力の夕食", occurredAt: "2026-10-08T19:00:00+09:00", recordedAt: "2026-10-08T19:00:00+09:00", tags: [] },
+  { id: "pfc-other-day", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "前日の朝食", occurredAt: "2026-10-07T09:00:00+09:00", recordedAt: "2026-10-07T09:00:00+09:00", tags: [] },
+];
+const pfcNutrition: MealNutrition[] = pfcMeals.map((meal, index) => ({ mealId: meal.id, photoId: null, occurredAt: meal.occurredAt, manualCaloriesKcal: index === 1 ? 750 : null, analysisStatus: null, analysisSummary: null, estimate: index === 1 ? null : { caloriesKcal: 600, proteinGrams: 40, fatGrams: 18, carbohydrateGrams: 80, model: "sample", analyzedAt: meal.occurredAt, inputHash: "a".repeat(64) } }));
+export const PfcDaySelection: Story = {
+  name: "日別 PFC から食事を絞り込み、全日へ戻る",
+  parameters: { initialUrl: "/health?from=2026-10-02&to=2026-10-09", msw: { handlers: [
+    http.get("*/api/v1/nutrition", ({ request }) => {
+      const query = new URL(request.url).searchParams;
+      return HttpResponse.json({ data: pfcNutrition.filter((meal) => meal.occurredAt.slice(0, 10) >= query.get("from")! && meal.occurredAt.slice(0, 10) <= query.get("to")!) });
+    }),
+    http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: pfcMeals, nextTo: null } })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "2026-10-08 の PFC と食事を見る" }));
+    await expect(await canvas.findByRole("heading", { name: "2026-10-08 の食事" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "2026/10/7 09:00 の食事を開く" })).not.toBeInTheDocument();
+    await userEvent.click(await canvas.findByRole("button", { name: "2026/10/8 12:00 の食事を開く" }));
+    const dialog = within(await within(document.body).findByRole("dialog", { name: "食事の記録" }));
+    await expect(dialog.getByText(/sample/)).toBeVisible();
+    await expect(dialog.getByText("栄養素は写真・メモからの推定値です。実際の分量や調理方法で変わります。")).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: "食事の詳細を閉じる" }));
+    await userEvent.click(canvas.getAllByRole("button", { name: "全日を見る" })[0]!);
+    await expect(await canvas.findByRole("button", { name: "2026/10/7 09:00 の食事を開く" })).toBeVisible();
+    await expect(canvas.getByText("PFC 未解析")).toBeVisible();
   },
 };

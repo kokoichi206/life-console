@@ -12,9 +12,9 @@ dependencies {
     compileOnly(libs.ktlint.cli.ruleset.core)
     testImplementation(libs.ktlint.rule.engine.core)
     testImplementation(libs.ktlint.test)
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
-    testRuntimeOnly("org.slf4j:slf4j-simple:2.0.16")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.14.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.14.4")
+    testRuntimeOnly("org.slf4j:slf4j-simple:2.0.20")
 }
 
 tasks.test {

@@ -21,7 +21,7 @@ test("体重の定期書き出しが実 API・D1・runner を経由して完了�
     nextRunAt: new Date().toISOString(), coalescing: "skip_if_pending", deadlineSeconds: 7200, payload: { dataDirectory },
   });
   await context.test("HTTP で記録・設定を保存し、Cron と runner で CSV・グラフ用 JS・成功結果を更新する", async () => {
-    await stack.post("/api/v1/weights", { source: "manual", sourceKey: "e2e-measurement", weightKg: 70.25, occurredAt: "2026-09-08T00:15:00Z" });
+    await stack.post("/api/v1/weights", { source: "manual", sourceKey: "e2e-measurement", weightKg: 70.25, bodyFatPercent: 21.3, occurredAt: "2026-09-08T00:15:00Z" });
     await stack.post("/api/v1/schedules", schedule("data/weight"));
     await stack.triggerCron();
     const [queued] = await stack.waitForJobs(1);
@@ -32,10 +32,10 @@ test("体重の定期書き出しが実 API・D1・runner を経由して完了�
     assert.equal(jobs.length, 1);
     assert.partialDeepStrictEqual(jobs[0], { id: queued.id, kind: "weight_obsidian_export", status: "succeeded", errorCode: null });
     assert.equal(await readFile(join(historyDirectory, "weight-trend.csv"), "utf8"),
-      "date,weight_kg,ma7_kg,window_samples\n2020-01-01,80.0,80.00,1\n2026-09-08,70.25,70.25,1\n");
+      "date,weight_kg,ma7_kg,window_samples,body_fat_percent\n2020-01-01,80.0,80.00,1,\n2026-09-08,70.25,70.25,1,21.3\n");
     const graph = await readFile(join(historyDirectory, "weight-data.js"), "utf8");
     assert.match(graph, /\{d:"2020-01-01", w:80\.0\}/u);
-    assert.match(graph, /\{d:"2026-09-08", w:70\.25\}/u);
+    assert.match(graph, /\{d:"2026-09-08", w:70\.25, bf:21\.3\}/u);
   });
 
   await context.test("既存 CSV がない場合は失敗を報告し、ファイルを新規作成しない", async () => {

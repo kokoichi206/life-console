@@ -6,11 +6,11 @@
 pnpm test:e2e
 ```
 
-Web / API / runner のビルドから実行します。ビルド済みなら `pnpm test:e2e:run` で E2E だけを実行できます。`pnpm check` と CI もビルド直後に同じ E2E を実行します。Node.js 24 以上と `pnpm install --frozen-lockfile` が必要です。
+Web / API / runner のビルドから実行します。ビルド済みなら `pnpm test:e2e:run` で E2E だけを実行できます。`pnpm check` と CI もビルド直後に同じ E2E を実行します。Node.js は [.node-version](../.node-version) に指定したバージョンを使い、`pnpm install --frozen-lockfile` を実行してください。
 
 ## 検証する経路
 
-`weight-export.test.mjs` は、HTTP で架空の体重と定期設定を登録し、Cron が作ったジョブを runner が取得するところから、CSV・グラフ用 JS の更新と成功報告まで確認します。DB にない過去の体重が残ること、認証なし・不正な token で取得できないこと、既存 CSV がない場合に失敗結果が記録されることも確認します。
+`weight-export.test.mjs` は、HTTP で架空の体重と定期設定を登録し、Cron が作ったジョブを runner が取得するところから、体脂肪率を含む CSV・グラフ用 JS の更新と成功報告まで確認します。DB にない過去の体重が残ること、認証なし・不正な token で取得できないこと、既存 CSV がない場合に失敗結果が記録されることも確認します。
 
 Cron は Wrangler の [ローカル実行用の入口](https://developers.cloudflare.com/workers/configuration/cron-triggers/#test-cron-triggers-locally)から呼びます。実際の時刻到来は待たず、アプリの `scheduled` handler を実行します。runner は通常の entry point に `--once` を渡します。
 

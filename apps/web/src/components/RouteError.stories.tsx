@@ -48,7 +48,24 @@ export const Retry: Story = {
   },
   play: async ({ canvas, userEvent }) => {
     await expect(await canvas.findByRole("heading", { name: "データを読み込めませんでした。" })).toBeVisible();
+    await expect(canvas.getByText("通信を確認して、もう一度お試しください。")).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "再読み込み" }));
     await expect(await canvas.findByText("読み込みが完了しました。")).toBeVisible();
+  },
+};
+
+const ThrownStringRouter = () => {
+  const router = useMemo(() => {
+    const root = createRootRoute({ errorComponent: RouteError });
+    const page = createRoute({ getParentRoute: () => root, path: "/", loader: () => Promise.reject("文字列のエラーを表示します。") });
+    return createRouter({ routeTree: root.addChildren([page]), history: createMemoryHistory({ initialEntries: ["/"] }) });
+  }, []);
+  return <RouterProvider router={router} />;
+};
+
+export const ThrownString: Story = {
+  render: () => <ThrownStringRouter />,
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText("文字列のエラーを表示します。")).toBeVisible();
   },
 };
