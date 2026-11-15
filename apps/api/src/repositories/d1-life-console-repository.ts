@@ -1,4 +1,4 @@
-import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, UpdateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import { calculate7DayMovingAverage } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import { err, ok, safeTry } from "@life-console/core";
@@ -303,6 +303,20 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     if (!result.ok) return err(appError.storage(result.error));
     const available = new Set(result.value.map((photo) => photo.photoId));
     return ok(records.map((meal) => ({ ...meal, blurredPhotoIds: (meal.photoId === null ? [] : [meal.photoId, ...meal.additionalPhotoIds]).filter((id) => available.has(id)) })));
+  }
+
+  async updateMeal(id: string, input: UpdateMealInput): Promise<Result<void, AppError>> {
+    // 実行中の解析が古い入力で結果を保存しないよう、編集と実行状態を同じ SQL で照合する。
+    const activeAnalysis = this.#database.select({ id: jobs.id }).from(jobs).where(and(
+      eq(jobs.kind, "nutrition_analysis"), inArray(jobs.status, [...activeJobStatuses]),
+      or(isNull(sql`json_extract(${jobs.payloadJson}, '$.mealId')`), eq(sql`json_extract(${jobs.payloadJson}, '$.mealId')`, id)),
+    ));
+    const result = await safeTry(() => this.#database.update(meals).set({
+      memo: input.memo, photoId: input.photoId, additionalPhotoIds: input.additionalPhotoIds,
+      occurredAt: input.occurredAt, tagsJson: JSON.stringify(input.tags),
+    }).where(and(eq(meals.id, id), isNull(meals.deletedAt), notExists(activeAnalysis))).run());
+    if (!result.ok) return err(appError.storage(result.error));
+    return result.value.meta.changes > 0 ? ok(undefined) : err(appError.conflict("食事を更新できませんでした。解析中は完了を待ち、削除済みの場合は一覧を更新してください。"));
   }
 
   async deleteMeal(id: string, now: string): Promise<Result<void, AppError>> {

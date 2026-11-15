@@ -56,6 +56,8 @@ class MealActivity : Activity() {
     private lateinit var status: TextView
     private var revision = 0
     private var screen = "list"
+    private var editingMeal: MealRecord? = null
+    private val retainedPhotoIds = mutableListOf<String>()
     private var selectedMeal: MealRecord? = null
     private var galleryTo: String? = null
     private var nextTo: String? = null
@@ -180,7 +182,7 @@ class MealActivity : Activity() {
         text = title
         setTextColor(getColor(R.color.widget_foreground))
         backgroundTintList = ColorStateList.valueOf(getColor(R.color.widget_border))
-        setOnClickListener { action() }
+        setOnClickListener { if (!busy) action() }
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
@@ -254,7 +256,39 @@ class MealActivity : Activity() {
         screen = "detail"
         selectedMeal = meal
         page(getString(R.string.meal_detail))
-        content.addView(button(getString(R.string.meal_back_to_list)) { showGallery() })
+        content.addView(button(getString(R.string.meal_back_to_list)) { if (!busy) showGallery() })
+        content.addView(button(getString(R.string.meal_reload)) { showDetail(meal) })
+        val edit = button(getString(R.string.meal_edit)) { editMeal(meal) }.apply {
+            isEnabled =
+                false
+        }
+        val analyze = button(getString(R.string.meal_reanalyze)) {
+            busy = true
+            showDetail(meal)
+            operation(getString(R.string.meal_analysis_scheduling), { api.analyzeMeal(meal.id) }) {
+                busy = false
+                showDetail(meal)
+            }
+        }.apply { isEnabled = false }
+        content.addView(edit)
+        content.addView(analyze)
+        if (!busy) {
+            operation(getString(R.string.meal_loading), {
+                api.analysisStatus(meal)
+            }) { analysisStatus ->
+                val active = analysisStatus in listOf("claimed", "running", "waiting_for_user")
+                val pending = active || analysisStatus == "queued"
+                edit.isEnabled = !active
+                analyze.isEnabled = !pending
+                status.setText(
+                    if (pending) {
+                        R.string.meal_analysis_pending
+                    } else {
+                        R.string.meal_saved_photo_notice
+                    },
+                )
+            }
+        }
         content.addView(label(formatDate(meal.occurredAt)))
         if (meal.memo.isNotEmpty()) content.addView(label(meal.memo))
         for ((index, photoId) in meal.photoIds.withIndex()) {
@@ -274,8 +308,45 @@ class MealActivity : Activity() {
                 ),
                 420,
             )
+            if (!meal.blurredPhotoIds.contains(photoId)) {
+                content.addView(
+                    button(getString(R.string.meal_add_blur)) {
+                        if (busy) return@button
+                        if (!modelReady) {
+                            status.setText(R.string.meal_blur_preparing)
+                            return@button
+                        }
+                        busy = true
+                        showDetail(meal)
+                        operation(getString(R.string.meal_processing), {
+                            val raw = File.createTempFile("saved-meal-", ".jpg", cacheDir)
+                            try {
+                                api.downloadOriginalPhoto(photoId, raw)
+                                val prepared = processor.prepare(UUID.randomUUID().toString(), raw)
+                                try {
+                                    val upload = api.reserveBlurPhoto(photoId)
+                                    if (upload != null) {
+                                        api.uploadPhoto(upload, prepared.blurredFile)
+                                        api.completeBlurPhoto(photoId)
+                                    }
+                                } finally {
+                                    deleteDraftPhoto(prepared)
+                                }
+                            } finally {
+                                raw.delete()
+                            }
+                        }) {
+                            busy = false
+                            savedPhotoBlur[photoId] = true
+                            val updated = meal.copy(
+                                blurredPhotoIds = meal.blurredPhotoIds + photoId,
+                            )
+                            showDetail(updated)
+                        }
+                    }.apply { isEnabled = !busy },
+                )
+            }
         }
-        status.setText(R.string.meal_saved_photo_notice)
     }
 
     private fun addSavedPhoto(
@@ -320,7 +391,21 @@ class MealActivity : Activity() {
         return image
     }
 
+    private fun editMeal(meal: MealRecord) {
+        editingMeal = meal
+        retainedPhotoIds.clear()
+        retainedPhotoIds.addAll(meal.photoIds)
+        photos.clear()
+        draftMemo = meal.memo
+        draftCalories = ""
+        draftOccurredAt = Instant.parse(meal.occurredAt).atZone(japanZone).toLocalDateTime()
+        saveAttempted = false
+        showEntry()
+    }
+
     private fun newDraft() {
+        editingMeal = null
+        retainedPhotoIds.clear()
         photos.clear()
         draftId = UUID.randomUUID().toString()
         draftMemo = ""
@@ -332,7 +417,7 @@ class MealActivity : Activity() {
 
     private fun showEntry() {
         screen = "entry"
-        page(getString(R.string.record_meal))
+        page(getString(if (editingMeal == null) R.string.record_meal else R.string.meal_edit))
         status.setText(if (modelReady) R.string.meal_blur_ready else R.string.meal_blur_preparing)
         content.addView(
             button(getString(R.string.meal_back_to_list)) { goBack() }.apply {
@@ -346,6 +431,27 @@ class MealActivity : Activity() {
         content.addView(camera)
         content.addView(library)
         updatePhotoButtons()
+        for ((index, photoId) in retainedPhotoIds.withIndex()) {
+            addSavedPhoto(
+                content,
+                photoId,
+                editingMeal!!.blurredPhotoIds.contains(photoId),
+                getString(
+                    R.string.meal_photo_number,
+                    (
+                        index +
+                            1
+                        ).toString(),
+                ),
+                280,
+            )
+            content.addView(
+                button(getString(R.string.meal_remove_photo)) {
+                    retainedPhotoIds.remove(photoId)
+                    showEntry()
+                }.apply { isEnabled = !busy && !saveAttempted },
+            )
+        }
         for ((index, photo) in photos.withIndex()) {
             content.addView(
                 label(getString(R.string.meal_photo_number, (index + 1).toString()), 16f),
@@ -414,21 +520,25 @@ class MealActivity : Activity() {
                 }
             },
         )
-        content.addView(label(getString(R.string.meal_calories)))
-        content.addView(
-            EditText(this).apply {
-                setText(draftCalories)
-                setTextColor(getColor(R.color.widget_foreground))
-                contentDescription = getString(R.string.meal_calories)
-                inputType = InputType.TYPE_CLASS_NUMBER
-                isEnabled = !busy && !saveAttempted
-                onTextChanged {
-                    draftCalories = it
-                    updateSaveButton()
-                }
-            },
-        )
-        content.addView(label(getString(R.string.meal_analysis_notice), 12f))
+        if (editingMeal == null) {
+            content.addView(label(getString(R.string.meal_calories)))
+            content.addView(
+                EditText(this).apply {
+                    setText(draftCalories)
+                    setTextColor(getColor(R.color.widget_foreground))
+                    contentDescription = getString(R.string.meal_calories)
+                    inputType = InputType.TYPE_CLASS_NUMBER
+                    isEnabled = !busy && !saveAttempted
+                    onTextChanged {
+                        draftCalories = it
+                        updateSaveButton()
+                    }
+                },
+            )
+            content.addView(label(getString(R.string.meal_analysis_notice), 12f))
+        } else {
+            content.addView(label(getString(R.string.meal_edit_analysis_notice), 12f))
+        }
         saveButton =
             button(getString(if (saveAttempted) R.string.meal_retry_save else R.string.meal_save)) {
                 saveMeal()
@@ -443,7 +553,9 @@ class MealActivity : Activity() {
     }
 
     private fun updateSaveButton() {
-        saveButton?.isEnabled = !busy && (photos.isNotEmpty() || draftMemo.isNotBlank())
+        saveButton?.isEnabled =
+            !busy &&
+            (retainedPhotoIds.isNotEmpty() || photos.isNotEmpty() || draftMemo.isNotBlank())
     }
 
     private fun showDraftPhoto(image: ImageView, photo: PreparedMealPhoto) {
@@ -583,13 +695,28 @@ class MealActivity : Activity() {
                     photo.blurUploaded = true
                 }
             }
-            api.createMeal(
-                draftId,
-                photos.map { it.upload!!.photoId },
-                draftMemo,
-                draftOccurredAt.atZone(japanZone).toInstant().toString(),
-                calories,
-            )
+            val editing = editingMeal
+            val uploadedPhotoIds = photos.map { it.upload!!.photoId }
+            val photoIds = retainedPhotoIds + uploadedPhotoIds
+            if (editing != null) {
+                val blurredPhotoIds = editing.blurredPhotoIds + uploadedPhotoIds
+                val occurredAt = draftOccurredAt.atZone(japanZone).toInstant().toString()
+                api.updateMeal(editing, photoIds, draftMemo, occurredAt)
+                editing.copy(
+                    photoIds = photoIds,
+                    memo = draftMemo,
+                    occurredAt = occurredAt,
+                    blurredPhotoIds = blurredPhotoIds.filter { it in photoIds },
+                )
+            } else {
+                api.createMeal(
+                    draftId,
+                    uploadedPhotoIds,
+                    draftMemo,
+                    draftOccurredAt.atZone(japanZone).toInstant().toString(),
+                    calories,
+                )
+            }
         }) { saved ->
             for (photo in photos) {
                 savedPhotoBlur[photo.upload!!.photoId] = photo.blurEnabled
@@ -602,7 +729,13 @@ class MealActivity : Activity() {
             draftCalories = ""
             galleryTo = Instant.parse(saved.occurredAt).atZone(japanZone).toLocalDate().toString()
             Toast.makeText(this, R.string.meal_saved, Toast.LENGTH_SHORT).show()
-            showGallery()
+            if (editingMeal == null) {
+                showGallery()
+            } else {
+                editingMeal = null
+                retainedPhotoIds.clear()
+                showDetail(saved)
+            }
         }
     }
 
@@ -639,7 +772,7 @@ class MealActivity : Activity() {
         if (busy) return
         when (screen) {
             "entry" -> {
-                if (photos.isEmpty() && draftMemo.isBlank() &&
+                if (editingMeal == null && photos.isEmpty() && draftMemo.isBlank() &&
                     draftCalories.isBlank()
                 ) {
                     showGallery()
@@ -699,6 +832,9 @@ class MealActivity : Activity() {
         draftCalories = saved.getString("calories")!!
         draftOccurredAt = LocalDateTime.parse(saved.getString("occurredAt"))
         saveAttempted = saved.getBoolean("saveAttempted")
+        editingMeal = saved.getString("editingMeal")?.let { parseMealRecord(JSONObject(it)) }
+        val retained = JSONArray(saved.getString("retainedPhotoIds"))
+        for (i in 0 until retained.length()) retainedPhotoIds.add(retained.getString(i))
         val records = JSONArray(saved.getString("photos"))
         for (i in 0 until records.length()) {
             val json = records.getJSONObject(i)
@@ -731,6 +867,20 @@ class MealActivity : Activity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        editingMeal?.let { meal ->
+            outState.putString(
+                "editingMeal",
+                JSONObject().put("id", meal.id)
+                    .put("photoId", meal.photoIds.firstOrNull() ?: JSONObject.NULL)
+                    .put("additionalPhotoIds", JSONArray(meal.photoIds.drop(1)))
+                    .put("memo", meal.memo).put("occurredAt", meal.occurredAt)
+                    .put(
+                        "blurredPhotoIds",
+                        JSONArray(meal.blurredPhotoIds),
+                    ).put("tags", JSONArray(meal.tags)).toString(),
+            )
+        }
+        outState.putString("retainedPhotoIds", JSONArray(retainedPhotoIds).toString())
         outState.putString("screen", screen)
         outState.putString("draftId", draftId)
         outState.putString("memo", draftMemo)

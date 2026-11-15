@@ -39,6 +39,8 @@ ML Kit Subject Segmentation で全被写体の前景を自動抽出し、その�
 
 日時、メモ、任意のカロリーを入力できます。カロリーが空欄の場合は既存の栄養解析経路を使い、保存した写真・メモを設定済みの AI サービスへ送ります。背景ぼかし自体には LLM・クラウド推論を使いません。両画像のアップロード完了後に食事を保存します。保存失敗時は同じ食事の ID で再試行し、入力を変更する場合は一覧へ戻って保存結果を確認します。栄養解析には写真の元画像を送ります。
 
+保存済みの食事は詳細の『食事を編集』から、日時・日本語メモ・写真を変更できます。保存済み写真を外し、新しく撮影・選択した写真を追加して差し替えます。手入力カロリーと登録日時は保持します。保存後は『栄養を再解析』で変更した入力の推定を予約できます。解析待ちは編集でき、実行中の編集は拒否されます。ぼかし画像が未保存の写真には『この写真の背景をぼかす』を表示し、保存済みの元画像から端末内で生成・追加保存します。
+
 release の食事 API は既存の本番 origin と OAuth を使います。debug の食事 API は `http://127.0.0.1:8790` に固定し、OAuth を使わずローカル検証データだけを保存します。debug の平文 HTTP 許可はローカル開発用です。表示用ウィジェットの接続先・認証は従来どおり本番のため、食事の debug 接続とは別です。
 
 USB 接続した端末からローカル検証する場合は、食事 API を 8790、Web を 5175（API proxy は 8790）で起動し、次のポート転送を設定します。API のローカル D1 / R2 と runner の接続先を確認し、画面・保存確認だけなら runner は起動しません。
@@ -54,6 +56,8 @@ adb -s DEVICE_SERIAL shell am start -a android.intent.action.VIEW -d 'http://127
 ## ビルドとインストール
 
 JDK 17 と Android SDK Platform 36 が必要です。`ANDROID_HOME` または Git 管理対象外の `local.properties` に SDK の場所を設定します。
+
+Android アプリは AGP 9 の組み込み Kotlin を使うため、`org.jetbrains.kotlin.android` は適用しません。カスタム lint ルールの `lint-rules` は JVM モジュールなので、`org.jetbrains.kotlin.jvm` を適用します。アプリと lint ルールの JVM toolchain は 17 に揃えます。
 
 ```bash
 cd clients/android
@@ -98,14 +102,14 @@ Kotlin と Android 標準の AppWidgetProvider / RemoteViews を使用します�
 
 ## Lint と CI
 
-ktlint 本体 `1.8.0` と Gradle plugin `14.2.0` を使用します。独自ルールの理由と制約は [lint-rules](lint-rules/README.md) を参照してください。
+ktlint 本体のバージョンは [version catalog](gradle/libs.versions.toml)、Gradle plugin のバージョンは [build.gradle.kts](build.gradle.kts) に指定します。独自ルールの理由と制約は [lint-rules](lint-rules/README.md) を参照してください。
 
 - `./gradlew ktlintCheck`: Kotlin と Gradle Kotlin DSL の標準ルール、カスタムルールを検査。
 - `./gradlew ktlintFormat`: 自動整形。カスタムルールの違反は自動修正しません。
 - `./gradlew :lint-rules:test`: カスタムルールの検出・非検出・抑制をテスト。
 - `./gradlew :app:lintDebug`: リソース、Manifest、Android API の使い方を検査。
 
-違反ファイルを削除しただけで増分検査に古い結果が残る場合は、`./gradlew ktlintCheck --rerun-tasks` で再検査します。[plugin の変更ファイル抽出](https://github.com/JLLeitschuh/ktlint-gradle/blob/v14.0.1/plugin/src/main/kotlin/org/jlleitschuh/gradle/ktlint/tasks/BaseKtLintCheckTask.kt) に基づく制約です。
+違反ファイルを削除しただけで増分検査に古い結果が残る場合は、`./gradlew ktlintCheck --rerun-tasks` で再検査します。[plugin の変更ファイル抽出](https://github.com/JLLeitschuh/ktlint-gradle/blob/v14.2.0/plugin/src/main/kotlin/org/jlleitschuh/gradle/ktlint/tasks/BaseKtLintCheckTask.kt) に基づく制約です。
 
 [ci-android](../../.github/workflows/ci-android.yml) は Android または同 workflow の変更を含む `develop` / `main` 向け PR・両ブランチへの push と手動実行で、lint、カスタムルールとアプリの単体テスト、Debug APK ビルドを実行します。レポートは 7 日間保存し、APK の公開・実機へのインストールは行いません。
 

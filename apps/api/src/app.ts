@@ -9,7 +9,7 @@ import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from
 import { calorieBaselineSchema, nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
 import { mealGalleryQuerySchema, mealPeriodQuerySchema, mealRangeQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
 import { stravaCaloriesQuerySchema, stravaCaloriesReconcileSchema, stravaCaloriesFetchSchema, stravaCaloriesPlanSchema } from "@life-console/contracts";
-import { abstinenceEventSchema, abstinenceGoalSchema, weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createMealBlurUploadSchema, mealPhotoVariantQuerySchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
+import { abstinenceEventSchema, abstinenceGoalSchema, weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, updateMealSchema, createMealUploadSchema, createMealBlurUploadSchema, mealPhotoVariantQuerySchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
@@ -470,6 +470,15 @@ const _routes = app
       if (!confirmed.ok) return respond(context, confirmed);
     }
     return respond(context, await handlers.createMeal(input));
+  })
+  .put("/api/v1/meals/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateMealSchema), async (context) => {
+    const handlers = createHandlers(context.get("environment"));
+    const input = context.req.valid("json");
+    for (const photoId of input.photoId === null ? [] : [input.photoId, ...input.additionalPhotoIds]) {
+      const confirmed = await handlers.confirmMealPhotoUploaded(photoId);
+      if (!confirmed.ok) return respond(context, confirmed);
+    }
+    return respond(context, await handlers.updateMeal(context.req.valid("param").id, input));
   })
   .delete("/api/v1/meals/:id", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createHandlers(context.get("environment")).deleteMeal(context.req.valid("param").id)))
   .post("/api/v1/meals/:id/restore", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createHandlers(context.get("environment")).restoreMeal(context.req.valid("param").id)))

@@ -41,4 +41,10 @@
     <string name="meal_discard_message">入力中の食事と写真を破棄します。</string>
     <string name="meal_discard_attempted">保存結果が未確認です。一覧へ戻って記録の有無を確認できます。入力中の内容は破棄します。</string>
     <string name="meal_keep_editing">入力を続ける</string>
+    <string name="meal_edit">食事を編集</string>
+    <string name="meal_reanalyze">栄養を再解析</string>
+    <string name="meal_analysis_scheduling">解析を予約しています…</string>
+    <string name="meal_analysis_pending">解析待ち・解析中です。実行中は完了後に編集・再解析できます。</string>
+    <string name="meal_add_blur">この写真の背景をぼかす</string>
+    <string name="meal_edit_analysis_notice">保存後に詳細の『栄養を再解析』で、変更した写真とメモから推定できます。手入力カロリーは変わりません。</string>
 </resources>

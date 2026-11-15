@@ -82,4 +82,6 @@ Storybook では MSW が架空の応答を返します。未定義の API 操作
 
 Vitest Browser Mode で stories を実際に描画し、play の操作とアクセシビリティ検査を行います。非同期の表示・操作準備は `findBy` / `waitFor` で待ち、待機期限は `.storybook/preview.tsx` の `asyncUtilTimeout`（10 秒）で共有します。API の呼び出し件数だけでは描画やボタンの有効化は保証されないため、操作前に画面の状態も確認します。`pnpm check` に静的ビルドとブラウザテストも含めています。共通 UI を追加して story を忘れた場合は ESLint が失敗します。
 
+Vitest と `@vitest/browser-playwright` は同じバージョンに揃え、Storybook addon と MSW の peer dependency の対応範囲も確認します。MSW 3 の未処理通信は `onUnhandledFrame: "error"` で検出します。MSW の更新時は `pnpm --filter @life-console/web exec msw init .storybook/public --save` で Service Worker を更新し、ソースと一緒にコミットします。
+
 `src/styles.css` は Tailwind の読込、テーマの CSS 変数、ベーススタイルを持ちます。ページごとのスタイルをまとめる場所ではありません。

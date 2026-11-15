@@ -15,7 +15,7 @@ const preview: Preview = {
   tags: ["autodocs"],
   loaders: [mswLoader(async () => {
     const worker = setupWorker(http.all("*/api/*", () => HttpResponse.json({ error: { message: "この操作の story 用応答は未定義です。" } }, { status: 501 })));
-    await worker.start({ quiet: true, onUnhandledRequest: "error" });
+    await worker.start({ quiet: true, onUnhandledFrame: "error" });
     return worker;
   })],
   initialGlobals: { theme: "light" },

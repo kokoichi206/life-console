@@ -123,7 +123,7 @@ R2 の公開ドメインは定義しない。既存 bucket を import する場�
 | `migration` | 適用済み D1 に `d1 migrations apply --remote` を実行 |
 | `deploy` | upload が返した version ID を `versions deploy <id>@100% --yes` で配信し、`triggers deploy` で公開 URL と Cron を設定 |
 
-初回・手動実行・比較元が現在の履歴にない場合は全工程を実行する。基盤や deploy 定義の変更も全工程、Web / API とその依存パッケージの変更は upload 以降、SQL migration だけなら migration を実行する。runner・Android・ドキュメントだけの変更ではアプリ配置を省く。workflow 自体は push ごとに起動し、失敗 run の変更を次の差分検出から落とさない。
+初回・手動実行・比較元が現在の履歴にない場合は全工程を実行する。基盤や deploy 定義、GitHub Actions の `actions.lock` の変更も全工程、Web / API とその依存パッケージの変更は upload 以降、SQL migration だけなら migration を実行する。runner・Android・ドキュメントだけの変更ではアプリ配置を省く。workflow 自体は push ごとに起動し、失敗 run の変更を次の差分検出から落とさない。
 
 `infra` が省略されても、必要な後続 job は実行する。上流の失敗やキャンセル後は進めない。配信だけ失敗した場合の「失敗したジョブを再実行」は、成功済み upload の version ID を使う。全ジョブの再実行では version を登録し直す。version ID は Wrangler の構造化出力 `version-upload` から取り、ログの文言を解析しない。
 
@@ -181,7 +181,7 @@ plan の変更資源・操作・検証コミット・実行ログへのリンク
 
 PR では apply・SQL migration を実行しない。apply は許可ブランチの `deploy.yml` が毎回作り直した plan を使う。R2 の lock を解放するため、PR の plan job は後続 push で自動キャンセルしない。
 
-workflow の規約とセキュリティ上の設定は、[ci-github-workflows.yml](../../.github/workflows/ci-github-workflows.yml) に SHA で固定した reusable workflow の `workflow lint` と `zizmor` で検査する。配置前の削除・置き換え拒否は `deploy.yml` 内の `jq` で行い、専用のスクリプトやテストは持たない。
+workflow の規約とセキュリティ上の設定は、[ci-github-workflows.yml](../../.github/workflows/ci-github-workflows.yml) に SHA で固定した reusable workflow の `workflow lint` と `zizmor` で検査する。参照先はロックファイルと `$/` 参照に対応した zizmor を実行する。配置前の削除・置き換え拒否は `deploy.yml` 内の `jq` で行い、専用のスクリプトやテストは持たない。
 
 ## 公式資料
 
