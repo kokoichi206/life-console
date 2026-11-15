@@ -24,7 +24,9 @@ migration 後に配置が失敗すると、適用済みの migration は残り�
 
 [Renovate の設定](../.github/renovate.json5)で、更新 PR の向き先を `develop` に固定する。通常の更新ブランチは日本時間の月曜 0:00〜4:00 に作成し、脆弱性アラートに基づく更新は通常のスケジュールを待たない。npm の workspace 依存は minor・patch 更新をまとめ、major 更新は個別に検証する。推奨 preset に含まれる、互換性上同時に更新するパッケージのグループは維持する。GitHub Actions、Terraform、Android の依存は、それぞれグループ化する。GitHub Actions の更新は、JDK など action の入力に指定する実行環境の更新とは分ける。
 
-GitHub Actions のコミットは、[actions.lock](../.github/workflows/actions.lock)で推移的な依存関係まで固定する。ワークフローにはリリースタグを記述し、リポジトリ内の Terraform composite action は `$/` 参照で同じワークフローのコミットから実行する。別リポジトリの reusable workflow 呼び出しはロックファイルの対象外なので、引き続き完全な SHA に固定する。コンテナイメージも digest 固定を維持する。
+GitHub Actions のコミットは、[actions.lock](../.github/workflows/actions.lock)で推移的な依存関係まで固定する。公開 action はリリースタグ、共通の workflow lint action は `main` を記述し、いずれもロックされたコミットを実行する。リポジトリ内の Terraform composite action は `$/` 参照で同じワークフローのコミットから実行する。別リポジトリの reusable workflow を追加する場合はロックファイルの対象外なので、完全な SHA に固定する。コンテナイメージも digest 固定を維持する。
+
+[workflow CI](../.github/workflows/ci-github-workflows.yml) は action を直接呼び出し、zizmor 本体のバージョンを 1.32.0 に固定する。更新時は action 自体のバージョンと、本体が `actions.lock`・`$/` 参照に対応していることを確認する。
 
 初回は `gh extension install github/gh-actions-lock --pin v0.4.1` で生成 CLI を準備する。ワークフローや action の `uses` を追加・変更・削除したら、リポジトリ直下で `gh actions-lock` を実行し、生成されたロックファイルとワークフローの差分を一緒にレビューする。新たなローカル composite action を `./` 参照で追加した場合は、`gh actions-lock --migrate-local-actions` で `$/` 参照へ移行する。ロックファイルは手動編集しない。ローカルでは `gh actions-lock --verify-local` で網羅性、`gh actions-lock --verify` で参照元の検証まで確認できる。後者は [workflow CI](../.github/workflows/ci-github-workflows.yml)でも実行する。
 

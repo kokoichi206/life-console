@@ -47,8 +47,38 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-  workflow-ci:
+  zizmor:
+    name: workflow-ci / zizmor static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       actions: read
-    uses: kokoichi206/gh-actions/.github/workflows/workflow-ci.yml@23f7cfcd0c343c037a3063ffbac9d7d62c945d8d # main
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@v0.8.1
+        with:
+          # actions.lock と $/ 参照に対応した検査器を使う。
+          version: "1.32.0"
+          inputs: .github/workflows/
+          online-audits: "true"
+          advanced-security: "false"
+          annotations: "true"
+
+  workflow-lint:
+    name: workflow-ci / workflow lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint workflows
+        uses: kokoichi206/gh-actions/lint-workflows@main
