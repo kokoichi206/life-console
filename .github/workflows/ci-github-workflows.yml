@@ -51,4 +51,4 @@ jobs:
     permissions:
       contents: read
       actions: read
-    uses: kokoichi206/gh-actions/.github/workflows/workflow-ci.yml@f85aa2c32988a93b44b1282168a7d69295575deb # fix/workflow-ci-lockfile-support
+    uses: kokoichi206/gh-actions/.github/workflows/workflow-ci.yml@38976dc654d444ac48ccfa45cb37ad4b8ea7fd62 # main
