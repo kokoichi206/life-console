@@ -181,7 +181,7 @@ plan の変更資源・操作・検証コミット・実行ログへのリンク
 
 PR では apply・SQL migration を実行しない。apply は許可ブランチの `deploy.yml` が毎回作り直した plan を使う。R2 の lock を解放するため、PR の plan job は後続 push で自動キャンセルしない。
 
-workflow の規約とセキュリティ上の設定は、[ci-github-workflows.yml](../../.github/workflows/ci-github-workflows.yml) の `workflow lint` と `zizmor` で検査する。各 action のコミットは `actions.lock` で固定し、zizmor 本体もロックファイルと `$/` 参照に対応した 1.32.0 を明示する。配置前の削除・置き換え拒否は `deploy.yml` 内の `jq` で行い、専用のスクリプトやテストは持たない。
+workflow の規約とセキュリティ上の設定は、[ci-github-workflows.yml](../../.github/workflows/ci-github-workflows.yml) に SHA で固定した reusable workflow の `workflow lint` と `zizmor` で検査する。参照先はロックファイルと `$/` 参照に対応した zizmor を実行する。配置前の削除・置き換え拒否は `deploy.yml` 内の `jq` で行い、専用のスクリプトやテストは持たない。
 
 ## 公式資料
 
