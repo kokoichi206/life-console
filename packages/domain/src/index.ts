@@ -44,6 +44,9 @@ export type AssetKind = typeof assetKinds[number];
 export const replyDraftStatuses = ["ready", "replied", "no_action", "needs_review"] as const;
 export type ReplyDraftStatus = typeof replyDraftStatuses[number];
 
+export const mealPhotoVariants = ["original", "blurred"] as const;
+export type MealPhotoVariant = typeof mealPhotoVariants[number];
+
 export const mealPhotoContentTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 export type MealPhotoContentType = typeof mealPhotoContentTypes[number];
 

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { FormError, Panel } from "../../components/DesignSystem";
 import { PageHeader } from "../../components/PageHeader";
-import { Button } from "../../components/ui/Button";
+import { Button, buttonVariants } from "../../components/ui/Button";
 
 import { CalorieBaselineDialog } from "./_components/CalorieBaselineDialog";
 import { DailyCalorieBalanceList, type ExerciseTrackingState } from "./_components/DailyCalorieBalanceList";
@@ -21,7 +21,7 @@ import { calorieBalanceRows, calorieBalanceRanges, RECENT_BALANCE_DAYS, recentBa
 import { exerciseCaloriesByDay } from "./exercise-calories";
 import { exerciseChartWeeks } from "./exercise-chart-weeks";
 import { exerciseWeeks } from "./exercise-weeks";
-import type { HealthSearch } from "./health-search";
+import type { HealthSearch, MealGalleryLayout } from "./health-search";
 import { useHealthQueries } from "./queries";
 import { useStravaActivities } from "./use-strava-activities";
 import { WEIGHT_DAY_MS, type WeightWindow } from "./weight-window";
@@ -37,11 +37,12 @@ const shortDate = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP
 
 const currentJapanDate = (): string => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
 
-export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayChange, calorieDays, onCalorieDaysChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
+export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayChange, onMealLayoutChange, calorieDays, onCalorieDaysChange, goalEntryOpen, onGoalEntryOpenChange, baselineEntryOpen, onBaselineEntryOpenChange, weightEntryOpen, onWeightEntryOpenChange, mealEntryOpen, onMealEntryOpenChange, selectedMealId, onSelectMeal }: {
   readonly search: HealthSearch;
   readonly onRangeChange: (range: Pick<HealthSearch, "range" | "from" | "to">) => void;
   readonly onOverlayChange: (overlay: HealthSearch["overlay"]) => void;
   readonly onPfcDayChange: (date: string | undefined) => void;
+  readonly onMealLayoutChange: (layout: MealGalleryLayout) => void;
   readonly calorieDays: number;
   readonly onCalorieDaysChange: (days: number) => void;
   readonly goalEntryOpen: boolean;
@@ -181,6 +182,12 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayCha
         <Button disabled={readOnly} variant="outline" className="h-11 min-w-0 rounded-xl px-1 text-xs whitespace-normal sm:px-5 sm:text-sm" onClick={() => onMealEntryOpenChange(true)}>食事</Button>
         <Button disabled={readOnly} className="h-11 min-w-0 rounded-xl px-1 text-xs whitespace-normal sm:px-5 sm:text-sm" onClick={() => onWeightEntryOpenChange(true)}>体重</Button>
       </div>
+      {!readOnly && navigator.userAgent.includes("Android") && (
+        <div id="android-meal-app" className="mb-4 grid justify-items-start gap-1">
+          <a className={buttonVariants({ variant: "outline" })} href="intent://meals#Intent;scheme=dev.kokoichi.lifeconsole;package=dev.kokoichi.lifeconsole;end">Android アプリで食事を開く</a>
+          <p className="text-xs text-muted-foreground">Android 版をインストールした端末で、食事一覧・撮影・保存をアプリ内で使えます。</p>
+        </div>
+      )}
       {!readOnly && <MealEntryDialog open={mealEntryOpen} onOpenChange={onMealEntryOpenChange} />}
       {!readOnly && <WeightEntryDialog open={weightEntryOpen} previousWeight={latestWeight} onOpenChange={onWeightEntryOpenChange} />}
       {!readOnly && <WeightGoalDialog open={goalEntryOpen} onOpenChange={onGoalEntryOpenChange} goal={weightGoal} initialWeight={weightTrend[0]?.weightKg} />}
@@ -300,7 +307,7 @@ export const HealthPage = ({ search, onRangeChange, onOverlayChange, onPfcDayCha
       {mealDayCounts.error !== null && <FormError>{mealDayCounts.error.message}</FormError>}
       {mealGallery.isPending && <p role="status">食事を読み込んでいます。</p>}
       {mealGallery.error !== null && <FormError>{mealGallery.error.message}</FormError>}
-      {mealGallery.data !== undefined && <MealGallery meals={galleryMeals} selectedDay={search.pfcDay} onShowAll={() => onPfcDayChange(undefined)} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} hasMore={mealGallery.hasNextPage} loadingMore={mealGallery.isFetchingNextPage} onLoadMore={() => { void mealGallery.fetchNextPage(); }} periodLabel="新しい順・直近 7 日間" />}
+      {mealGallery.data !== undefined && <MealGallery meals={galleryMeals} layout={search.mealLayout ?? "horizontal"} onLayoutChange={onMealLayoutChange} selectedDay={search.pfcDay} onShowAll={() => onPfcDayChange(undefined)} selectedMealId={selectedMealId} onSelectMeal={onSelectMeal} hasMore={mealGallery.hasNextPage} loadingMore={mealGallery.isFetchingNextPage} onLoadMore={() => { void mealGallery.fetchNextPage(); }} periodLabel="新しい順・直近 7 日間" />}
     </>
   );
 };

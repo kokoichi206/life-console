@@ -1,8 +1,8 @@
-import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, UpdateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import { calculate7DayMovingAverage } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import { err, ok, safeTry } from "@life-console/core";
-import { abstinenceEvents, abstinenceGoal, agentQuestions, assetBalances, calorieBaseline, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
+import { abstinenceEvents, abstinenceGoal, agentQuestions, assetBalances, calorieBaseline, connectorStates, conversations, financeAdjustments, financeTransactions, jobHeartbeatObservations, jobs, mealPhotoBlurs, mealPhotos, meals, notes, repositories, replyDrafts, runners, schedules, sourceRepositoryMappings, systemState, taskRepositories, tasks, weightGoal, weights } from "@life-console/db";
 import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, JobKind, AgentProvider, MealPhotoContentType } from "@life-console/domain";
 import { and, asc, count, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lte, notExists, notInArray, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -239,7 +239,7 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     )).orderBy(desc(meals.occurredAt));
     const result = await safeTry(() => (period === undefined ? query.limit(100) : query).all());
     if (!result.ok) return err(appError.storage(result.error));
-    return ok(result.value.map((row) => ({ ...row, tags: JSON.parse(row.tagsJson) as ReadonlyArray<string> })));
+    return this.#withPhotoBlurs(result.value.map((row) => ({ ...row, tags: JSON.parse(row.tagsJson) as ReadonlyArray<string> })));
   }
 
   async listMealGallery(to: string) {
@@ -256,8 +256,10 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     ]);
     if (!result.ok) return err(appError.storage(result.error));
     if (!previous.ok) return err(appError.storage(previous.error));
+    const photos = await this.#withPhotoBlurs(result.value.map((row) => ({ ...row, tags: JSON.parse(row.tagsJson) as ReadonlyArray<string> })));
+    if (!photos.ok) return photos;
     return ok({
-      meals: result.value.map((row) => ({ ...row, tags: JSON.parse(row.tagsJson) as ReadonlyArray<string> })),
+      meals: photos.value,
       nextTo: previous.value === undefined ? null : new Date(Date.parse(from) - 86_400_000).toISOString().slice(0, 10),
     });
   }
@@ -287,7 +289,46 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
     const selected = await safeTry(() => this.#database.select(mealColumns).from(meals).where(eq(meals.clientId, input.clientId)).get());
     if (!selected.ok) return err(appError.storage(selected.error));
     if (selected.value === undefined) return err(appError.storage("meal insert returned no row"));
-    return ok({ ...selected.value, tags: JSON.parse(selected.value.tagsJson) as ReadonlyArray<string> });
+    const photos = await this.#withPhotoBlurs([{ ...selected.value, tags: JSON.parse(selected.value.tagsJson) as ReadonlyArray<string> }]);
+    if (!photos.ok) return photos;
+    return ok(photos.value[0]!);
+  }
+
+  async #withPhotoBlurs(records: ReadonlyArray<Omit<Meal, "blurredPhotoIds">>): Promise<Result<ReadonlyArray<Meal>, AppError>> {
+    const ids = records.flatMap((meal) => meal.photoId === null ? [] : [meal.photoId, ...meal.additionalPhotoIds]);
+    if (ids.length === 0) return ok(records.map((meal) => ({ ...meal, blurredPhotoIds: [] })));
+    // 写真の枚数によらず、D1 のバインドパラメーター上限を超えないよう 1 個の JSON として渡す。
+    const result = await safeTry(() => this.#database.select({ photoId: mealPhotoBlurs.photoId }).from(mealPhotoBlurs)
+      .where(and(sql`${mealPhotoBlurs.photoId} in (select value from json_each(${JSON.stringify(ids)}))`, isNotNull(mealPhotoBlurs.uploadedAt))).all());
+    if (!result.ok) return err(appError.storage(result.error));
+    const available = new Set(result.value.map((photo) => photo.photoId));
+    return ok(records.map((meal) => ({ ...meal, blurredPhotoIds: (meal.photoId === null ? [] : [meal.photoId, ...meal.additionalPhotoIds]).filter((id) => available.has(id)) })));
+  }
+
+  async updateMeal(id: string, input: UpdateMealInput): Promise<Result<void, AppError>> {
+    // 実行中の解析が古い入力で結果を保存しないよう、編集と実行状態を同じ SQL で照合する。
+    const activeAnalysis = this.#database.select({ id: jobs.id }).from(jobs).where(and(
+      eq(jobs.kind, "nutrition_analysis"), inArray(jobs.status, [...activeJobStatuses]),
+      or(isNull(sql`json_extract(${jobs.payloadJson}, '$.mealId')`), eq(sql`json_extract(${jobs.payloadJson}, '$.mealId')`, id)),
+    ));
+    const result = await safeTry(() => this.#database.update(meals).set({
+      memo: input.memo, photoId: input.photoId, additionalPhotoIds: input.additionalPhotoIds,
+      occurredAt: input.occurredAt, tagsJson: JSON.stringify(input.tags),
+    }).where(and(eq(meals.id, id), isNull(meals.deletedAt), notExists(activeAnalysis))).run());
+    if (!result.ok) return err(appError.storage(result.error));
+    return result.value.meta.changes > 0 ? ok(undefined) : err(appError.conflict("食事を更新できませんでした。解析中は完了を待ち、削除済みの場合は一覧を更新してください。"));
+  }
+
+  async deleteMeal(id: string, now: string): Promise<Result<void, AppError>> {
+    const result = await safeTry(() => this.#database.update(meals).set({ deletedAt: now }).where(and(eq(meals.id, id), isNull(meals.deletedAt))).run());
+    if (!result.ok) return err(appError.storage(result.error));
+    return result.value.meta.changes > 0 ? ok(undefined) : err(appError.notFound("削除できる食事記録が見つかりません。"));
+  }
+
+  async restoreMeal(id: string): Promise<Result<void, AppError>> {
+    const result = await safeTry(() => this.#database.update(meals).set({ deletedAt: null }).where(and(eq(meals.id, id), isNotNull(meals.deletedAt))).run());
+    if (!result.ok) return err(appError.storage(result.error));
+    return result.value.meta.changes > 0 ? ok(undefined) : err(appError.notFound("元に戻せる食事記録が見つかりません。"));
   }
 
   async createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>> {
@@ -309,6 +350,31 @@ export class D1LifeConsoleRepository implements LifeConsoleRepository {
 
   async markMealPhotoUploaded(id: string, now: string): Promise<Result<void, AppError>> {
     const result = await safeTry(() => this.#database.update(mealPhotos).set({ uploadedAt: now }).where(eq(mealPhotos.id, id)).run());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(undefined);
+  }
+
+  async reserveMealPhotoBlur(input: { readonly photoId: string; readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<boolean, AppError>> {
+    const result = await safeTry(() => this.#database.insert(mealPhotoBlurs).values({ photoId: input.photoId, contentType: input.contentType, objectKey: input.objectKey,
+      uploadTokenHash: input.tokenHash, uploadExpiresAt: input.expiresAt, uploadedAt: null, createdAt: input.now,
+    }).onConflictDoUpdate({ target: mealPhotoBlurs.photoId, set: { uploadTokenHash: input.tokenHash, uploadExpiresAt: input.expiresAt, contentType: input.contentType, objectKey: input.objectKey },
+      setWhere: isNull(mealPhotoBlurs.uploadedAt),
+    }).returning({ photoId: mealPhotoBlurs.photoId }).all());
+    if (!result.ok) return err(appError.storage(result.error));
+    return ok(result.value.length > 0);
+  }
+
+  async getMealPhotoBlur(photoId: string): Promise<Result<{ readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly uploadedAt: string | null }, AppError>> {
+    const result = await safeTry(() => this.#database.select({ contentType: mealPhotoBlurs.contentType, objectKey: mealPhotoBlurs.objectKey,
+      tokenHash: mealPhotoBlurs.uploadTokenHash, expiresAt: mealPhotoBlurs.uploadExpiresAt, uploadedAt: mealPhotoBlurs.uploadedAt,
+    }).from(mealPhotoBlurs).where(eq(mealPhotoBlurs.photoId, photoId)).get());
+    if (!result.ok) return err(appError.storage(result.error));
+    if (result.value === undefined) return err(appError.notFound("ぼかし画像がありません。"));
+    return ok(result.value);
+  }
+
+  async markMealPhotoBlurUploaded(photoId: string, now: string): Promise<Result<void, AppError>> {
+    const result = await safeTry(() => this.#database.update(mealPhotoBlurs).set({ uploadedAt: now }).where(eq(mealPhotoBlurs.photoId, photoId)).run());
     if (!result.ok) return err(appError.storage(result.error));
     return ok(undefined);
   }

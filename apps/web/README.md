@@ -49,6 +49,7 @@ src/
 - 内部遷移は `Link` / `useNavigate` を使います。ページ内で search を引き継ぐ `Link` は `from` を指定し、コールバックの型はルーターから推論させます。
 - `validateSearch` は URL の入力を検証し、`search.strict: true` で検証結果にない項目を URL と画面の状態から除去します。パーサーの戻り値から省くだけでは、元の不正な値が保持されます。パラメーターを消す操作には `undefined` を使うため、任意項目の型も明示的な `undefined` を許可します。常設フォームへのリンクは hash を使います。
 - 健康ページの `calories` は数値または数値文字列の、7 より大きい 7 の倍数を受け付けます。URL から復元した JSON の配列・オブジェクトなどは除外し、他の表示条件を保持します。本人画面と共有画面で同じ検証を使います。
+- 食事一覧の `mealLayout` は `horizontal` / `wrapped` を受け付けます。未指定は日別の横スクロール、`wrapped` は日別の 2 列折り返しです。切り替えは他の表示条件を保持して URL を置き換え、詳細の開閉や再読み込みでも表示形式を保ちます。本人画面と共有画面で同じ検証を使います。
 - ページは `lazyRouteComponent` で分割し、リンクの事前読み込みでコードも取得します。Query を使う loader では `ensureQueryData` を呼び、`defaultPreloadStaleTime: 0` でキャッシュの制御を Query に任せます。
 - ページ切り替えでコードやデータを待つ場合は、遷移先の見出しとスケルトンをすぐ表示します。`defaultPendingMs` と `defaultPendingMinMs` は `0` とし、読み込み表示のために本文の表示を遅らせません。本人画面では取得済みの Query データをそのまま使い、再取得では本文を隠しません。ホームの禁欲記録は概要と並列に取得し、読み込み・失敗・再試行をその欄で表示します。
 - 未定義の URL はホームへ戻れる 404 画面にします。取得エラーは Query のエラー状態をリセットし、`router.invalidate()` で再試行します。
@@ -80,5 +81,7 @@ CI はブラウザと OS 依存を含む [Playwright 公式コンテナ](https:/
 Storybook では MSW が架空の応答を返します。未定義の API 操作は 501 とし、アプリ用の API proxy は無効にしています。会話、メール、体重などの実データや外部サービスの認証は使いません。生成された Service Worker は `.storybook/public` に置き、アプリの配信物には含めません。
 
 Vitest Browser Mode で stories を実際に描画し、play の操作とアクセシビリティ検査を行います。非同期の表示・操作準備は `findBy` / `waitFor` で待ち、待機期限は `.storybook/preview.tsx` の `asyncUtilTimeout`（10 秒）で共有します。API の呼び出し件数だけでは描画やボタンの有効化は保証されないため、操作前に画面の状態も確認します。`pnpm check` に静的ビルドとブラウザテストも含めています。共通 UI を追加して story を忘れた場合は ESLint が失敗します。
+
+Vitest と `@vitest/browser-playwright` は同じバージョンに揃え、Storybook addon と MSW の peer dependency の対応範囲も確認します。MSW 3 の未処理通信は `onUnhandledFrame: "error"` で検出します。MSW の更新時は `pnpm --filter @life-console/web exec msw init .storybook/public --save` で Service Worker を更新し、ソースと一緒にコミットします。
 
 `src/styles.css` は Tailwind の読込、テーマの CSS 変数、ベーススタイルを持ちます。ページごとのスタイルをまとめる場所ではありません。

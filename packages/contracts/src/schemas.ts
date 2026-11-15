@@ -1,4 +1,4 @@
-import { taskAreas, taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
+import { taskAreas, taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoVariants, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
 import { z } from "zod";
 
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
@@ -112,16 +112,17 @@ export const createConversationReplySchema = z.object({
   body: z.string().trim().min(1).max(5_000),
 });
 
+export const mealPhotoVariantQuerySchema = z.object({ variant: z.enum(mealPhotoVariants).default("original") });
+export const createMealBlurUploadSchema = z.object({ contentType: z.enum(mealPhotoContentTypes) });
+
 export const createMealUploadSchema = z.object({
   clientId: z.uuid(),
   contentType: z.enum(mealPhotoContentTypes),
 });
 
-export const createMealSchema = z.object({
-  clientId: z.uuid(),
+export const updateMealSchema = z.object({
   photoId: identifierSchema.nullable().default(null),
   additionalPhotoIds: z.array(identifierSchema).default([]),
-  manualCaloriesKcal: z.number().int().nonnegative().optional(),
   memo: z.string().trim().max(2_000).default(""),
   occurredAt: isoDateTimeSchema,
   tags: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
@@ -132,6 +133,11 @@ export const createMealSchema = z.object({
 }).refine((input) => input.photoId !== null || input.memo.length > 0, {
   message: "写真またはメモのどちらかが必要です。",
   path: ["memo"],
+});
+
+export const createMealSchema = updateMealSchema.safeExtend({
+  clientId: z.uuid(),
+  manualCaloriesKcal: z.number().int().nonnegative().optional(),
 });
 
 export const createNutritionEstimateSchema = z.object({
@@ -286,6 +292,7 @@ export const createScheduleSchema = z.discriminatedUnion("jobKind", [
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+export type UpdateMealInput = z.infer<typeof updateMealSchema>;
 export type CreateMealInput = z.infer<typeof createMealSchema>;
 export type CreateWeightInput = z.infer<typeof createWeightSchema>;
 export type CreateFinanceTransactionInput = z.infer<typeof createFinanceTransactionSchema>;

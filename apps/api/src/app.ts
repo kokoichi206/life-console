@@ -9,7 +9,7 @@ import { shoppingNameSchema, updateShoppingItemSchema, shoppingLinkSchema } from
 import { calorieBaselineSchema, nutritionAnalysisPayloadSchema, saveMealCaloriesSchema, saveNutritionEstimateSchema } from "@life-console/contracts";
 import { mealGalleryQuerySchema, mealPeriodQuerySchema, mealRangeQuerySchema, stravaActivityQuerySchema, registerMonitorsSchema, reportMonitoringSchema, monitoringHistoryQuerySchema } from "@life-console/contracts";
 import { stravaCaloriesQuerySchema, stravaCaloriesReconcileSchema, stravaCaloriesFetchSchema, stravaCaloriesPlanSchema } from "@life-console/contracts";
-import { abstinenceEventSchema, abstinenceGoalSchema, weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, createMealUploadSchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
+import { abstinenceEventSchema, abstinenceGoalSchema, weightGoalSchema, pushEndpointInputSchema, pushSubscriptionSchema, assignRepositorySchema, agentReportSchema, claimJobSchema, classifyConversationSchema, completeJobSchema, createAgentJobSchema, createAssetBalanceSchema, createConnectorSyncSchema, createConversationReplySchema, createReplyDraftsSchema, editReplyDraftSchema, saveReplyDraftSchema, createFinanceAdjustmentSchema, createFinanceTransactionSchema, createMealSchema, updateMealSchema, createMealUploadSchema, createMealBlurUploadSchema, mealPhotoVariantQuerySchema, createNoteSchema, createRepositorySchema, createScheduleSchema, createTaskSchema, createWeightSchema, importConversationsSchema, jobHeartbeatSchema, listConversationsQuerySchema, promoteTaskSchema, registerRunnerSchema, runnerHeartbeatSchema, syncRepositoriesSchema, upsertSourceRepositoryMappingSchema, updateTaskSchema, weightCsvRowSchema } from "@life-console/contracts";
 import { err, type Result } from "@life-console/core";
 import { Hono, type Context } from "hono";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
@@ -64,7 +64,7 @@ type HonoEnvironment = {
 };
 
 const identifierParameterSchema = z.object({ id: z.string().min(1).max(128) });
-const photoUploadQuerySchema = z.object({ token: z.string().uuid() });
+const photoUploadQuerySchema = mealPhotoVariantQuerySchema.extend({ token: z.string().uuid() });
 const agentContextQuerySchema = z.object({
   taskId: z.string().min(1).max(128),
   repositoryId: z.string().min(1).max(128),
@@ -286,8 +286,8 @@ const healthReadRoutes = new Hono<HonoEnvironment>()
     const period = context.req.valid("query");
     return respond(context, await createHandlers(context.get("environment")).listMealDayCounts(period));
   })
-  .get("/meal-photos/:id/content", zValidator("param", identifierParameterSchema), async (context) => {
-    const result = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id);
+  .get("/meal-photos/:id/content", zValidator("param", identifierParameterSchema), zValidator("query", mealPhotoVariantQuerySchema), async (context) => {
+    const result = await createHandlers(context.get("environment")).readMealPhoto(context.req.valid("param").id, context.req.valid("query").variant);
     if (!result.ok) return respond(context, result);
     return new Response(result.value.body, {
       headers: {
@@ -446,6 +446,10 @@ const _routes = app
       input.contentType,
     ));
   })
+  .post("/api/v1/meal-photos/:id/blur/upload", zValidator("param", identifierParameterSchema), zValidator("json", createMealBlurUploadSchema), async (context) =>
+    respond(context, await createHandlers(context.get("environment")).createMealPhotoBlurUpload(context.req.valid("param").id, context.req.valid("json").contentType)))
+  .post("/api/v1/meal-photos/:id/blur/complete", zValidator("param", identifierParameterSchema), async (context) =>
+    respond(context, await createHandlers(context.get("environment")).confirmMealPhotoUploaded(context.req.valid("param").id, "blurred")))
   .put("/api/v1/meal-photos/:id/content", zValidator("param", identifierParameterSchema), zValidator("query", photoUploadQuerySchema), async (context) => {
     const body = context.req.raw.body;
     const contentType = context.req.header("Content-Type");
@@ -455,6 +459,7 @@ const _routes = app
       context.req.valid("query").token,
       contentType,
       body,
+      context.req.valid("query").variant,
     ));
   })
   .post("/api/v1/meals", zValidator("json", createMealSchema), async (context) => {
@@ -466,6 +471,17 @@ const _routes = app
     }
     return respond(context, await handlers.createMeal(input));
   })
+  .put("/api/v1/meals/:id", zValidator("param", identifierParameterSchema), zValidator("json", updateMealSchema), async (context) => {
+    const handlers = createHandlers(context.get("environment"));
+    const input = context.req.valid("json");
+    for (const photoId of input.photoId === null ? [] : [input.photoId, ...input.additionalPhotoIds]) {
+      const confirmed = await handlers.confirmMealPhotoUploaded(photoId);
+      if (!confirmed.ok) return respond(context, confirmed);
+    }
+    return respond(context, await handlers.updateMeal(context.req.valid("param").id, input));
+  })
+  .delete("/api/v1/meals/:id", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createHandlers(context.get("environment")).deleteMeal(context.req.valid("param").id)))
+  .post("/api/v1/meals/:id/restore", zValidator("param", identifierParameterSchema), async (context) => respond(context, await createHandlers(context.get("environment")).restoreMeal(context.req.valid("param").id)))
   .put("/api/v1/weight-goal", zValidator("json", weightGoalSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveWeightGoal(context.req.valid("json"))))
   .put("/api/v1/calorie-baseline", zValidator("json", calorieBaselineSchema.nullable()), async (context) => respond(context, await createHandlers(context.get("environment")).saveCalorieBaseline(context.req.valid("json"))))
   .post("/api/v1/weights", zValidator("json", createWeightSchema), async (context) => {
