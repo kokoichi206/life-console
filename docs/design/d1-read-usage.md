@@ -249,7 +249,7 @@ migration `0024_smooth_mac_gargan.sql` は列と部分索引を追加し、既�
 
 同じ架空データのローカル D1 で、未復旧の障害に受付済み警告 1,200 件を追加した。前回のコードは、別対象の正常判定が 8 → 3,608 行に増えた。今回のコードは 9 → 9 行。復旧済みの履歴 1,000 件を初回確認した後も 9 行で、同じ対象の未復旧警告も保留判定の読み取りを増やさなかった。これは復旧や新しい配送がない定常時の値であり、本番の日次使用量の保証ではない。
 
-関連 storage テストでは、遅い受付による再確認、古い lease の拒否、復旧予約の重複なし、予約・受付保存に失敗した batch の rollback を確認する。再現は `pnpm exec vitest run tests/monitoring-storage.test.ts apps/api/src/repositories/d1-maintenance-read-cost.test.ts`。
+関連 storage テストでは、遅い受付による再確認、古い lease の拒否、復旧予約の重複なし、予約・受付保存に失敗した batch の rollback を確認する。再現は `pnpm exec vitest run apps/api/tests/integration/monitoring-storage.test.ts apps/api/src/repositories/d1-maintenance-read-cost.test.ts`。
 
 本番は上限到達中のため、未復旧警告の実件数は取得できていない。原因の判断は新 SQL の走査量と計画、同条件のローカル再現に基づく。今回の修正は本番未反映。反映後に新 SQL の平均走査行数・回数と、UTC の一日を通したアカウント全 DB の使用量を確認する必要がある。上限到達後の低使用量や、短時間の成功だけで解消済みとはしない。
 

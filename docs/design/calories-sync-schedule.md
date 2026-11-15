@@ -201,7 +201,7 @@ reconcile は入力に `backfill: boolean`（既定 false）を足す。true の
 
 ## 4. テストの観点
 
-「詳細取得は 1 活動 1 回だけ」を定期実行で固定するもの（`tests/strava-calories-storage.test.ts` に追加。架空の Strava 応答で `activityDetail` の呼び出し回数を数える）:
+「詳細取得は 1 活動 1 回だけ」を定期実行で固定するもの（`apps/api/tests/integration/strava-calories-storage.test.ts` に追加。架空の Strava 応答で `activityDetail` の呼び出し回数を数える）:
 
 - 直近 30 日の reconcile で `measured` / `unavailable` の行が一覧に再び現れても、`status`・`calories_kcal`・`fetched_at` が変わらず `seen_at` だけ進み、`listPendingActivityIds` に出ない。
 - 同じ活動を含む定期 job（payload `{}`）を 2 回続けて実行しても、`activityDetail` は活動ごとに 1 回しか呼ばれず、2 回目の summary は取得 0 件になる。
@@ -226,7 +226,7 @@ runner（`apps/runner/src/usecases/strava-calories-job.test.ts` に追加）:
 - plan の precondition 失敗で `skipped_precondition`。
 - payload `{ from, to }` の従来の流れが変わらない。
 
-同期の状態（`tests/strava-calories-storage.test.ts` と部品の stories）:
+同期の状態（`apps/api/tests/integration/strava-calories-storage.test.ts` と部品の stories）:
 
 - `GET /api/v1/strava/calories/sync-status` は job がなければ job の項目を null で返し、あれば種別 `strava_calories_sync` の最新 1 件を返す。他の種別の job は返さない。Strava を呼ばない。
 - 遡りの状態行の有無で遡りの項目が null / 値になる。

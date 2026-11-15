@@ -161,7 +161,7 @@
 | 11e | devtools の Network で切り替え前後の `/api/v1/meals?from&to` を比べる | `from` / `to` は期間全体のまま変わらない。切り替えで新しい取得が走らない |
 | 12 | 解除 → 「基準消費量を設定」に戻す | 収支の棒と数値が消え、摂取の数値だけ残る |
 | 13 | <http://localhost:5173/operations> | 実行状況が表示され、ジョブ種別に `strava_calories_sync` 用の表示名がある（実装がラベルを持つ場合）。未接続なのでジョブは 0 件 |
-| 14 | `pnpm exec vitest run tests/calorie-baseline-storage.test.ts tests/strava-calories-storage.test.ts apps/api/src/repositories/strava-api-repository.test.ts apps/runner/src/usecases/strava-calories-job.test.ts apps/web/src/pages/health/calorie-balance.test.ts apps/web/src/pages/health/exercise-calories.test.ts`（実装のファイル名に読み替える） | すべて pass。1.3 節の観点（lease 検証順、429、削除同期の範囲、冪等性、接続解除）に対応するテストがあることを目視で確認する |
+| 14 | `pnpm exec vitest run apps/api/tests/integration/calorie-baseline-storage.test.ts apps/api/tests/integration/strava-calories-storage.test.ts apps/api/src/repositories/strava-api-repository.test.ts apps/runner/src/usecases/strava-calories-job.test.ts apps/web/src/pages/health/calorie-balance.test.ts apps/web/src/pages/health/exercise-calories.test.ts`（実装のファイル名に読み替える） | すべて pass。1.3 節の観点（lease 検証順、429、削除同期の範囲、冪等性、接続解除）に対応するテストがあることを目視で確認する |
 | 15 | `pnpm --filter @life-console/runner build` | 成功する |
 | 16 | `pnpm check` | 成功する。失敗したら原因と対象を記録する |
 
@@ -209,7 +209,7 @@ runner はこの層では起動しない（Strava 未接続ではジョブが作
 
 | 順 | 操作 | 期待する結果 |
 | --- | --- | --- |
-| 1 | `pnpm exec vitest run tests/strava-calories-storage.test.ts apps/runner/src/usecases/strava-calories-job.test.ts`（schedule の storage テストも含める） | すべて pass。「定期 job を 2 回実行しても `activityDetail` が活動ごとに 1 回」「チャンクのやり直しで再取得しない」「`every_2_hours` の次回時刻が 2 時間後」のテストがあることを目視で確認する |
+| 1 | `pnpm exec vitest run apps/api/tests/integration/strava-calories-storage.test.ts apps/runner/src/usecases/strava-calories-job.test.ts`（schedule の storage テストも含める） | すべて pass。「定期 job を 2 回実行しても `activityDetail` が活動ごとに 1 回」「チャンクのやり直しで再取得しない」「`every_2_hours` の次回時刻が 2 時間後」のテストがあることを目視で確認する |
 | 2 | ローカル API に `POST /api/v1/schedules` で `jobKind: "strava_calories_sync"`、`interval: "every_2_hours"`、`timezone: "Asia/Tokyo"`、`nextRunAt` を現在時刻、`coalescing: "skip_if_pending"`、`deadlineSeconds: 7200`、`payload: {}` を登録する | 200。`/operations` の schedule 一覧に出る（一覧が connector 以外も出す場合） |
 | 3 | `docs/weight-obsidian-export.md` の手順でローカルの Cron を 1 回起動する（`--test-scheduled` と `/__scheduled`） | `/operations` に `strava_calories_sync` の queued が 1 件。もう一度起動しても 2 件目が積まれない（`skip_if_pending`） |
 | 4 | Strava 未接続のまま `pnpm dev:runner:once` | job が `skipped_precondition` で終わり、summary に未接続の旨。`failed` ではない |

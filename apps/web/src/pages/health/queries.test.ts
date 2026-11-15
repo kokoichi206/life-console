@@ -2,9 +2,9 @@ import type { StravaActivity } from "@life-console/contracts";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createJobStorage } from "../../../../../tests/support/d1-storage";
 import { app } from "../../../../api/src/app";
 import { createStravaCaloriesRepository } from "../../../../api/src/repositories/strava-calories-repository";
+import { createApiStorage } from "../../../../api/tests/integration/support/d1-storage";
 import { createHealthReadApi } from "../../api";
 
 import { exerciseCaloriesByDay } from "./exercise-calories";
@@ -19,7 +19,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("健康画面のカロリー取得", () => {
   it("保存済みの全ページとカロリーを HTTP API から読み、週の合計と取得状態へ反映する", async () => {
-    const storage = createJobStorage();
+    const storage = createApiStorage();
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     try {
       const repository = createStravaCaloriesRepository(storage.binding);

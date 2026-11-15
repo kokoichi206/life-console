@@ -5,11 +5,11 @@ import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { getPlatformProxy } from "wrangler";
 
-import { createJobStorage } from "../../../../tests/support/d1-storage";
+import { createApiStorage } from "../../tests/integration/support/d1-storage";
 
 import { createNutritionRepository } from "./nutrition-repository";
 it("ローカル D1 で栄養一覧と監視の過去の修正前後を比較", async () => {
-  const storage = createJobStorage();
+  const storage = createApiStorage();
   const captured: { sql: string; params: unknown[] }[] = [];
   const prepare = storage.binding.prepare.bind(storage.binding);
   vi.spyOn(storage.binding, "prepare").mockImplementation((sql: string) => {

@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | 食事ごとのカロリー | `MealNutrition` に `manualCaloriesKcal`（手入力）と `estimate.caloriesKcal`（推定）がある。手入力を優先する | `packages/contracts/src/nutrition.ts`、`apps/web/src/pages/health/nutrition-summary.ts` |
 | 日別集計 | `summarizeDailyNutrition` が日本時間の日付で `{ date, caloriesKcal, recordedMeals, totalMeals }` を新しい順に返す。カロリー未確定の食事は合計に入れず `recordedMeals < totalMeals` で分かる。食事のない日は配列に現れない | 同上 |
-| 食事一覧の期間指定 | API は `+09:00` の暦日境界で絞る。Web 側で `MealNutrition.occurredAt` を日本時間の日付で絞れば同じ結果になる | `apps/api/src/repositories/d1-life-console-repository.ts` の `listMeals`、`tests/meal-period-storage.test.ts` |
+| 食事一覧の期間指定 | API は `+09:00` の暦日境界で絞る。Web 側で `MealNutrition.occurredAt` を日本時間の日付で絞れば同じ結果になる | `apps/api/src/repositories/d1-life-console-repository.ts` の `listMeals`、`apps/api/tests/integration/meal-period-storage.test.ts` |
 | 栄養情報の取得 | `GET /api/v1/nutrition` は期間指定を受け取らず、削除されていない全食事を `occurredAt` 降順で件数制限なく返す。Web の `nutritionQuery` はこれを 5 秒ごとに再取得する（解析中の反映のため） | `apps/api/src/repositories/nutrition-repository.ts` の `list()`、`apps/web/src/pages/health/queries.ts` |
 | 未記録の扱い | 「日本時間の日別合計を表示する。カロリー未記録の件数を明示し、値がない食事を 0 kcal と扱わない」が記録済みの要件 | `docs/requirements.md` 6.7 |
 | Strava の取得内容 | 一覧 API から `id`, `name`, `sportType`, `occurredAt`, `distanceMeters`, `movingSeconds`, `elapsedSeconds`, `averageHeartrate`。接続済みなら「走行距離を重ねる」の有無に関係なく表示期間の全ページを Web が順に取得する。一覧の Query は `gcTime: 0` で自動再取得しない | `packages/contracts/src/strava.ts`、`apps/web/src/pages/health/use-strava-activities.ts` |
@@ -527,12 +527,12 @@ calorieBalanceRows(from: string, to: string, nutrition: ReadonlyArray<MealNutrit
 - 日本時間の日付で `measured` を合計し、同じ ID の重複を除く。
 - 行のない活動と `pending` を取得待ちに、`unavailable` を算入外に数え、どちらも kcal に加えない。
 
-`tests/calorie-baseline-storage.test.ts`（`weight-goal-storage.test.ts` を写す）:
+`apps/api/tests/integration/calorie-baseline-storage.test.ts`（`weight-goal-storage.test.ts` を写す）:
 
 - 未設定は `null`。保存・更新・解除を HTTP で読み直せる。
 - `0`、小数、上限超過、文字列は 400 で、保存済みの値が変わらない。
 
-`tests/strava-calories-storage.test.ts`（`tests/strava-storage.test.ts` の隣。架空の Strava 応答を注入）:
+`apps/api/tests/integration/strava-calories-storage.test.ts`（`apps/api/tests/integration/strava-storage.test.ts` の隣。架空の Strava 応答を注入）:
 
 - 一覧の取得で保存行のない活動を `pending` で登録し、既存の行は `seen_at` だけ更新し、新規登録があればジョブを 1 件だけ予約する。未完了ジョブがあれば予約しない。完了後は再び予約できる。
 - reconcile はページごとに登録・`seen_at` 更新を行い、空ページで期間内の `seen_at` がジョブの `startedAt` より古い行を削除する。一覧の取得に失敗したら削除も登録もしない。

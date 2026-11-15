@@ -3,14 +3,13 @@ import { writeFile } from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../apps/api/src/app";
+import { createApiStorage } from "../apps/api/tests/integration/support/d1-storage";
 import type { RunnerConfig } from "../apps/runner/src/config";
 import { createApiRepository } from "../apps/runner/src/repositories/api-repository";
 import { createNutritionGenerator } from "../apps/runner/src/repositories/nutrition-generator";
 import { createJobExecutorUsecase } from "../apps/runner/src/usecases/job-executor-usecase";
 import { createRunnerUsecase } from "../apps/runner/src/usecases/runner-usecase";
 import { ok } from "../packages/core/src/index";
-
-import { createJobStorage } from "./support/d1-storage";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -21,7 +20,7 @@ describe("栄養解析の HTTP と runner の経路", () => {
     }
   });
   it.each(["photo", null])("写真またはメモの取得から解析・lease 付き保存・ジョブ完了・再表示まで通る: %s", async (photoId) => {
-    const { database, repository, binding } = createJobStorage();
+    const { database, repository, binding } = createApiStorage();
     const get = vi.fn().mockResolvedValue({ body: new Blob(["test-image"]).stream(), httpEtag: "\"test\"" });
     const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding, MEAL_PHOTOS: { get, head: vi.fn().mockResolvedValue({}) } };
     try {
@@ -57,7 +56,7 @@ describe("栄養解析の HTTP と runner の経路", () => {
 
 describe("手入力カロリーの HTTP 経路", () => {
   it("写真とカロリーを初回保存し、詳細から変更して再取得できる", async () => {
-    const { database, repository, binding } = createJobStorage();
+    const { database, repository, binding } = createApiStorage();
     const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding, MEAL_PHOTOS: { head: vi.fn().mockResolvedValue({}) } };
     const headers = { "Content-Type": "application/json" };
     try {
@@ -82,7 +81,7 @@ describe("手入力カロリーの HTTP 経路", () => {
 
 describe("解析予約後の手入力", () => {
   it("画像解析中に手入力された個別ジョブを失敗にせず、手入力値を保持する", async () => {
-    const { database, repository, binding } = createJobStorage();
+    const { database, repository, binding } = createApiStorage();
     const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
     const now = new Date().toISOString();
     try {
@@ -103,7 +102,7 @@ describe("解析予約後の手入力", () => {
     } finally { database.close(); }
   });
   it.each(["photo", null])("手入力済みの記録を個別解析・再解析し、カロリーと最新の栄養素を再取得する: %s", async (photoId) => {
-    const { database, repository, binding } = createJobStorage();
+    const { database, repository, binding } = createApiStorage();
     const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
     const now = new Date().toISOString();
     try {
@@ -128,7 +127,7 @@ describe("解析予約後の手入力", () => {
 });
 
 it("栄養 API は日本時間の指定範囲だけを返し、不完全な範囲を拒否する", async () => {
-  const { database, repository, binding } = createJobStorage();
+  const { database, repository, binding } = createApiStorage();
   const environment = { APP_ENV: "local", PHOTO_UPLOAD_MODE: "worker", DB: binding };
   try {
     for (const [id, occurredAt] of [
