@@ -1,7 +1,7 @@
 import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog } from "@base-ui/react/dialog";
 import { weightCalendarDate, type Meal, type MealNutrition } from "@life-console/contracts";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Utensils, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
 
@@ -14,6 +14,7 @@ import type { MealGalleryLayout } from "../health-search";
 import { nutritionIsPending, summarizeDailyNutrition } from "../nutrition-summary";
 import { useHealthQueries } from "../queries";
 
+import { MealEntryForm } from "./MealEntryDialog";
 import { PfcNutrients } from "./PfcNutrients";
 
 const mealDateTime = (occurredAt: string): string => new Intl.DateTimeFormat("ja-JP", {
@@ -173,6 +174,8 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
     onLayoutChange(next);
   };
   const { nutritionQuery, nutritionQueryKey, readOnly } = useHealthQueries();
+  const savingMeal = useIsMutating({ mutationKey: ["meal-save"] }) > 0;
+  const [editing, setEditing] = useState(false);
   const [backgroundBlur, setBackgroundBlur] = useState(true);
   const queryClient = useQueryClient();
   const [deletedMeal, setDeletedMeal] = useState<Meal>();
@@ -317,65 +320,78 @@ export const MealGallery = ({ meals, layout, onLayoutChange, selectedMealId, onS
             )}
         {hasMore && selectedDay === undefined && <div className="mt-4 flex justify-center"><Button variant="outline" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? "読み込んでいます…" : "もっと見る"}</Button></div>}
       </div>
-      <Dialog.Root open={selectedMealId !== undefined} onOpenChange={(open) => { if (!open) onSelectMeal(undefined); }}>
+      <Dialog.Root
+        open={selectedMealId !== undefined}
+        onOpenChange={(open) => {
+          if (!open && !savingMeal && (!editing || window.confirm("編集中の変更を破棄して閉じますか？"))) {
+            setEditing(false);
+            onSelectMeal(undefined);
+          }
+        }}
+      >
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
           <Dialog.Popup className="fixed top-1/2 left-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-card p-4 text-foreground shadow-2xl outline-none sm:p-6">
             <header className="mb-4 flex items-center justify-between gap-3">
               <Dialog.Title className="text-lg font-semibold">食事の記録</Dialog.Title>
-              <Dialog.Close render={<Button variant="ghost" size="icon" aria-label="食事の詳細を閉じる" />}><X /></Dialog.Close>
+              <Dialog.Close render={<Button variant="ghost" size="icon" disabled={savingMeal} aria-label="食事の詳細を閉じる" />}><X /></Dialog.Close>
             </header>
             <Dialog.Description className="mb-4 text-sm text-muted-foreground">{selectedMeal === undefined ? "この食事記録は一覧にありません。" : mealDateTime(selectedMeal.occurredAt)}</Dialog.Description>
             {selectedMeal !== undefined && (
-              <div className="grid gap-4">
-                {selectedMeal.blurredPhotoIds.length > 0 && (
-                  <label className="flex min-h-11 items-center gap-2 text-sm">
-                    <input className="size-4 accent-primary" type="checkbox" role="switch" checked={backgroundBlur} onChange={(event) => setBackgroundBlur(event.target.checked)} />
-                    背景ぼかし
-                  </label>
-                )}
-                {selectedMeal.photoId !== null && (
-                  <div className="space-y-2">
-                    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto rounded-xl" role="region" aria-label="食事の写真" tabIndex={0}>
-                      {[selectedMeal.photoId, ...selectedMeal.additionalPhotoIds].map((photoId, index) => (
-                        <div key={photoId} className={`w-full shrink-0 snap-center overflow-hidden rounded-xl bg-muted ${selectedMeal.additionalPhotoIds.length > 0 ? "aspect-[4/3]" : ""}`}><MealPhoto photoId={photoId} backgroundBlur={backgroundBlur && selectedMeal.blurredPhotoIds.includes(photoId)} alt={`食事の写真 ${index + 1}`} className={selectedMeal.additionalPhotoIds.length > 0 ? "size-full object-contain" : "max-h-[60dvh] w-full object-contain"} /></div>
-                      ))}
+              editing
+                ? <MealEntryForm key={`edit:${selectedMeal.id}`} meal={selectedMeal} onSaved={() => setEditing(false)} onCancel={() => { if (window.confirm("編集中の変更を破棄しますか？")) setEditing(false); }} />
+                : (
+                    <div className="grid gap-4">
+                      {!readOnly && <Button variant="outline" disabled={(pending && selectedNutrition?.analysisStatus !== "queued") || nutrition.data === undefined} onClick={() => setEditing(true)}>食事を編集</Button>}
+                      {selectedMeal.blurredPhotoIds.length > 0 && (
+                        <label className="flex min-h-11 items-center gap-2 text-sm">
+                          <input className="size-4 accent-primary" type="checkbox" role="switch" checked={backgroundBlur} onChange={(event) => setBackgroundBlur(event.target.checked)} />
+                          背景ぼかし
+                        </label>
+                      )}
+                      {selectedMeal.photoId !== null && (
+                        <div className="space-y-2">
+                          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto rounded-xl" role="region" aria-label="食事の写真" tabIndex={0}>
+                            {[selectedMeal.photoId, ...selectedMeal.additionalPhotoIds].map((photoId, index) => (
+                              <div key={photoId} className={`w-full shrink-0 snap-center overflow-hidden rounded-xl bg-muted ${selectedMeal.additionalPhotoIds.length > 0 ? "aspect-[4/3]" : ""}`}><MealPhoto photoId={photoId} backgroundBlur={backgroundBlur && selectedMeal.blurredPhotoIds.includes(photoId)} alt={`食事の写真 ${index + 1}`} className={selectedMeal.additionalPhotoIds.length > 0 ? "size-full object-contain" : "max-h-[60dvh] w-full object-contain"} /></div>
+                            ))}
+                          </div>
+                          {selectedMeal.additionalPhotoIds.length > 0 && <p className="text-xs text-muted-foreground">{`${1 + selectedMeal.additionalPhotoIds.length} 枚 · 横にスワイプで写真を切り替え`}</p>}
+                        </div>
+                      )}
+                      {selectedMeal.memo !== "" && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{selectedMeal.memo}</p>}
+                      {selectedNutrition !== undefined && selectedNutrition.manualCaloriesKcal !== null && <p className="text-xl font-semibold">{mealCaloriesLabel(selectedNutrition)}</p>}
+                      {selectedNutrition !== undefined && selectedNutrition.estimate !== null && (
+                        <div className="space-y-2 rounded-xl bg-muted/50 p-4">
+                          {selectedNutrition.manualCaloriesKcal === null && <p className="text-xl font-semibold">{`推定 約 ${selectedNutrition.estimate.caloriesKcal} kcal`}</p>}
+                          <PfcNutrients grams={selectedNutrition.estimate} />
+                          <p className="text-xs text-muted-foreground">{`${selectedNutrition.estimate.model} ・ ${mealDateTime(selectedNutrition.estimate.analyzedAt)} に解析`}</p>
+                          <p className="text-xs text-muted-foreground">栄養素は写真・メモからの推定値です。実際の分量や調理方法で変わります。</p>
+                        </div>
+                      )}
+                      {selectedNutrition !== undefined && <MealCaloriesForm key={selectedMeal.id} nutrition={selectedNutrition} />}
+                      {(selectedMeal.photoId !== null || selectedMeal.memo.trim() !== "") && <Button disabled={readOnly || analyze.isPending || pending || nutrition.data === undefined} onClick={() => analyze.mutate({ mealId: selectedMeal.id })}>{pending ? "解析待ち・解析中" : selectedNutrition?.estimate == null ? "栄養を解析" : "栄養を再解析"}</Button>}
+                      {selectedNutrition?.manualCaloriesKcal != null && <p className="text-xs text-muted-foreground">解析しても手入力したカロリーは変わりません。</p>}
+                      {pending && <p role="status" className="text-sm text-muted-foreground">Mac の runner で順番に解析します。「栄養の結果を更新」で結果を確認できます。</p>}
+                      <Button variant="outline" disabled={nutrition.isFetching} onClick={() => { void queryClient.invalidateQueries({ queryKey: nutritionQueryKey }); }}>{nutrition.isFetching ? "更新中…" : "栄養の結果を更新"}</Button>
+                      {nutrition.error !== null && <FormError>{nutrition.error.message}</FormError>}
+                      {selectedNutrition?.analysisStatus === "failed" && <FormError>{selectedNutrition.analysisSummary ?? "解析に失敗しました。再解析できます。"}</FormError>}
+                      {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}
+                      {!readOnly && (
+                        <MealDeleteConfirmation
+                          key={`delete:${selectedMeal.id}`}
+                          meal={selectedMeal}
+                          backgroundBlur={backgroundBlur}
+                          onDeleted={async (meal) => {
+                            restore.reset();
+                            setDeletedMeal(meal);
+                            onSelectMeal(undefined);
+                            await refreshMeals();
+                          }}
+                        />
+                      )}
                     </div>
-                    {selectedMeal.additionalPhotoIds.length > 0 && <p className="text-xs text-muted-foreground">{`${1 + selectedMeal.additionalPhotoIds.length} 枚 · 横にスワイプで写真を切り替え`}</p>}
-                  </div>
-                )}
-                {selectedMeal.memo !== "" && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{selectedMeal.memo}</p>}
-                {selectedNutrition !== undefined && selectedNutrition.manualCaloriesKcal !== null && <p className="text-xl font-semibold">{mealCaloriesLabel(selectedNutrition)}</p>}
-                {selectedNutrition !== undefined && selectedNutrition.estimate !== null && (
-                  <div className="space-y-2 rounded-xl bg-muted/50 p-4">
-                    {selectedNutrition.manualCaloriesKcal === null && <p className="text-xl font-semibold">{`推定 約 ${selectedNutrition.estimate.caloriesKcal} kcal`}</p>}
-                    <PfcNutrients grams={selectedNutrition.estimate} />
-                    <p className="text-xs text-muted-foreground">{`${selectedNutrition.estimate.model} ・ ${mealDateTime(selectedNutrition.estimate.analyzedAt)} に解析`}</p>
-                    <p className="text-xs text-muted-foreground">栄養素は写真・メモからの推定値です。実際の分量や調理方法で変わります。</p>
-                  </div>
-                )}
-                {selectedNutrition !== undefined && <MealCaloriesForm key={selectedMeal.id} nutrition={selectedNutrition} />}
-                {(selectedMeal.photoId !== null || selectedMeal.memo.trim() !== "") && <Button disabled={readOnly || analyze.isPending || pending || nutrition.data === undefined} onClick={() => analyze.mutate({ mealId: selectedMeal.id })}>{pending ? "解析待ち・解析中" : selectedNutrition?.estimate == null ? "栄養を解析" : "栄養を再解析"}</Button>}
-                {selectedNutrition?.manualCaloriesKcal != null && <p className="text-xs text-muted-foreground">解析しても手入力したカロリーは変わりません。</p>}
-                {pending && <p role="status" className="text-sm text-muted-foreground">Mac の runner で順番に解析します。「栄養の結果を更新」で結果を確認できます。</p>}
-                <Button variant="outline" disabled={nutrition.isFetching} onClick={() => { void queryClient.invalidateQueries({ queryKey: nutritionQueryKey }); }}>{nutrition.isFetching ? "更新中…" : "栄養の結果を更新"}</Button>
-                {nutrition.error !== null && <FormError>{nutrition.error.message}</FormError>}
-                {selectedNutrition?.analysisStatus === "failed" && <FormError>{selectedNutrition.analysisSummary ?? "解析に失敗しました。再解析できます。"}</FormError>}
-                {analyze.error !== null && <FormError>{analyze.error.message}</FormError>}
-                {!readOnly && (
-                  <MealDeleteConfirmation
-                    key={`delete:${selectedMeal.id}`}
-                    meal={selectedMeal}
-                    backgroundBlur={backgroundBlur}
-                    onDeleted={async (meal) => {
-                      restore.reset();
-                      setDeletedMeal(meal);
-                      onSelectMeal(undefined);
-                      await refreshMeals();
-                    }}
-                  />
-                )}
-              </div>
+                  )
             )}
           </Dialog.Popup>
         </Dialog.Portal>

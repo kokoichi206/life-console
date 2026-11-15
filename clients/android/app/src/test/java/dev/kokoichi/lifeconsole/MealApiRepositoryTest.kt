@@ -13,7 +13,7 @@ class MealApiRepositoryTest {
                 "blurredPhotoIds",
                 JSONArray(),
             ).put("additionalPhotoIds", JSONArray(additional)).put("memo", "架空の食事")
-            .put("occurredAt", "2026-11-14T03:00:00Z")
+            .put("tags", JSONArray()).put("occurredAt", "2026-11-14T03:00:00Z")
 
     @Test
     fun memoOnlyMealHasNoPhoto() {

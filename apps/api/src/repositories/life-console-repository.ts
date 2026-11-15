@@ -1,4 +1,4 @@
-import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, MealDayCount, MealGalleryPage, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
+import type { AbstinenceEvent, AbstinenceGoal, CalorieBaseline, WeightGoal, CompleteJobInput, CreateAssetBalanceInput, CreateFinanceAdjustmentInput, CreateFinanceTransactionInput, CreateMealInput, UpdateMealInput, CreateScheduleInput, CreateTaskInput, CreateWeightInput, JobHeartbeatInput, MealDayCount, MealGalleryPage, RegisterRunnerInput, CreateReplyDraftsInput, SaveReplyDraftInput, EditReplyDraftInput, ReplyDraft, SyncRepositoriesInput, UpsertSourceRepositoryMappingInput, UpdateTaskInput } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 import type { AgentProvider, AssetKind, ConnectorKind, ConversationClassification, FinanceEntryKind, JobCompletionOutcome, JobKind, JobStatus, MealPhotoContentType, OrcaStatus, RepositoryRole, SourceMappingConnector, SourceScope, TaskArea, TaskStatus, WeightSource } from "@life-console/domain";
 
@@ -199,6 +199,7 @@ export interface LifeConsoleRepository {
   listMealGallery(to: string): Promise<Result<MealGalleryPage, AppError>>;
   listMealDayCounts(period: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<MealDayCount>, AppError>>;
   createMealAndQueueNutrition(id: string, input: CreateMealInput, now: string): Promise<Result<Meal, AppError>>;
+  updateMeal(id: string, input: UpdateMealInput): Promise<Result<void, AppError>>;
   deleteMeal(id: string, now: string): Promise<Result<void, AppError>>;
   restoreMeal(id: string): Promise<Result<void, AppError>>;
   createMealPhoto(input: { readonly id: string; readonly clientId: string; readonly contentType: MealPhotoContentType; readonly objectKey: string; readonly tokenHash: string; readonly expiresAt: string; readonly now: string }): Promise<Result<void, AppError>>;

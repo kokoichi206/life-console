@@ -120,11 +120,9 @@ export const createMealUploadSchema = z.object({
   contentType: z.enum(mealPhotoContentTypes),
 });
 
-export const createMealSchema = z.object({
-  clientId: z.uuid(),
+export const updateMealSchema = z.object({
   photoId: identifierSchema.nullable().default(null),
   additionalPhotoIds: z.array(identifierSchema).default([]),
-  manualCaloriesKcal: z.number().int().nonnegative().optional(),
   memo: z.string().trim().max(2_000).default(""),
   occurredAt: isoDateTimeSchema,
   tags: z.array(z.string().trim().min(1).max(40)).max(12).default([]),
@@ -135,6 +133,11 @@ export const createMealSchema = z.object({
 }).refine((input) => input.photoId !== null || input.memo.length > 0, {
   message: "写真またはメモのどちらかが必要です。",
   path: ["memo"],
+});
+
+export const createMealSchema = updateMealSchema.safeExtend({
+  clientId: z.uuid(),
+  manualCaloriesKcal: z.number().int().nonnegative().optional(),
 });
 
 export const createNutritionEstimateSchema = z.object({
@@ -289,6 +292,7 @@ export const createScheduleSchema = z.discriminatedUnion("jobKind", [
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+export type UpdateMealInput = z.infer<typeof updateMealSchema>;
 export type CreateMealInput = z.infer<typeof createMealSchema>;
 export type CreateWeightInput = z.infer<typeof createWeightSchema>;
 export type CreateFinanceTransactionInput = z.infer<typeof createFinanceTransactionSchema>;

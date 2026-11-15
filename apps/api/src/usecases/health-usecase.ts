@@ -1,5 +1,5 @@
 import type { LifeConsoleRepository, Meal, WeightPoint } from "@api/repositories/life-console-repository";
-import type { CalorieBaseline, CreateMealInput, CreateWeightInput, MealDayCount, MealGalleryPage, WeightGoal } from "@life-console/contracts";
+import type { CalorieBaseline, CreateMealInput, UpdateMealInput, CreateWeightInput, MealDayCount, MealGalleryPage, WeightGoal } from "@life-console/contracts";
 import type { Result } from "@life-console/core";
 
 import type { AppError } from "../shared/app-error";
@@ -11,6 +11,7 @@ export interface HealthUsecase {
   listMealGallery(to: string): Promise<Result<MealGalleryPage, AppError>>;
   listMealDayCounts(period: { readonly from: string; readonly to: string }): Promise<Result<ReadonlyArray<MealDayCount>, AppError>>;
   createMeal(input: CreateMealInput): Promise<Result<Meal, AppError>>;
+  updateMeal(id: string, input: UpdateMealInput): Promise<Result<void, AppError>>;
   deleteMeal(id: string): Promise<Result<void, AppError>>;
   restoreMeal(id: string): Promise<Result<void, AppError>>;
   getWeightGoal(): Promise<Result<WeightGoal | null, AppError>>;
@@ -32,6 +33,7 @@ export const createHealthUsecase = (
   listMealGallery: (to) => repository.listMealGallery(to),
   listMealDayCounts: (period) => repository.listMealDayCounts(period),
   createMeal: (input) => repository.createMealAndQueueNutrition(idGenerator.create(), input, clock.now().toISOString()),
+  updateMeal: (id, input) => repository.updateMeal(id, input),
   deleteMeal: (id) => repository.deleteMeal(id, clock.now().toISOString()),
   restoreMeal: (id) => repository.restoreMeal(id),
   getWeightGoal: () => repository.getWeightGoal(),

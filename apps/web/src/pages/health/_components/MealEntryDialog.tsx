@@ -1,4 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog";
+import type { Meal } from "@life-console/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, ImagePlus, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
@@ -20,12 +21,19 @@ type PhotoPreview = { blob: Blob; url: string };
 type PhotoError = { error: string };
 type PreparedPhoto = { quarterTurns: number; preview: PhotoPreview | PhotoError };
 
-const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
+export const MealEntryForm = ({ onSaved, meal, onCancel }: { readonly onSaved: () => void; readonly meal?: Meal; readonly onCancel?: () => void }) => {
   const queryClient = useQueryClient();
-  const initialOccurredAt = currentLocalDateTime();
+  const initialOccurredAt = meal === undefined
+    ? currentLocalDateTime()
+    : (() => {
+        const date = new Date(meal.occurredAt);
+        date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+        return date.toISOString().slice(0, 16);
+      })();
   const [occurredAt, setOccurredAt] = useState(initialOccurredAt);
   const [caloriesKcal, setCaloriesKcal] = useState("");
-  const [memo, setMemo] = useState("");
+  const [memo, setMemo] = useState(meal?.memo ?? "");
+  const [savedPhotoIds, setSavedPhotoIds] = useState(meal?.photoId == null ? [] : [meal.photoId, ...meal.additionalPhotoIds]);
   const [photos, setPhotos] = useState<Array<{ id: string; file: File; quarterTurns: number }>>([]);
   const [preparedPhotos, setPreparedPhotos] = useState<Record<string, PreparedPhoto>>({});
   const photoCache = useRef(new Map<string, PreparedPhoto>());
@@ -79,9 +87,10 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
     event.target.value = "";
   };
   const createMeal = useMutation({
+    mutationKey: ["meal-save"],
     mutationFn: async () => {
       const clientId = crypto.randomUUID();
-      const photoIds: string[] = [];
+      const photoIds: string[] = [...savedPhotoIds];
       for (const preview of readyPhotos!) {
         const upload = await api.createMealUpload({ clientId: crypto.randomUUID(), contentType: "image/jpeg" });
         const response = await fetch(upload.uploadUrl, {
@@ -90,6 +99,7 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
         if (!response.ok) throw new Error("写真のアップロードに失敗しました。");
         photoIds.push(upload.photoId);
       }
+      if (meal !== undefined) return api.updateMeal({ id: meal.id, input: { photoId: photoIds[0] ?? null, additionalPhotoIds: photoIds.slice(1), memo, occurredAt: occurredAt === initialOccurredAt ? meal.occurredAt : new Date(occurredAt).toISOString(), tags: [...meal.tags] } });
       return api.createMeal({ clientId, photoId: photoIds[0] ?? null, additionalPhotoIds: photoIds.slice(1), ...(caloriesKcal === "" ? {} : { manualCaloriesKcal: Number(caloriesKcal) }), memo, occurredAt: new Date(occurredAt).toISOString(), tags: [] });
     },
     onSuccess: async () => {
@@ -113,8 +123,15 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
       <fieldset disabled={createMeal.isPending} className="grid min-w-0 gap-4">
         <legend className="sr-only">食事の内容と日時</legend>
         <div className="grid gap-3">
-          <p className="text-xs text-muted-foreground">{`写真（任意・${photos.length} 枚）`}</p>
+          <p className="text-xs text-muted-foreground">{`写真（任意・${savedPhotoIds.length + photos.length} 枚）`}</p>
           <div className="grid grid-cols-2 gap-3">
+            {savedPhotoIds.map((photoId, index) => (
+              <div key={photoId} className="min-w-0 space-y-2">
+                <img src={api.mealPhotoUrl(photoId, meal!.blurredPhotoIds.includes(photoId))} alt={`保存済みの写真 ${index + 1}`} className="h-36 w-full rounded-xl object-contain" />
+                <p className="text-xs text-muted-foreground">{index === 0 ? "代表写真" : `写真 ${index + 1}`}</p>
+                <Button type="button" variant="outline" aria-label={`保存済みの写真 ${index + 1} を外す`} onClick={() => setSavedPhotoIds((current) => current.filter((id) => id !== photoId))}>この写真を外す</Button>
+              </div>
+            ))}
             {photos.map((photo, index) => (
               <div key={photo.id} className={`min-w-0 space-y-2 ${photos.length === 1 ? "col-span-2" : ""}`}>
                 <div className="relative overflow-hidden rounded-xl border bg-muted">
@@ -149,12 +166,18 @@ const MealEntryForm = ({ onSaved }: { readonly onSaved: () => void }) => {
           <p className="text-xs text-muted-foreground">最初の写真を一覧に表示します。全ての写真とメモを同じ 1 回の食事として解析します。</p>
         </div>
         <Field label="食事の日時"><Input required type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></Field>
-        <Field label="カロリー（kcal・任意）"><Input type="number" inputMode="numeric" min={0} step={1} value={caloriesKcal} onChange={(event) => setCaloriesKcal(event.target.value)} aria-describedby="meal-calories-help" /></Field>
-        <p id="meal-calories-help" className="text-xs text-muted-foreground">入力した場合は自動解析しません。空欄なら写真またはメモから自動で推定します。</p>
+        {meal === undefined && (
+          <>
+            <Field label="カロリー（kcal・任意）"><Input type="number" inputMode="numeric" min={0} step={1} value={caloriesKcal} onChange={(event) => setCaloriesKcal(event.target.value)} aria-describedby="meal-calories-help" /></Field>
+            <p id="meal-calories-help" className="text-xs text-muted-foreground">入力した場合は自動解析しません。空欄なら写真またはメモから自動で推定します。</p>
+          </>
+        )}
         <Field label="メモ"><Textarea rows={3} maxLength={2_000} placeholder="例：おにぎり 2 個、味噌汁" value={memo} onChange={(event) => setMemo(event.target.value)} /></Field>
-        <Button type="submit" disabled={createMeal.isPending || readyPhotos === undefined || (photos.length === 0 && memo.trim() === "")} className="h-12 w-full rounded-2xl text-base">
-          {createMeal.isPending ? "保存しています…" : "食事を保存"}
+        <Button type="submit" disabled={createMeal.isPending || readyPhotos === undefined || (photos.length + savedPhotoIds.length === 0 && memo.trim() === "")} className="h-12 w-full rounded-2xl text-base">
+          {createMeal.isPending ? "保存しています…" : meal === undefined ? "食事を保存" : "変更を保存"}
         </Button>
+        {meal !== undefined && <p className="text-xs text-muted-foreground">保存後に『栄養を再解析』から、変更した写真とメモで解析できます。再解析までは以前の推定結果を表示します。手入力カロリーは変わりません。</p>}
+        {onCancel !== undefined && <Button type="button" variant="outline" onClick={onCancel}>編集をキャンセル</Button>}
       </fieldset>
       {createMeal.error !== null && <div className="mt-3"><FormError>{createMeal.error.message}</FormError></div>}
     </form>
