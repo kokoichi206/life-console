@@ -22,9 +22,19 @@ migration 後に配置が失敗すると、適用済みの migration は残り�
 
 ## 依存関係の更新
 
-[Renovate の設定](../.github/renovate.json5)で、更新 PR の向き先を `develop` に固定する。通常の更新ブランチは日本時間の月曜 0:00〜4:00 に作成し、脆弱性アラートに基づく更新は通常のスケジュールを待たない。npm の workspace 依存、GitHub Actions、Terraform、Android の依存は、それぞれグループ化する。GitHub Actions はリリースタグに対応する SHA に固定する。
+[Renovate の設定](../.github/renovate.json5)で、更新 PR の向き先を `develop` に固定する。通常の更新ブランチは日本時間の月曜 0:00〜4:00 に作成し、脆弱性アラートに基づく更新は通常のスケジュールを待たない。npm の workspace 依存は minor・patch 更新をまとめ、major 更新は個別に検証する。推奨 preset に含まれる、互換性上同時に更新するパッケージのグループは維持する。GitHub Actions、Terraform、Android の依存は、それぞれグループ化する。GitHub Actions の更新は、JDK など action の入力に指定する実行環境の更新とは分ける。
+
+GitHub Actions のコミットは、[actions.lock](../.github/workflows/actions.lock)で推移的な依存関係まで固定する。ワークフローにはリリースタグを記述し、リポジトリ内の Terraform composite action は `$/` 参照で同じワークフローのコミットから実行する。別リポジトリの reusable workflow 呼び出しはロックファイルの対象外なので、完全な SHA に固定する。コンテナイメージも digest 固定を維持する。
+
+[workflow CI](../.github/workflows/ci-github-workflows.yml) は共通 reusable workflow を呼び出す。参照先を更新するときは、そこで実行する zizmor 本体が `actions.lock`・`$/` 参照に対応していることを確認する。
+
+初回は `gh extension install github/gh-actions-lock --pin v0.4.1` で生成 CLI を準備する。ワークフローや action の `uses` を追加・変更・削除したら、リポジトリ直下で `gh actions-lock` を実行し、生成されたロックファイルとワークフローの差分を一緒にレビューする。新たなローカル composite action を `./` 参照で追加した場合は、`gh actions-lock --migrate-local-actions` で `$/` 参照へ移行する。ロックファイルは手動編集しない。ローカルでは `gh actions-lock --verify-local` で網羅性、`gh actions-lock --verify` で参照元の検証まで確認できる。後者は [workflow CI](../.github/workflows/ci-github-workflows.yml)でも実行する。
+
+Renovate は action の更新時にロックファイルも再生成する。[公式の対応説明](https://docs.renovatebot.com/modules/manager/github-actions/#github-actions-lockfile-actionslock)にあるとおり、この連携は実験的な扱いなので、更新 PR では両方の差分と検証結果を確認する。`commit` の変更は実行コードの変更、`owner_id` / `repo_id` の変更は参照先リポジトリの変更として確認する。移動したタグやブランチを更新する場合は、上流の履歴を確認したうえで `gh actions-lock --relock` を実行する。ロックファイルだけの変更も Android CI とデプロイの全工程を対象にする。
 
 自動マージと自動 rebase は無効。更新 PR は CI と差分を確認して手動でマージする。ベースブランチの変更を取り込む必要があるときは、Renovate の PR または Dependency Dashboard から rebase を要求する。Node.js を更新する場合は、次節の常駐 runner の切り替えも確認する。
+
+Miniflare が要求する Undici 7 系は、`pnpm-workspace.yaml` の override で 8 系へ置き換えない。`packages/eslint-config` の TypeScript は typescript-eslint とカスタムルールが使う Compiler API の対応範囲に合わせ、6 系を維持する。これらの制限は親パッケージや利用 API の対応を確認してから見直す。
 
 利用開始には [Renovate GitHub App](https://github.com/apps/renovate) の対象リポジトリに `kokoichi206/life-console` を含め、この設定を `develop` に取り込む。[導入手順](https://docs.renovatebot.com/getting-started/installing-onboarding/)に従い、Dependency Dashboard と更新 PR で稼働を確認する。
 
@@ -32,7 +42,7 @@ migration 後に配置が失敗すると、適用済みの migration は残り�
 
 開発・テスト・ビルドに使う Node.js は、リポジトリ直下の [.node-version](../.node-version) に固定する。GitHub Actions の CI・Terraform plan・デプロイも `node-version-file` で同じ指定を読む。指定ファイルだけを更新した場合も、デプロイの変更検出は全工程を対象にする。
 
-標準の開発・検証環境は `.node-version` の Node.js 26 系とする。root と runner の `package.json` の `engines.node` は 26.13.0 以降の 26 系を指定し、`@types/node` と runner のビルド target も 26 系に揃える。npm パッケージとして依存する Undici は Node.js 内蔵版とは別に更新する。`pnpm-workspace.yaml` の override は、Miniflare の固定依存を含む修正前の 7 系だけに適用する。
+標準の開発・検証環境は `.node-version` の Node.js 26 系とする。root と runner の `package.json` の `engines.node` は 26.13.1 以降の 26 系を指定し、`@types/node` と runner のビルド target も 26 系に揃える。npm パッケージとして依存する Undici は Node.js 内蔵版とは別に更新する。`pnpm-workspace.yaml` の override は、Miniflare の固定依存を含む修正前の 7 系だけに適用する。
 
 Mac の常駐 runner は LaunchAgent から起動する実体の Node.js パスも確認する。対話シェルの `node --version` や `.node-version` の変更だけでは、既に動いているプロセスのランタイムは変わらない。
 

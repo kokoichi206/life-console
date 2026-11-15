@@ -24,6 +24,9 @@ export const HealthRouteContent = ({ search, navigate }: {
       onPfcDayChange={(pfcDay) => {
         void navigate({ search: { ...search, pfcDay, meal: undefined }, replace: false, resetScroll: false });
       }}
+      onMealLayoutChange={(mealLayout) => {
+        void navigate({ search: { ...search, mealLayout: mealLayout === "horizontal" ? undefined : mealLayout }, replace: true, resetScroll: false });
+      }}
       onOverlayChange={(overlay) => {
         void navigate({ search: { ...search, overlay }, replace: true, resetScroll: false });
       }}

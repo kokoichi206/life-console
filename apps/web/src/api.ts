@@ -7,6 +7,7 @@ import type { ShoppingList, UpdateShoppingItemInput } from "@life-console/contra
 import type { AbstinenceEventInput, AbstinenceGoalInput, AbstinenceOverview, CalorieBaseline, MealDayCount, MealGalleryPage, MealNutrition, NutritionAnalysisPayload } from "@life-console/contracts";
 import type { StravaActivityCalories, StravaActivityPage, StravaCaloriesSyncStatus, StravaStatus, MonitorHistory, MonitoringSummary } from "@life-console/contracts";
 import type {
+  UpdateMealInput,
   PushConfiguration,
   PushSubscriptionInput,
   Conversation,
@@ -76,7 +77,7 @@ export const createHealthReadApi = (baseUrl: string) => {
     weightGoal: async () => unwrap<WeightGoal | null>(await readClient["weight-goal"].$get()),
     calorieBaseline: async () => unwrap<CalorieBaseline | null>(await readClient["calorie-baseline"].$get()),
     weights: async () => unwrap<ReadonlyArray<WeightPoint>>(await readClient.weights.$get()),
-    mealPhotoUrl: (photoId: string) => `${baseUrl}/meal-photos/${encodeURIComponent(photoId)}/content`,
+    mealPhotoUrl: (photoId: string, backgroundBlur = false) => `${baseUrl}/meal-photos/${encodeURIComponent(photoId)}/content${backgroundBlur ? "?variant=blurred" : ""}`,
   };
 };
 
@@ -137,6 +138,9 @@ export const api = {
   })),
   createMealUpload: async (input: { readonly clientId: string; readonly contentType: "image/jpeg" | "image/png" | "image/webp" }) => unwrap<{ readonly photoId: string; readonly uploadUrl: string; readonly expiresAt: string; readonly requiredHeaders: Readonly<Record<string, string>> }>(await client.api.v1["meal-photos"].upload.$post({ json: input })),
   createMeal: async (input: Parameters<typeof client.api.v1.meals.$post>[0]["json"]) => unwrap<Meal>(await client.api.v1.meals.$post({ json: input })),
+  updateMeal: async ({ id, input }: { readonly id: string; readonly input: UpdateMealInput }) => unwrap<null>(await client.api.v1.meals[":id"].$put({ param: { id }, json: input })),
+  deleteMeal: async (id: string) => unwrap<null>(await client.api.v1.meals[":id"].$delete({ param: { id } })),
+  restoreMeal: async (id: string) => unwrap<null>(await client.api.v1.meals[":id"].restore.$post({ param: { id } })),
   saveWeightGoal: async (input: WeightGoal | null) => unwrap<null>(await client.api.v1["weight-goal"].$put({ json: input })),
   saveCalorieBaseline: async (input: CalorieBaseline | null) => unwrap<null>(await client.api.v1["calorie-baseline"].$put({ json: input })),
   abstinence: async () => unwrap<AbstinenceOverview>(await client.api.v1.abstinence.$get()),

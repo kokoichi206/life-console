@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import { parseHealthSearch, parseSharedHealthSearch } from "./health-search";
 
+describe("食事一覧の表示形式", () => {
+  it.each(["horizontal", "wrapped"])("本人・共有 URL で %s を復元する", (mealLayout) => {
+    expect(parseHealthSearch({ mealLayout, pfcDay: "2026-11-13" })).toEqual({ mealLayout, pfcDay: "2026-11-13" });
+    expect(parseSharedHealthSearch({ mealLayout, meal: "meal-1", entry: "meal" })).toEqual({ mealLayout, meal: "meal-1" });
+  });
+  it.each(["grid", "", ["wrapped"], null, true])("不正な表示形式 %s を除外し、他の表示条件を保つ", (mealLayout) => {
+    expect(parseHealthSearch({ mealLayout, range: "d30" })).toEqual({ range: "d30" });
+    expect(parseSharedHealthSearch({ mealLayout, range: "d30" })).toEqual({ range: "d30" });
+  });
+});
+
 describe("カロリー収支の表示日数", () => {
   it("共有と本人の URL で 7 日単位の追加表示を復元する", () => {
     expect(parseHealthSearch({ calories: "14" })).toEqual({ calories: 14 });

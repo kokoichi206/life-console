@@ -23,6 +23,9 @@ life_console_forbidden_import_prefixes = android.webkit, okhttp3, retrofit2
 [app/src/main/java/dev/kokoichi/lifeconsole/WidgetOAuth.kt]
 life_console_forbidden_import_prefixes = android.webkit, okhttp3, retrofit2
 
+[app/src/main/java/dev/kokoichi/lifeconsole/MealApiRepository.kt]
+life_console_forbidden_import_prefixes = android.webkit, okhttp3, retrofit2
+
 [app/src/main/java/dev/kokoichi/lifeconsole/LoopbackOAuthReceiver.kt]
 life_console_forbidden_import_prefixes = android.webkit, okhttp3, retrofit2
 

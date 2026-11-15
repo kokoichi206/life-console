@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="meal_blur_model_download">認識モデルをダウンロード中：%1$d %%</string>
+    <string name="meal_blur_model_status_error">認識モデルの準備に失敗しました（%1$d）。画面を開き直してください。</string>
+    <string name="meal_blur_model_error">認識モデルの準備に失敗しました：%1$s</string>
+    <string name="meal_blur_photo_error">写真の処理に失敗しました：%1$s</string>
+</resources>

@@ -23,6 +23,7 @@ import type {
   CreateFinanceAdjustmentInput,
   CreateFinanceTransactionInput,
   CreateMealInput,
+  UpdateMealInput,
   CreateScheduleInput,
   CreateTaskInput,
   CreateWeightInput,
@@ -34,7 +35,7 @@ import type {
   UpsertSourceRepositoryMappingInput,
   UpdateTaskInput,
 } from "@life-console/contracts";
-import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, MealPhotoContentType } from "@life-console/domain";
+import type { ConversationClassification, RepositoryRole, OrcaStatus, JobCompletionOutcome, MealPhotoContentType, MealPhotoVariant } from "@life-console/domain";
 
 type Dependencies = {
   readonly replyDrafts: ReplyDraftUsecase;
@@ -68,10 +69,14 @@ export const createLifeConsoleHandlers = (dependencies: Dependencies) => ({
   listMealGallery: (to: string) => dependencies.health.listMealGallery(to),
   listMealDayCounts: (period: { readonly from: string; readonly to: string }) => dependencies.health.listMealDayCounts(period),
   createMeal: (input: CreateMealInput) => dependencies.health.createMeal(input),
+  updateMeal: (id: string, input: UpdateMealInput) => dependencies.health.updateMeal(id, input),
+  deleteMeal: (id: string) => dependencies.health.deleteMeal(id),
+  restoreMeal: (id: string) => dependencies.health.restoreMeal(id),
   createMealPhotoUpload: (clientId: string, contentType: MealPhotoContentType) => dependencies.mealPhotos.createUpload(clientId, contentType),
-  confirmMealPhotoUploaded: (photoId: string) => dependencies.mealPhotos.confirmUploaded(photoId),
-  uploadMealPhoto: (photoId: string, token: string, contentType: string, body: ReadableStream) => dependencies.mealPhotos.uploadViaWorker(photoId, token, contentType, body),
-  readMealPhoto: (photoId: string) => dependencies.mealPhotos.read(photoId),
+  confirmMealPhotoUploaded: (photoId: string, variant?: MealPhotoVariant) => dependencies.mealPhotos.confirmUploaded(photoId, variant),
+  createMealPhotoBlurUpload: (photoId: string, contentType: MealPhotoContentType) => dependencies.mealPhotos.createBlurUpload(photoId, contentType),
+  uploadMealPhoto: (photoId: string, token: string, contentType: string, body: ReadableStream, variant?: MealPhotoVariant) => dependencies.mealPhotos.uploadViaWorker(photoId, token, contentType, body, variant),
+  readMealPhoto: (photoId: string, variant?: MealPhotoVariant) => dependencies.mealPhotos.read(photoId, variant),
   getWeightGoal: () => dependencies.health.getWeightGoal(),
   saveWeightGoal: (input: WeightGoal | null) => dependencies.health.saveWeightGoal(input),
   getCalorieBaseline: () => dependencies.health.getCalorieBaseline(),

@@ -2,9 +2,11 @@ packages:
   - "apps/*"
   - "packages/*"
 
-onlyBuiltDependencies:
-  - esbuild
-  - workerd
+allowBuilds:
+  esbuild: true
+  workerd: true
+  msw: false
+  unrs-resolver: false
 
 # Miniflare の固定依存を含め、修正前の Undici 7 系を残さない。
 overrides:

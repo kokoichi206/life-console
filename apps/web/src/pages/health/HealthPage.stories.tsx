@@ -59,8 +59,24 @@ export const Recorded: Story = {
     await expect(canvas.getByText("25%")).toBeVisible();
   },
 };
+
+export const OpenAndroidMealApp: Story = {
+  name: "Android の食事一覧を開く入口",
+  beforeEach: () => {
+    const userAgent = navigator.userAgent;
+    Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Android" });
+    return () => {
+      Object.defineProperty(navigator, "userAgent", { configurable: true, value: userAgent });
+    };
+  },
+  play: async ({ canvas }) => {
+    const link = await canvas.findByRole("link", { name: "Android アプリで食事を開く" });
+    await expect(link).toHaveAttribute("href", "intent://meals#Intent;scheme=dev.kokoichi.lifeconsole;package=dev.kokoichi.lifeconsole;end");
+    await expect(await canvas.findByRole("button", { name: /^食事$/ })).toBeEnabled();
+  },
+};
 export const Empty: Story = { parameters: { msw: { handlers: handlers([]) } } };
-const galleryMeal = (id: string, occurredAt: string): Meal => ({ id, photoId: null, additionalPhotoIds: [], memo: "", occurredAt, recordedAt: occurredAt, tags: [] });
+const galleryMeal = (id: string, occurredAt: string): Meal => ({ id, photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "", occurredAt, recordedAt: occurredAt, tags: [] });
 export const LoadOlderMeals: Story = {
   name: "食事は 1 週間ずつ追加で読み込む",
   parameters: { msw: { handlers: [
@@ -76,6 +92,23 @@ export const LoadOlderMeals: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "もっと見る" }));
     await expect(await canvas.findByRole("button", { name: "2026/9/1 09:00 の食事を開く" })).toBeVisible();
     await expect(canvas.queryByRole("button", { name: "もっと見る" })).not.toBeInTheDocument();
+  },
+};
+export const MealLayoutUrl: Story = {
+  name: "食事一覧の URL の表示形式を復元し、詳細の開閉後も保つ",
+  parameters: { initialUrl: "/health?mealLayout=wrapped", msw: { handlers: [
+    http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [galleryMeal("layout-meal", "2026-09-07T09:00:00+09:00")], nextTo: null } })),
+    ...handlers(weights),
+  ] } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await expect(await canvas.findByRole("button", { name: "2 列折り返し" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(canvas.getByRole("button", { name: "2026/9/7 09:00 の食事を開く" }));
+    const screen = within(canvasElement.ownerDocument.body);
+    const dialog = within(await screen.findByRole("dialog", { name: "食事の記録" }));
+    await userEvent.click(dialog.getByRole("button", { name: "食事の詳細を閉じる" }));
+    await expect(canvas.getByRole("button", { name: "2 列折り返し" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(canvas.getByRole("button", { name: "横スクロール" }));
+    await expect(canvas.getByRole("button", { name: "横スクロール" })).toHaveAttribute("aria-pressed", "true");
   },
 };
 export const Dark: Story = { globals: { theme: "dark" } };
@@ -290,8 +323,8 @@ export const WeeklyExerciseAndMeals: Story = {
     }),
     http.get("*/api/v1/meal-day-counts", () => HttpResponse.json({ data: [{ occurredAt: "2026-09-07", count: 1 }, { occurredAt: "2026-08-31", count: 1 }] })),
     http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: [
-      { id: "current-meal", photoId: null, additionalPhotoIds: [], memo: "架空の食事メモ・今週", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
-      { id: "previous-meal", photoId: null, additionalPhotoIds: [], memo: "架空の食事メモ・前週", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
+      { id: "current-meal", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "架空の食事メモ・今週", tags: [], occurredAt: "2026-09-07T03:00:00Z", recordedAt: "2026-09-07T03:00:00Z" },
+      { id: "previous-meal", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "架空の食事メモ・前週", tags: [], occurredAt: "2026-08-31T03:00:00Z", recordedAt: "2026-08-31T03:00:00Z" },
     ], nextTo: null } })),
     ...handlers(weights),
   ] } },
@@ -444,7 +477,7 @@ export const NarrowHealthRecords: Story = {
     initialUrl: "/health?from=2026-09-01&to=2026-09-07",
     msw: { handlers: [
       http.get("*/api/v1/meal-gallery", () => HttpResponse.json({ data: { meals: calorieMeals.map((meal) => ({
-        id: meal.mealId, photoId: null, additionalPhotoIds: [], memo: "架空の食事", tags: [], occurredAt: meal.occurredAt, recordedAt: meal.occurredAt,
+        id: meal.mealId, photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "架空の食事", tags: [], occurredAt: meal.occurredAt, recordedAt: meal.occurredAt,
       })), nextTo: null } })),
       ...calorieBalanceHandlers(() => measuredCalories),
     ] },
@@ -760,9 +793,9 @@ export const MalformedCalorieDays: Story = {
 };
 
 const pfcMeals: Meal[] = [
-  { id: "pfc-analyzed", photoId: null, additionalPhotoIds: [], memo: "ごはんと鶏肉", occurredAt: "2026-10-08T12:00:00+09:00", recordedAt: "2026-10-08T12:00:00+09:00", tags: [] },
-  { id: "pfc-manual", photoId: null, additionalPhotoIds: [], memo: "手入力の夕食", occurredAt: "2026-10-08T19:00:00+09:00", recordedAt: "2026-10-08T19:00:00+09:00", tags: [] },
-  { id: "pfc-other-day", photoId: null, additionalPhotoIds: [], memo: "前日の朝食", occurredAt: "2026-10-07T09:00:00+09:00", recordedAt: "2026-10-07T09:00:00+09:00", tags: [] },
+  { id: "pfc-analyzed", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "ごはんと鶏肉", occurredAt: "2026-10-08T12:00:00+09:00", recordedAt: "2026-10-08T12:00:00+09:00", tags: [] },
+  { id: "pfc-manual", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "手入力の夕食", occurredAt: "2026-10-08T19:00:00+09:00", recordedAt: "2026-10-08T19:00:00+09:00", tags: [] },
+  { id: "pfc-other-day", photoId: null, blurredPhotoIds: [], additionalPhotoIds: [], memo: "前日の朝食", occurredAt: "2026-10-07T09:00:00+09:00", recordedAt: "2026-10-07T09:00:00+09:00", tags: [] },
 ];
 const pfcNutrition: MealNutrition[] = pfcMeals.map((meal, index) => ({ mealId: meal.id, photoId: null, occurredAt: meal.occurredAt, manualCaloriesKcal: index === 1 ? 750 : null, analysisStatus: null, analysisSummary: null, estimate: index === 1 ? null : { caloriesKcal: 600, proteinGrams: 40, fatGrams: 18, carbohydrateGrams: 80, model: "sample", analyzedAt: meal.occurredAt, inputHash: "a".repeat(64) } }));
 export const PfcDaySelection: Story = {
