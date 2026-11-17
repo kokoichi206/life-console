@@ -24,7 +24,7 @@ schema の正本は、この skill と同じ Life Console リポジトリの `pa
 | `nutrition_estimates` | `meal_id = meals.id`。`analyzed_at DESC, rowid DESC` で最新の 1 件を選ぶ |
 | `meal_photos` | 食事の `photo_id` と `additional_photo_ids` から写真 ID・object key・MIME type を取得 |
 
-`meals[].estimate` は保存済みの最新推定。モデル、解析日時、kcal と PFC を含む。推定がなければ `null`。
+`meals[].estimate` は保存済みの最新推定。モデル、解析日時、kcal と PFC を含む。推定がなければ `null`。 `estimate.details` は料理別の分量・栄養値・前提、メモの解釈、解析時のメモ本文・写真 ID、指示バージョンを保持する。導入前の推定では `null`。解析時の入力は現在の食事メモと異なる場合がある。料理別の説明はモデルが採用した推定の前提であり、実測値や外部資料で検証済みの事実とは扱わない。
 
 `meals[].caloriesKcal` は手入力を優先し、未入力なら推定カロリーを採る。両方なければ `null`。手入力の `0` は有効値で、推定に置き換えない。`caloriesSource` は `manual`、`estimate`、または `null`。
 

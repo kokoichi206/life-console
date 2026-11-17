@@ -1,6 +1,7 @@
 import { workConfirmationKinds, workConfirmationCompletedBy, workConfirmationNotificationStatuses } from "@life-console/domain";
 import { calendarEventSources, calendarEventStatuses, calendarReminderSlots, calendarReminderStatuses, tokushimaCollectionDistricts } from "@life-console/domain";
 import { taskAreas, agentProviders, assetKinds, connectorKinds, conversationClassifications, financeEntryKinds, jobKinds, jobStatuses, mealPhotoContentTypes, monitorDeliveryOutcomes, monitorNotificationKinds, monitorNotificationStatuses, monitorOutcomes, monitorServices, orcaStatuses, promotionTargets, replyDraftStatuses, repositoryRoles, scheduleCoalescingModes, scheduleIntervals, sourceMappingConnectors, sourceScopes, stravaCaloriesStatuses, taskStatuses, weightSources } from "@life-console/domain";
+import type { NutritionEstimateDetails } from "@life-console/domain";
 import { sql } from "drizzle-orm";
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -161,6 +162,7 @@ export const nutritionEstimates = sqliteTable("nutrition_estimates", {
   proteinGrams: integer("protein_grams").notNull(),
   fatGrams: integer("fat_grams").notNull(),
   carbohydrateGrams: integer("carbohydrate_grams").notNull(),
+  details: text("details_json", { mode: "json" }).$type<NutritionEstimateDetails>(),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("nutrition_estimates_meal_time_idx").on(table.mealId, table.analyzedAt)]);
 

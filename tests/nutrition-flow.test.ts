@@ -37,7 +37,9 @@ describe("栄養解析の HTTP と runner の経路", () => {
         expect(JSON.parse(options.stdin) as unknown).toEqual({ memo: "牛乳200ml" });
         expect(args.includes("--image")).toBe(photoId !== null);
         await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({
-          estimate: { caloriesKcal: 650, proteinGrams: 30, fatGrams: 20, carbohydrateGrams: 87.5 },
+          estimate: { items: [{ name: "テスト定食", portionDescription: "1 人前", estimatedWeightGrams: 300, quantityBasis: "memo", memoRelation: "supplement",
+            caloriesKcal: 650, proteinGrams: 30, fatGrams: 20, carbohydrateGrams: 87.5, estimationBasis: "標準成分による概算" }],
+          memoInterpretation: "食事の補足", assumptions: ["重量は推定"] },
         }));
         return ok({ stdout: JSON.stringify({ type: "turn.completed" }), stderr: "" });
       });
@@ -47,7 +49,9 @@ describe("栄養解析の HTTP と runner の経路", () => {
       await runner.runOnce();
       expect(database.prepare("SELECT status, error_code FROM jobs").get()).toMatchObject({ status: "succeeded", error_code: null });
       const listed = await app.request("/api/v1/nutrition", {}, environment);
-      expect(await listed.json()).toMatchObject({ data: [{ estimate: { caloriesKcal: 650, model: "gpt-5.6-luna" } }] });
+      expect(await listed.json()).toMatchObject({ data: [{ estimate: { caloriesKcal: 650, model: "gpt-5.6-luna",
+        details: { promptVersion: "food-breakdown-v1", input: { memo: "牛乳200ml", photoIds: photoId === null ? [] : [photoId] },
+          items: [{ name: "テスト定食", caloriesKcal: 650 }], memoInterpretation: "食事の補足" } } }] });
       if (photoId === null) expect(get).not.toHaveBeenCalled();
       else expect(get).toHaveBeenCalledWith("meals/test.jpg");
       expect(execute).toHaveBeenCalledOnce();

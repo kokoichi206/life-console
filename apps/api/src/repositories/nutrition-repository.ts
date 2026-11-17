@@ -51,6 +51,7 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
           model: estimate.model, analyzedAt: estimate.analyzedAt, inputHash: estimate.inputHash,
           caloriesKcal: estimate.caloriesKcal, proteinGrams: estimate.proteinGrams,
           fatGrams: estimate.fatGrams, carbohydrateGrams: estimate.carbohydrateGrams,
+          details: estimate.details,
         },
         sourceJobId: estimate.sourceJobId, jobId: analysisJob.id,
         analysisStatus: analysisJob.status, analysisSummary: analysisJob.summary,
@@ -103,7 +104,9 @@ export const createNutritionRepository = (database: D1Database): NutritionReposi
       const selection = db.select({
         id: sql`${id}`.as("id"), mealId: sql`${input.mealId}`.as("mealId"), sourceJobId: sql`${input.jobId}`.as("sourceJobId"), model: sql`${input.model}`.as("model"),
         analyzedAt: sql`${input.analyzedAt}`.as("analyzedAt"), inputHash: sql`${input.inputHash}`.as("inputHash"), caloriesKcal: sql`${input.caloriesKcal}`.as("caloriesKcal"),
-        proteinGrams: sql`${input.proteinGrams}`.as("proteinGrams"), fatGrams: sql`${input.fatGrams}`.as("fatGrams"), carbohydrateGrams: sql`${input.carbohydrateGrams}`.as("carbohydrateGrams"), createdAt: sql`${now}`.as("createdAt"),
+        proteinGrams: sql`${input.proteinGrams}`.as("proteinGrams"), fatGrams: sql`${input.fatGrams}`.as("fatGrams"), carbohydrateGrams: sql`${input.carbohydrateGrams}`.as("carbohydrateGrams"),
+        details: sql`${input.details == null ? null : JSON.stringify(input.details)}`.as("details"),
+        createdAt: sql`${now}`.as("createdAt"),
       }).from(meals).where(and(eq(meals.id, input.mealId), isNull(meals.deletedAt),
         or(isNotNull(meals.photoId), sql`length(trim(${meals.memo})) > 0`),
         validExecution,
