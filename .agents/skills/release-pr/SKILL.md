@@ -57,7 +57,7 @@ PR 作成だけなら、別のローカル作業ツリーで `pnpm check` を実
 作成直前に、既存 PR とリモートの `main` / `develop` の SHA を再確認する。対象が進んでいたら差分と本文を更新してから作成する。
 
 ```sh
-gh pr create --repo kokoichi206/life-console --base main --head develop --title 'リリース YYYY-MM-DD' --body-file <body-file>
+pnpm pr:create --repo kokoichi206/life-console --base main --head develop --title 'リリース YYYY-MM-DD' --body-file <body-file>
 ```
 
 `--head develop` を明示し、現在の作業ブランチを誤って公開しない。作成結果が不明な場合は既存 PR を再取得してから再試行し、重複投稿を避ける。

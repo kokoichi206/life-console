@@ -34,6 +34,18 @@ Codex の [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-
 
 モデル、承認モード、sandbox、個人アカウント、MCP、プラグインは各クライアントの利用者設定で管理する。共通化のために個人の設定を上書きしない。Claude 専用の `context: fork`、動的 shell 展開、特定 MCP や未導入スキルへの依存は共通スキルに入れない。
 
+## PR 作成前の検査
+
+Codex と Claude Code は、[package.json](../package.json) の `pnpm pr:create` から PR を作成する。`gh pr create` と同じ引数を渡す。
+
+```sh
+pnpm pr:create --base develop --head <branch> --title '<title>' --body-file <body-file>
+```
+
+このコマンドは `pnpm harness:check` の成功後にだけ GitHub CLI を実行する。文書の相対リンクはディレクトリの実際の項目名と照合するため、Mac でも大文字・小文字の誤りを検出する。未コミット・未追跡のファイルも現在の作業ツリーで検査する。`pnpm check` など変更内容に応じた検証は、引き続き PR 作成前に行う。
+
+`gh pr create` の直接実行や GitHub の Web 画面にはこの検査は適用されない。共通の作成手順で使用し、CI でも同じハーネス検査を実行する。
+
 ## 健康記録を読む skill の配布
 
 [life-console-read](../.agents/skills/life-console-read/SKILL.md) は、このリポジトリの保存構造に合わせて体重・食事・栄養推定・食事写真を読み取る。正本と取得スクリプトは `.agents/skills/life-console-read/` に置き、schema や API repository の変更と同じリポジトリで保守する。
@@ -72,7 +84,7 @@ Claude Code をリポジトリルートから起動し、`/hooks` で登録を�
 
 1. 共通の前提は `AGENTS.md`、条件付きの規約は `docs/agent-rules/`、作業手順は `.agents/skills/<name>/SKILL.md` に書く。スキルには `name` と `description` の YAML frontmatter を付ける。
 2. ルールを増やしたら `AGENTS.md` の参照表にも対象とリンクを追加する。`paths` は YAML の block style で書く。各パッケージの README や ESLint が正本の内容はリンクで参照する。
-3. `pnpm harness:check` を実行する。共通リンクの種類・リンク先、スキルの必須メタデータ、指示文書の Markdown 相対リンクを検査する。指示内容の正しさや、クライアントでの読み込み成功を証明するコマンドではない。
+3. `pnpm harness:check` を実行する。共通リンクの種類・リンク先、スキルの必須メタデータ、指示文書の Markdown 相対リンクを検査する。リンク先は各階層の名前を大文字・小文字まで照合する。指示内容の正しさや、クライアントでの読み込み成功を証明するコマンドではない。
 4. 読み込みを変更した場合は、新規セッションで指示元・利用可能スキルを確認する。Claude Code では `/memory` と `/skills`、Codex ではスキル選択と読み込んだ指示元を確認する。利用者のグローバル設定が探索を制限する場合も、この静的チェックの対象外。
 
 `pnpm check` と既存 CI にハーネス検証を含める。文言を正規表現で禁止する Stop hook や、各編集のたびに全テストを実行する hook は追加しない。実装品質は既存 ESLint・型・テストと、要件に沿った動作確認で判断する。
