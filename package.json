@@ -23,6 +23,7 @@
     "storybook:build": "pnpm --filter @life-console/web storybook:build",
     "storybook:test": "pnpm --filter @life-console/web storybook:test",
     "harness:check": "node .agents/scripts/check-harness.mjs",
+    "pr:create": "pnpm harness:check && gh pr create",
     "migrations:check": "pnpm --filter @life-console/db migrations:check",
     "check": "pnpm harness:check && pnpm skills:test && pnpm migrations:check && pnpm lint && pnpm knip && pnpm typecheck && pnpm test && pnpm build && pnpm storybook:build && pnpm storybook:test",
     "skills:test": "uv run .agents/tests/test_life_console_read.py"

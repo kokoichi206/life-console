@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { lstat, readFile, readdir, readlink, realpath, stat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, parse as parsePath, resolve, sep } from "node:path";
 import { stdout } from "node:process";
 import { fileURLToPath, URL } from "node:url";
 
@@ -43,6 +43,12 @@ for (const filename of markdownFiles) {
   for (const [, destination] of content.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/gu)) {
     if (/^(?:https?:|#)/u.test(destination)) continue;
     const targetPath = resolve(dirname(markdownPath), destination.split("#")[0]);
+    // Mac の大文字・小文字を区別しない FS でも、Linux と同じパス表記を要求する。
+    let exactPath = parsePath(targetPath).root;
+    for (const segment of targetPath.slice(exactPath.length).split(sep)) {
+      assert((await readdir(exactPath)).includes(segment), `${filename} の参照先 ${destination} が存在しないか、大文字・小文字が一致しません。`);
+      exactPath = resolve(exactPath, segment);
+    }
     assert((await stat(targetPath)).isFile(), `${filename} の参照先 ${destination} がファイルではありません。`);
   }
 }
