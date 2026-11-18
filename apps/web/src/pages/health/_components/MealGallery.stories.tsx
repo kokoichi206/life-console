@@ -518,7 +518,9 @@ export const EditMeal: Story = {
     const screen = within(canvasElement.ownerDocument.body);
     await userEvent.click(await canvas.findByRole("button", { name: /の食事を開く/ }));
     let detail = within(await screen.findByRole("dialog"));
-    await userEvent.click(await detail.findByRole("button", { name: "食事を編集" }));
+    const editButton = await detail.findByRole("button", { name: "食事を編集" });
+    await waitFor(() => expect(editButton).toBeEnabled());
+    await userEvent.click(editButton);
     // 編集ボタンの除去後、Dialog が次の描画フレームでフォーカスを復元するため待つ。
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await userEvent.clear(detail.getByLabelText("メモ"));
@@ -556,7 +558,9 @@ export const EditMealFailure: Story = {
   play: async ({ canvas, canvasElement, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: /の食事を開く/ }));
     const detail = within(await within(canvasElement.ownerDocument.body).findByRole("dialog"));
-    await userEvent.click(await detail.findByRole("button", { name: "食事を編集" }));
+    const editButton = await detail.findByRole("button", { name: "食事を編集" });
+    await waitFor(() => expect(editButton).toBeEnabled());
+    await userEvent.click(editButton);
     // 編集ボタンの除去後、Dialog が次の描画フレームでフォーカスを復元するため待つ。
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await userEvent.clear(detail.getByLabelText("メモ"));
