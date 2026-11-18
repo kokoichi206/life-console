@@ -1,0 +1,1 @@
+ALTER TABLE `nutrition_estimates` ADD `details_json` text;

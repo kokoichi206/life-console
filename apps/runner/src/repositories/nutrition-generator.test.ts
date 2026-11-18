@@ -6,17 +6,23 @@ import { createNutritionGenerator } from "./nutrition-generator";
 
 const meal = { id: "meal", photoId: "photo", additionalPhotoIds: [], memo: "ごはんは半分" };
 const estimate = { caloriesKcal: 600, proteinGrams: 25, fatGrams: 15, carbohydrateGrams: 90 };
+const analysis = {
+  items: [{ name: "テスト定食", portionDescription: "1 人前", estimatedWeightGrams: 300, quantityBasis: "photo", memoRelation: "supplement",
+    ...estimate, estimationBasis: "写真の量と標準成分による概算" }],
+  memoInterpretation: "写真のご飯を半量として反映", assumptions: ["重量は写真から推定"],
+};
 const reply = (value: unknown) => ok({ stdout: JSON.stringify({ type: "result", is_error: false, modelUsage: { "actual-model": {} }, structured_output: { estimate: value } }), stderr: "" });
 const signal = new AbortController().signal;
 
 describe("写真からの栄養推定", () => {
   it("写真を画像ブロック、メモをデータとして渡し、実モデルと入力 hash を記録する", async () => {
-    const execute = vi.fn<CommandRepository["execute"]>().mockResolvedValue(reply(estimate));
+    const execute = vi.fn<CommandRepository["execute"]>().mockResolvedValue(reply(analysis));
     const readMealPhoto = vi.fn().mockResolvedValue(ok({ contentType: "image/jpeg", base64: "aW1hZ2U=" }));
     const generator = createNutritionGenerator({ execute }, { readMealPhoto }, { provider: "claude" });
     const result = await generator.generate(meal, signal);
     expect(result).toMatchObject({ ok: true, value: { ...estimate, model: "actual-model", inputHash: expect.stringMatching(/^[a-f0-9]{64}$/u) } });
     const args = execute.mock.calls[0]![1];
+    expect(result).toMatchObject({ ok: true, value: { details: { ...analysis, promptVersion: "food-breakdown-v1", input: { memo: meal.memo, photoIds: [meal.photoId] } } } });
     expect(args).toContain("--safe-mode");
     expect(args).toContain("--strict-mcp-config");
     expect(args).toContain("--no-session-persistence");
@@ -30,11 +36,25 @@ describe("写真からの栄養推定", () => {
     const changedPhoto = await generator.generate(meal, signal);
     expect(result.ok && changedPhoto.ok && result.value.inputHash !== changedPhoto.value.inputHash).toBe(true);
   });
-  it.each([null, { ...estimate, caloriesKcal: -1 }, { ...estimate, proteinGrams: "25" }])("判断不能・不正な出力をゼロとして保存しない", async (value) => {
+  it.each([null, { ...analysis, items: [] }, { ...analysis, items: [{ ...analysis.items[0], caloriesKcal: -1 }] }, { ...analysis, items: [{ ...analysis.items[0], proteinGrams: "25" }] }])("判断不能・不正な出力をゼロとして保存しない", async (value) => {
     const generator = createNutritionGenerator({ execute: vi.fn().mockResolvedValue(reply(value)) }, {
       readMealPhoto: vi.fn().mockResolvedValue(ok({ contentType: "image/png", base64: "test" })),
     }, { provider: "claude" });
     expect((await generator.generate(meal, signal)).ok).toBe(false);
+  });
+  it("料理別の値をコードで合計し、補足・追加の解釈と不明な重量を残す", async () => {
+    const foods = { items: [
+      { ...analysis.items[0]!, name: "ご飯", caloriesKcal: 234, proteinGrams: 3.8, fatGrams: 0.5, carbohydrateGrams: 55.7 },
+      { ...analysis.items[0]!, name: "写真外の飲み物", estimatedWeightGrams: null, quantityBasis: "memo", memoRelation: "additional", caloriesKcal: 100, proteinGrams: 0, fatGrams: 0, carbohydrateGrams: 25 },
+    ], memoInterpretation: "ご飯の量は補足、飲み物は明記された追加分", assumptions: ["ご飯は写真から推定"] };
+    const execute = vi.fn<CommandRepository["execute"]>().mockResolvedValue(reply(foods));
+    const result = await createNutritionGenerator({ execute }, { readMealPhoto: vi.fn().mockResolvedValue(ok({ contentType: "image/jpeg", base64: "aW1hZ2U=" })) }, { provider: "claude" }).generate(meal, signal);
+    expect(result).toMatchObject({ ok: true, value: { caloriesKcal: 334, proteinGrams: 3.8, fatGrams: 0.5, carbohydrateGrams: 80.7, details: { ...foods } } });
+    const args = execute.mock.calls[0]![1];
+    const prompt = args[args.indexOf("--system-prompt") + 1]!;
+    expect(prompt).toContain("別の食品として追加計上しない");
+    expect(prompt).toContain("含まれている衣や油を別に加算しない");
+    expect(prompt).toContain("重複する食品を推測で追加せず");
   });
   it("写真の取得失敗時には LLM を呼ばない", async () => {
     const execute = vi.fn();
@@ -65,7 +85,7 @@ describe("Gemini による画像解析", () => {
         admin: { mcp: { enabled: false }, extensions: { enabled: false }, skills: { enabled: false } },
       });
       expect(await readlink(join(directory, "home/.gemini/oauth_creds.json"))).toBe("/test-auth/.gemini/oauth_creds.json");
-      return geminiReply({ estimate });
+      return geminiReply({ estimate: analysis });
     });
     const generator = createNutritionGenerator({ execute }, { readMealPhoto: vi.fn().mockResolvedValue(ok(photo)) }, { provider: "gemini", model: "gemini-test", geminiCliHome: "/test-auth" });
     expect(await generator.generate({ ...meal, memo }, signal)).toMatchObject({ ok: true, value: { ...estimate, model: "gemini-test" } });
@@ -86,7 +106,7 @@ describe("Gemini による画像解析", () => {
     await expect(stat(directory)).rejects.toMatchObject({ code: "ENOENT" });
     expect(execute).toHaveBeenCalledOnce();
   });
-  it.each([{ estimate: null }, { estimate: { ...estimate, caloriesKcal: -1 } }, "not JSON"])("判断不能や不正な結果を成功にしない", async (response) => {
+  it.each([{ estimate: null }, { estimate: { ...analysis, items: [{ ...analysis.items[0], caloriesKcal: -1 }] } }, "not JSON"])("判断不能や不正な結果を成功にしない", async (response) => {
     const execute = vi.fn().mockResolvedValue(geminiReply(response));
     expect((await createNutritionGenerator({ execute }, { readMealPhoto: vi.fn().mockResolvedValue(ok(photo)) }, { provider: "gemini" }).generate(meal, signal)).ok).toBe(false);
     expect(execute).toHaveBeenCalledOnce();
@@ -98,6 +118,7 @@ describe("メモだけの栄養推定", () => {
     const { readFile, writeFile } = await import("node:fs/promises");
     const { join } = await import("node:path");
     const textMeal = { ...meal, photoId: null, memo: "カレーライス" };
+    const memoAnalysis = { ...analysis, items: [{ ...analysis.items[0]!, quantityBasis: "memo", memoRelation: "meal_description" }] };
     const readMealPhoto = vi.fn();
     const execute = vi.fn<CommandRepository["execute"]>().mockImplementation(async (_command, args, options) => {
       const prompt = provider === "claude"
@@ -109,18 +130,19 @@ describe("メモだけの栄養推定", () => {
       if (provider === "codex") {
         expect(args).not.toContain("--image");
         expect(JSON.parse(options!.stdin!) as unknown).toEqual({ memo: textMeal.memo });
-        await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({ estimate }));
+        await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({ estimate: memoAnalysis }));
         return ok({ stdout: JSON.stringify({ type: "turn.completed" }), stderr: "" });
       }
       if (provider === "gemini") {
         expect(args[args.indexOf("--prompt") + 1]).toBe("@meal.json この食事の栄養を推定してください。");
         expect(JSON.parse(await readFile(join(options!.cwd!, "meal.json"), "utf8")) as unknown).toEqual({ memo: textMeal.memo });
-        return ok({ stdout: JSON.stringify({ response: JSON.stringify({ estimate }), stats: { models: { test: {} } } }), stderr: "" });
+        return ok({ stdout: JSON.stringify({ response: JSON.stringify({ estimate: memoAnalysis }), stats: { models: { test: {} } } }), stderr: "" });
       }
       expect(JSON.parse(options!.stdin!) as unknown).toMatchObject({ message: { content: [{ type: "text", text: JSON.stringify({ memo: textMeal.memo }) }] } });
-      return reply(estimate);
+      return reply(memoAnalysis);
     });
-    expect(await createNutritionGenerator({ execute }, { readMealPhoto }, { provider, geminiAuth: "gemini-api-key" }).generate(textMeal, signal)).toMatchObject({ ok: true, value: estimate });
+    expect(await createNutritionGenerator({ execute }, { readMealPhoto }, { provider, geminiAuth: "gemini-api-key" }).generate(textMeal, signal)).toMatchObject({ ok: true, value: { ...estimate,
+      details: { input: { memo: textMeal.memo, photoIds: [] }, items: [{ memoRelation: "meal_description" }] } } });
     expect(readMealPhoto).not.toHaveBeenCalled();
   });
 });
@@ -137,17 +159,17 @@ describe("複数写真の食事解析", () => {
         const message = JSON.parse(options!.stdin!) as { message: { content: { type: string; source?: { data: string } }[] } };
         expect(message.message.content.filter((block) => block.type === "image").map((block) => Buffer.from(block.source!.data, "base64").toString())).toEqual(photoIds);
         expect(args[args.indexOf("--system-prompt") + 1]).toContain("写真ごとの推定値を単純に合算しない");
-        return reply(estimate);
+        return reply(analysis);
       }
       directory = options!.cwd!;
       for (const [index, photoId] of photoIds.entries()) expect(await readFile(join(directory, `meal-${index}.jpeg`), "utf8")).toBe(photoId);
       if (provider === "codex") {
         expect(args.filter((arg) => arg === "--image")).toHaveLength(4);
-        await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({ estimate }));
+        await writeFile(args[args.indexOf("--output-last-message") + 1]!, JSON.stringify({ estimate: analysis }));
         return ok({ stdout: JSON.stringify({ type: "turn.completed" }), stderr: "" });
       }
       expect(args[args.indexOf("--prompt") + 1]).toBe("@meal-0.jpeg @meal-1.jpeg @meal-2.jpeg @meal-3.jpeg @meal.json この食事の栄養を推定してください。");
-      return ok({ stdout: JSON.stringify({ response: JSON.stringify({ estimate }), stats: { models: { test: {} } } }), stderr: "" });
+      return ok({ stdout: JSON.stringify({ response: JSON.stringify({ estimate: analysis }), stats: { models: { test: {} } } }), stderr: "" });
     });
     const generator = createNutritionGenerator({ execute }, { readMealPhoto }, { provider, geminiAuth: "gemini-api-key" });
     const result = await generator.generate({ ...meal, photoId: photoIds[0]!, additionalPhotoIds: photoIds.slice(1) }, signal);
@@ -155,7 +177,7 @@ describe("複数写真の食事解析", () => {
     expect(readMealPhoto.mock.calls.map(([id]) => id)).toEqual(photoIds);
     expect(execute).toHaveBeenCalledOnce();
     if (directory !== undefined) await expect(stat(directory)).rejects.toMatchObject({ code: "ENOENT" });
-    const single = await createNutritionGenerator({ execute: vi.fn().mockResolvedValue(reply(estimate)) }, { readMealPhoto }, { provider: "claude" }).generate({ ...meal, photoId: photoIds[0]! }, signal);
+    const single = await createNutritionGenerator({ execute: vi.fn().mockResolvedValue(reply(analysis)) }, { readMealPhoto }, { provider: "claude" }).generate({ ...meal, photoId: photoIds[0]! }, signal);
     // 写真の追加で古い解析結果の入力 hash を使い回さない。
     expect(single.ok && result.ok && single.value.inputHash !== result.value.inputHash).toBe(true);
   });

@@ -214,6 +214,24 @@ class RecordTests(unittest.TestCase):
         self.assertEqual(meals[2]["caloriesKcal"], 400)
         self.assertEqual(meals[2]["caloriesSource"], "estimate")
 
+    def test_nutrition_details_keep_the_analysis_input(self):
+        self.assertIsNone(self.read()["meals"][0]["estimate"]["details"])
+        details = {
+            "promptVersion": "food-breakdown-v1",
+            "input": {"memo": "写真のご飯は半分", "photoIds": ["p1", "p2", "p3"]},
+            "items": [{"name": "ご飯", "portionDescription": "半量", "estimatedWeightGrams": 100,
+                       "quantityBasis": "memo", "memoRelation": "supplement", "caloriesKcal": 156,
+                       "proteinGrams": 2.5, "fatGrams": 0.3, "carbohydrateGrams": 37.1,
+                       "estimationBasis": "炊いたご飯の標準成分"}],
+            "memoInterpretation": "写真のご飯の補足", "assumptions": ["元の量は写真から推定"],
+        }
+        self.connection.execute(
+            "UPDATE nutrition_estimates SET details_json = ? WHERE id = ?",
+            (json.dumps(details, ensure_ascii=False), "tie"),
+        )
+        self.connection.execute("UPDATE meals SET memo = '編集後のメモ' WHERE id = 'm1'")
+        self.assertEqual(self.read()["meals"][0]["estimate"]["details"], details)
+
     def test_all_photos_keep_meal_and_display_order(self):
         records = self.read()
         self.assertEqual(records["meals"][0]["photoIds"], ["p1", "p2", "p3"])

@@ -1,6 +1,8 @@
 import { taskAreas, taskStatuses, conversationClassifications, connectorKinds, repositoryRoles, sourceScopes, jobStatuses, jobKinds, agentProviders, scheduleIntervals, scheduleCoalescingModes, financeEntryKinds, assetKinds, replyDraftStatuses, mealPhotoVariants, mealPhotoContentTypes, weightSources, orcaStatuses, jobCompletionOutcomes, agentExecutionModes, promotionTargets, sourceMappingConnectors } from "@life-console/domain";
 import { z } from "zod";
 
+import { nutritionEstimateDetailsSchema } from "./nutrition-details";
+
 const isoDateTimeSchema = z.iso.datetime({ offset: true });
 const identifierSchema = z.string().min(1).max(128);
 
@@ -148,6 +150,7 @@ export const createNutritionEstimateSchema = z.object({
   proteinGrams: z.number().nonnegative(),
   fatGrams: z.number().nonnegative(),
   carbohydrateGrams: z.number().nonnegative(),
+  details: nutritionEstimateDetailsSchema.nullable().optional(),
 });
 
 export const createWeightSchema = z.object({
