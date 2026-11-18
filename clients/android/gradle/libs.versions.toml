@@ -4,7 +4,7 @@ junit = "4.13.2"
 json = "20260814"
 appauth = "0.11.1"
 subject-segmentation = "16.0.0-beta1"
-androidx-core = "1.9.0"
+androidx-core = "1.19.1"
 
 [libraries]
 ktlint-rule-engine-core = { module = "com.pinterest.ktlint:ktlint-rule-engine-core", version.ref = "ktlint" }

@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace = "dev.kokoichi.lifeconsole"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "dev.kokoichi.lifeconsole"
