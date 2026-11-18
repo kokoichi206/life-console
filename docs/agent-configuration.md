@@ -26,8 +26,11 @@ Codex の [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-
 | 差分の自己点検 | `$self-review` | `/self-review` |
 | レビュー指摘の仕組み化 | `$learn-from-review` | `/learn-from-review` |
 | 明示された Life Console タスクの昇格 | `$github-task-promotion` | `/github-task-promotion` |
+| 本番リリース PR の作成 | `$release-pr` | `/release-pr` |
 
 自然文でも description が対象に合えば利用できる。GitHub 昇格の入力条件・報告先は既存スキルのまま。スキルを利用できること自体は、外部投稿や本番操作の許可にはならない。
+
+[release-pr](../.agents/skills/release-pr/SKILL.md) は `develop` → `main` の差分と検証状況をまとめ、既存 PR がなければ本番リリース PR を作成する。「本番向けのリリース PR を作って」で呼び出せる。通常は PR 作成までで終了し、マージと本番配置は依頼された場合だけ行う。
 
 モデル、承認モード、sandbox、個人アカウント、MCP、プラグインは各クライアントの利用者設定で管理する。共通化のために個人の設定を上書きしない。Claude 専用の `context: fork`、動的 shell 展開、特定 MCP や未導入スキルへの依存は共通スキルに入れない。
 
