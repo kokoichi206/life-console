@@ -45,8 +45,9 @@ it("ローカル D1 で栄養一覧と監視の過去の修正前後を比較", 
     const before = await db.prepare(old[0]!.query).bind(1, "nutrition_analysis", 1).all();
     await db.prepare(readFileSync("packages/db/migrations/0018_soft_grim_reaper.sql", "utf8")).run();
     const indexOnly = await db.prepare(old[0]!.query).bind(1, "nutrition_analysis", 1).all();
+    await db.prepare(readFileSync("packages/db/migrations/0026_spicy_wither.sql", "utf8")).run();
     const after = await db.prepare(nutrition.sql).bind(...nutrition.params).all();
-    expect(after.results).toEqual(before.results);
+    expect(after.results.map(({ details_json: _details, ...row }) => row)).toEqual(before.results);
     await db.prepare(`WITH RECURSIVE seq(i) AS (SELECT 0 UNION ALL SELECT i+1 FROM seq WHERE i<9999)
  INSERT INTO jobs(id,kind,status,idempotency_key,payload_json,attempt,created_at,updated_at)
  SELECT 'unrelated-'||i,'nutrition_analysis','succeeded','unrelated-'||i,json_object('mealId','other-'||i),1,'2026-09-22T00:00:00.000Z','2026-09-22T00:00:00.000Z' FROM seq`).run();

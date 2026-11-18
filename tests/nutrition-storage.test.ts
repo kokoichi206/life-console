@@ -33,6 +33,25 @@ describe("食事の栄養推定の保存", () => {
       expect(database.prepare("SELECT memo, photo_id FROM meals").get()).toMatchObject({ memo: "食事メモ", photo_id: "photo" });
     } finally { database.close(); }
   });
+  it("内訳と入力のスナップショットを保存し、後のメモ編集で書き換えない", async () => {
+    const { database, nutrition } = await setup();
+    const details: NonNullable<SaveNutritionEstimateInput["details"]> = {
+      promptVersion: "food-breakdown-v1", input: { memo: "写真のご飯は半分", photoIds: ["photo", "photo-2"] },
+      items: [{ name: "ご飯", portionDescription: "半量", estimatedWeightGrams: 100, quantityBasis: "memo", memoRelation: "supplement",
+        caloriesKcal: 156, proteinGrams: 2.5, fatGrams: 0.3, carbohydrateGrams: 37.1, estimationBasis: "炊いたご飯の標準成分" }],
+      memoInterpretation: "写真のご飯の量への補足", assumptions: ["元のご飯は 200 g と仮定"],
+    };
+    try {
+      expect((await nutrition.save("with-details", { ...estimate, details }, now)).ok).toBe(true);
+      expect(JSON.parse(String(database.prepare("SELECT details_json FROM nutrition_estimates WHERE id = 'with-details'").get()?.details_json)) as unknown).toEqual(details);
+      database.exec("UPDATE meals SET memo = '編集後のメモ'");
+      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ estimate: { details } }] });
+      database.exec("UPDATE jobs SET id = 'job-2', idempotency_key = 'job-2'");
+      expect((await nutrition.save("legacy-shape", { ...estimate, jobId: "job-2" }, now)).ok).toBe(true);
+      expect(await nutrition.list()).toMatchObject({ ok: true, value: [{ estimate: { details: null } }] });
+      expect(JSON.parse(String(database.prepare("SELECT details_json FROM nutrition_estimates WHERE id = 'with-details'").get()?.details_json)) as unknown).toEqual(details);
+    } finally { database.close(); }
+  });
   it.each([
     "UPDATE jobs SET lease_token = 'expired'", "UPDATE jobs SET lease_expires_at = '2026-09-08T00:00:00Z'",
     "UPDATE jobs SET cancel_requested_at = '2026-09-09T00:00:00Z'", "UPDATE jobs SET status = 'succeeded'",
