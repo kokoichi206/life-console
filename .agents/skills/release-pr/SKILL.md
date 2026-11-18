@@ -7,7 +7,7 @@ description: Life Console の本番リリースに向けて、develop から mai
 
 対象は `kokoichi206/life-console` の `develop` → `main`。PR 作成の依頼なら作成まで進める。文案・調査だけの依頼や、このスキル自体の作成・修正では GitHub に書き込まない。
 
-[運用上の注意](../../../docs/operations.md)、[deploy workflow](../../../.github/workflows/deploy.yml)、[PR テンプレート](../../../.github/pull_request_template.md) を読む。作業ツリーとリリース元が異なる場合は、`git show origin/develop:<path>` でリリース元の定義も確認する。
+[運用上の注意](../../../docs/operations.md)、[deploy workflow](../../../.github/workflows/deploy.yml)、[PR テンプレート](../../../.github/PULL_REQUEST_TEMPLATE.md) を読む。作業ツリーとリリース元が異なる場合は、`git show origin/develop:<path>` でリリース元の定義も確認する。
 
 `main` へのマージは本番配置を開始する。通常の終了地点は PR 作成と状況報告まで。マージ・auto-merge の設定・ブランチ削除・workflow の手動実行・Mac runner の更新は含めない。マージまで明示的に依頼されている場合は、既存の許可範囲で CI と対象 SHA を確認し、運用文書どおり merge commit を使う。
 
