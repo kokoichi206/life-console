@@ -183,6 +183,13 @@
       "when": 1794661845095,
       "tag": "0025_clammy_rage",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1794888266931,
+      "tag": "0026_spicy_wither",
+      "breakpoints": true
     }
   ]
 }

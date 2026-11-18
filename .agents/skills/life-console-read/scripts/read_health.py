@@ -37,7 +37,8 @@ SELECT m.id, m.memo, m.occurred_at AS occurredAt,
        m.photo_id AS photoId, m.additional_photo_ids AS additionalPhotoIds,
        n.id AS estimateId, n.model, n.analyzed_at AS analyzedAt,
        n.calories_kcal AS estimatedCaloriesKcal, n.protein_grams AS proteinGrams,
-       n.fat_grams AS fatGrams, n.carbohydrate_grams AS carbohydrateGrams
+       n.fat_grams AS fatGrams, n.carbohydrate_grams AS carbohydrateGrams,
+       n.details_json AS detailsJson
 FROM selected_meals AS m
 LEFT JOIN nutrition_estimates AS n ON n.id = (
     SELECT e.id FROM nutrition_estimates AS e WHERE e.meal_id = m.id
@@ -128,6 +129,9 @@ def read_records(reader, from_date, to_date):
                 "proteinGrams": row["proteinGrams"],
                 "fatGrams": row["fatGrams"],
                 "carbohydrateGrams": row["carbohydrateGrams"],
+                "details": None
+                if row["detailsJson"] is None
+                else json.loads(row["detailsJson"]),
             }
         )
         manual = row["manualCaloriesKcal"]

@@ -50,6 +50,30 @@ export type MealPhotoVariant = typeof mealPhotoVariants[number];
 export const mealPhotoContentTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 export type MealPhotoContentType = typeof mealPhotoContentTypes[number];
 
+export const nutritionQuantityBases = ["memo", "photo", "standard_portion"] as const;
+export const nutritionMemoRelations = ["supplement", "additional", "meal_description", "none", "uncertain"] as const;
+
+export type NutritionFoodEstimate = {
+  readonly name: string;
+  readonly portionDescription: string;
+  readonly estimatedWeightGrams: number | null;
+  readonly quantityBasis: typeof nutritionQuantityBases[number];
+  readonly memoRelation: typeof nutritionMemoRelations[number];
+  readonly caloriesKcal: number;
+  readonly proteinGrams: number;
+  readonly fatGrams: number;
+  readonly carbohydrateGrams: number;
+  readonly estimationBasis: string;
+};
+
+export type NutritionEstimateDetails = {
+  readonly promptVersion: string;
+  readonly input: { readonly memo: string; readonly photoIds: ReadonlyArray<string> };
+  readonly items: ReadonlyArray<NutritionFoodEstimate>;
+  readonly memoInterpretation: string;
+  readonly assumptions: ReadonlyArray<string>;
+};
+
 export const weightSources = ["manual", "csv"] as const;
 export type WeightSource = typeof weightSources[number];
 
