@@ -55,7 +55,7 @@ adb -s DEVICE_SERIAL shell am start -a android.intent.action.VIEW -d 'http://127
 
 ## ビルドとインストール
 
-JDK 17 と Android SDK Platform 36 が必要です。`ANDROID_HOME` または Git 管理対象外の `local.properties` に SDK の場所を設定します。
+JDK 17 と Android SDK Platform 37.0 が必要です。`ANDROID_HOME` または Git 管理対象外の `local.properties` に SDK の場所を設定します。
 
 Android アプリは AGP 9 の組み込み Kotlin を使うため、`org.jetbrains.kotlin.android` は適用しません。カスタム lint ルールの `lint-rules` は JVM モジュールなので、`org.jetbrains.kotlin.jvm` を適用します。アプリと lint ルールの JVM toolchain は 17 に揃えます。
 
